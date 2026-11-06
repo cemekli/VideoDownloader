@@ -39,6 +39,13 @@ export interface AppStatus {
   buildProfile: "debug" | "release";
 }
 
+export interface Diagnostics {
+  /** SQLite compiled into the app (SPEC §16.1). */
+  sqliteVersion: string;
+  sqliteFts5: boolean;
+  schemaVersion: number;
+}
+
 /** Where the UI gets its data from. Shown to the user so fixture data is never mistaken for a real library. */
 export type BackendKind = "desktop" | "fixture";
 
@@ -56,6 +63,7 @@ export interface StatusClient {
   readonly kind: BackendKind;
   ping(nonce: number): Promise<Pong>;
   getStatus(): Promise<AppStatus>;
+  getDiagnostics(): Promise<Diagnostics>;
 }
 
 export type BackendClient = LibraryClient & StatusClient;

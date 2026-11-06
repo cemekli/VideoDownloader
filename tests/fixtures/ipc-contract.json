@@ -1,13 +1,22 @@
 {
   "fixture": "ipc-contract",
   "version": 1,
-  "spec_refs": ["§18.1", "§18.2", "§18.3"],
+  "spec_refs": [
+    "§18.1",
+    "§18.2",
+    "§18.3"
+  ],
   "note": "Wire shape of every IPC command and of DomainError. Rust tests check the backend serializes exactly these keys and types; UI tests use the same values as mocked responses. Change only together with CONTRACT_VERSION.",
   "contractVersion": 1,
   "commands": {
     "ping": {
-      "args": { "nonce": 42 },
-      "response": { "nonce": 42, "contractVersion": 1 }
+      "args": {
+        "nonce": 42
+      },
+      "response": {
+        "nonce": 42,
+        "contractVersion": 1
+      }
     },
     "get_status": {
       "args": {},
@@ -18,6 +27,14 @@
         "os": "windows",
         "arch": "x86_64",
         "buildProfile": "debug"
+      }
+    },
+    "get_diagnostics": {
+      "args": {},
+      "response": {
+        "sqliteVersion": "3.53.2",
+        "sqliteFts5": true,
+        "schemaVersion": 1
       }
     }
   },

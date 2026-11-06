@@ -1,0 +1,16 @@
+[package]
+name = "vv-persistence"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault SQLite storage: connection setup, migrations, backup (ADR-0002)"
+
+[dependencies]
+# `bundled` compiles a fixed SQLite (with FTS5) into the app, so the version we
+# test is the version we ship (SPEC §16.1). `backup` = online backup API.
+rusqlite = { version = "=0.40.2", features = ["bundled", "backup"] }
+sha2 = "=0.11.1"
+
+[dev-dependencies]
+tempfile = "3"

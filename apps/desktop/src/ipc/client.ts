@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppStatus, BackendClient, DomainError, LibraryItemDto, Pong } from "./types";
+import type { AppStatus, BackendClient, Diagnostics, DomainError, LibraryItemDto, Pong } from "./types";
 import libraryFixture from "@fixtures/library-small.json";
 import contract from "@fixtures/ipc-contract.json";
 
@@ -56,6 +56,9 @@ export function createFixtureClient(items: LibraryItemDto[] = libraryFixture.ite
     async getStatus() {
       return structuredClone(contract.commands.get_status.response) as AppStatus;
     },
+    async getDiagnostics() {
+      return structuredClone(contract.commands.get_diagnostics.response) as Diagnostics;
+    },
   };
 }
 
@@ -70,6 +73,7 @@ export function createTauriClient(): BackendClient {
     },
     ping: (nonce) => call<Pong>("ping", { nonce }),
     getStatus: () => call<AppStatus>("get_status"),
+    getDiagnostics: () => call<Diagnostics>("get_diagnostics"),
   };
 }
 

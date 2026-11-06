@@ -31,6 +31,11 @@ describe("Tauri client", () => {
     await expect(createTauriClient().getStatus()).resolves.toEqual(contract.commands.get_status.response);
   });
 
+  it("getDiagnostics calls get_diagnostics", async () => {
+    mockIPC((cmd) => (cmd === "get_diagnostics" ? contract.commands.get_diagnostics.response : Promise.reject("unexpected " + cmd)));
+    await expect(createTauriClient().getDiagnostics()).resolves.toEqual(contract.commands.get_diagnostics.response);
+  });
+
   it("maps a backend DomainError to IpcError with the stable code (SPEC §18.3)", async () => {
     mockIPC(() => Promise.reject(contract.domainError));
     const err = await createTauriClient().getStatus().catch((e: unknown) => e);

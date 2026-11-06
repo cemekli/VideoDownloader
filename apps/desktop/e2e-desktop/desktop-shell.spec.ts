@@ -33,6 +33,16 @@ test("ping round-trips through the real IPC bridge", async () => {
   expect(pong).toEqual({ nonce: 7, contractVersion: 1 });
 });
 
+test("shipped SQLite has FTS5 (SPEC §16.1, STATE.md F0.5)", async () => {
+  const diag = (await app.page.evaluate(() =>
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("get_diagnostics"),
+  )) as { sqliteVersion: string; sqliteFts5: boolean; schemaVersion: number };
+  expect(diag.sqliteFts5).toBe(true);
+  expect(diag.sqliteVersion).toMatch(/^3\.\d+\.\d+$/);
+  expect(diag.schemaVersion).toBeGreaterThanOrEqual(1);
+  console.log(`packaged SQLite ${diag.sqliteVersion}, FTS5=${diag.sqliteFts5}, schema v${diag.schemaVersion}`);
+});
+
 test("commands outside the capability are refused (least privilege)", async () => {
   const results = await app.page.evaluate(async () => {
     const invoke = (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke;

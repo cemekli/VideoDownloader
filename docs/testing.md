@@ -40,6 +40,7 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 |---|---|---|
 | Saf iş kuralı (URL, durum makinesi, hata eşleme) | `crates/vv-domain/src/*.rs` içinde `#[cfg(test)]` | IO yok, her işletim sisteminde çalışır |
 | Çok vakalı kural | `tests/fixtures/<ad>.json` + `crates/*/tests/<ad>_fixture.rs` | Beklenen sonuç fixture'da yazılır; tek doğruluk kaynağı fixture'dır |
+| Veritabanı, migration, yedek | `crates/vv-persistence/tests/*.rs` | Gerçek dosyalarla, `tempfile` dizininde; yeni migration için ileri/geri testi otomatik çalışır |
 | IPC komutu (yeni Tauri komutu) | `apps/desktop/src-tauri/tests/ipc.rs` + `tests/fixtures/ipc-contract.json` | Komut `build.rs` listesine ve `capabilities/main.json`'a da eklenir; aksi halde ACL reddeder |
 | UI bileşeni | `apps/desktop/src/**/<Bileşen>.test.tsx` | Fixture istemcisiyle |
 | Kullanıcı yolculuğu | `apps/desktop/e2e/*.spec.ts` | 3 görünümde çalışır |

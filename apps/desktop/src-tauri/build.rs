@@ -1,7 +1,7 @@
 // Every app command must be listed here. Listing them turns on Tauri's ACL for
 // app commands, so a command is callable only if a capability grants it
 // (SPEC §20 IPC row: least privilege).
-const COMMANDS: &[&str] = &["ping", "get_status"];
+const COMMANDS: &[&str] = &["ping", "get_status", "get_diagnostics"];
 
 fn main() {
     // On Windows, Tauri links against Common Controls v6, which needs an

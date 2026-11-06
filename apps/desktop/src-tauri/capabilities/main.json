@@ -3,5 +3,5 @@
   "identifier": "main",
   "description": "Main window: only VideoVault's own commands. No core, filesystem, shell or HTTP permissions (SPEC §10.1, §20).",
   "windows": ["main"],
-  "permissions": ["allow-ping", "allow-get-status"]
+  "permissions": ["allow-ping", "allow-get-status", "allow-get-diagnostics"]
 }
