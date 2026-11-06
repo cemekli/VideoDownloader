@@ -287,7 +287,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 ## Sonraki adım
 
-**F0.3 — Tauri 2 kabuğu.** Windows'ta Rust, Node 22 ve WebView2 gerekiyor. Başlamadan önce Windows'ta `npm run setup` ve `npm run verify` çalıştırılıp bu dosyadaki “Son doğrulama” satırı güncellenmeli.
+**F0.3 — Tauri 2 kabuğu.** Windows'ta Rust, Node 26 ve WebView2 gerekiyor. Başlamadan önce Windows'ta `npm run setup` ve `npm run verify` çalıştırılıp bu dosyadaki “Son doğrulama” satırı güncellenmeli.
 
 ## Değişiklik günlüğü
 
