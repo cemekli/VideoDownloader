@@ -13,7 +13,8 @@ use tauri::{Builder, Runtime};
 pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
     builder.invoke_handler(tauri::generate_handler![
         commands::ping,
-        commands::get_status
+        commands::get_status,
+        commands::get_diagnostics
     ])
 }
 

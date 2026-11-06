@@ -6,7 +6,12 @@ import type { AppStatus, StatusClient } from "../ipc/types";
 import contract from "@fixtures/ipc-contract.json";
 
 const status = contract.commands.get_status.response as AppStatus;
-const desktop = (getStatus: () => Promise<AppStatus>): StatusClient => ({ kind: "desktop", getStatus, ping: async (n) => ({ nonce: n, contractVersion: 1 }) });
+const desktop = (getStatus: () => Promise<AppStatus>): StatusClient => ({
+  kind: "desktop",
+  getStatus,
+  ping: async (n) => ({ nonce: n, contractVersion: 1 }),
+  getDiagnostics: async () => contract.commands.get_diagnostics.response,
+});
 
 describe("BackendStatus", () => {
   it("labels fixture data so it is not mistaken for a real library", async () => {

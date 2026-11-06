@@ -107,6 +107,21 @@ fn get_status_matches_contract_shape() {
 }
 
 #[test]
+fn get_diagnostics_matches_contract_and_reports_fts5() {
+    let app = app();
+    let w = window(&app, "main");
+    let c = contract();
+    let res =
+        invoke(&w, "get_diagnostics", json!({}), app_origin()).expect("get_diagnostics allowed");
+    assert_same_shape(
+        &res,
+        &c["commands"]["get_diagnostics"]["response"],
+        "get_diagnostics",
+    );
+    assert_eq!(res["sqliteFts5"], true);
+}
+
+#[test]
 fn domain_error_matches_contract_shape() {
     use vv_domain::error::{DomainError, ErrorCode};
     let c = contract();
@@ -178,7 +193,9 @@ fn main_capability_grants_only_app_commands() {
         .iter()
         .map(|p| p.as_str().expect("plain permission id").to_owned())
         .collect();
-    let expected: BTreeSet<String> = ["allow-ping", "allow-get-status"].map(String::from).into();
+    let expected: BTreeSet<String> = ["allow-ping", "allow-get-status", "allow-get-diagnostics"]
+        .map(String::from)
+        .into();
     assert_eq!(perms, expected);
 }
 

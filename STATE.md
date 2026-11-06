@@ -62,7 +62,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | E2E (fixture IPC) | Playwright; 1366×768, 1920×1080, 800 px | `apps/desktop/e2e/` | `npm run e2e` | ✅ çalışıyor |
 | Görsel inceleme | Playwright ekran görüntüleri | `test-artifacts/screenshots/` | `npm run e2e` | ✅ çalışıyor |
 | CI | GitHub Actions, Windows + Linux | `.github/workflows/ci.yml` | push/PR | ✅ ilk çalışma yeşil |
-| SQLite migration/integration | `cargo test` + geçici DB | `crates/vv-persistence` | — | ⬜ F0.5 |
+| SQLite migration/integration | `cargo test` + geçici DB dosyaları | `crates/vv-persistence/tests/` | `npm run test:rust` | ✅ çalışıyor |
 | Gerçek uygulama E2E | Playwright + WebView2 CDP, test exe'si (`e2e-cdp`) | `apps/desktop/e2e-desktop/` | `npm run desktop:e2e-exe` + `npm run e2e:desktop` | ✅ çalışıyor (yalnızca Windows) |
 | Güvenlik testleri | canary secret, kötü niyetli URL/yol | `tests/fixtures/` + Rust | — | 🟨 URL politikası var; gerisi F3–F4 |
 | Erişilebilirlik | Playwright + axe | `apps/desktop/e2e/` | — | ⬜ F2.9 |
@@ -85,7 +85,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.2 | Test altyapısı: Vitest, Playwright (3 görünüm), paylaşılan fixture'lar, `verify` betiği, fixture sır taraması, CI tanımı | §25.1, §25.2, §25.4 | `npm run verify` 8/8; sır taraması sahte bir sızıntıyı yakaladı | ✅ |
 | F0.3 | Tauri 2 kabuğu, tipli `ping`/`status` komutu, gerçek Tauri IPC istemcisi | §10.1, §18 | Windows 11'de pencere açılır; IPC entegrasyon testi geçer | ✅ IPC testleri 9/9 (Windows + Linux), Vitest 17/17; [CI #42261547079](https://github.com/cemekli/VideoDownloader/actions/runs/42261547079) Windows açılış testi: pencere “VideoVault” açık kaldı; 6 Kas 2026 Windows 11'de elle açıldı, “Desktop v0.0.1” gösterdi |
 | F0.4 | Gerçek uygulama üzerinde E2E altyapısı seçimi ve ilk test | §25.1 | ADR + gerçek IPC ile bir E2E testi | ✅ ADR-0001 (`docs/decisions.md`); `e2e-desktop` 4/4 Windows'ta gerçek exe ile: durum rozeti, `ping`, yetki dışı komut reddi, CSP; [CI #42271413057](https://github.com/cemekli/VideoDownloader/actions/runs/42271413057) |
-| F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ⬜ |
+| F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | 🟨 ADR-0002; `vv-persistence` 16/16 (Linux); Windows CI ve gerçek exe'de FTS5 testi bekleniyor |
 | F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ⬜ |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
 | F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ⬜ |

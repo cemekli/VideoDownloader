@@ -4,6 +4,7 @@
 
 use serde::Serialize;
 use tauri::{AppHandle, Runtime};
+use vv_domain::error::{DomainError, ErrorCode};
 
 /// Bumped whenever a command, DTO or error field changes incompatibly.
 pub const CONTRACT_VERSION: u32 = 1;
@@ -61,6 +62,30 @@ pub fn get_status<R: Runtime>(app: AppHandle<R>) -> AppStatus {
     status(&info.name, &info.version.to_string())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostics {
+    /// Version of the SQLite compiled into this executable.
+    pub sqlite_version: String,
+    /// FTS5 module usable in that SQLite (SPEC §16.1).
+    pub sqlite_fts5: bool,
+    /// Newest schema migration this build knows.
+    pub schema_version: u32,
+}
+
+/// Build/runtime facts for Settings → Diagnostics (SPEC §18.1). Contains no
+/// paths, user data or secrets (SPEC §18.3).
+#[tauri::command]
+pub fn get_diagnostics() -> Result<Diagnostics, DomainError> {
+    let info = vv_persistence::sqlite_info()
+        .map_err(|_| DomainError::new(ErrorCode::InternalError, "diag-sqlite-info"))?;
+    Ok(Diagnostics {
+        sqlite_version: info.version,
+        sqlite_fts5: info.fts5,
+        schema_version: vv_persistence::migrations::MIGRATIONS.len() as u32,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,6 +99,13 @@ mod tests {
                 contract_version: CONTRACT_VERSION
             }
         );
+    }
+
+    #[test]
+    fn diagnostics_report_shipped_sqlite_with_fts5() {
+        let d = get_diagnostics().unwrap();
+        assert!(d.sqlite_fts5);
+        assert!(d.schema_version >= 1);
     }
 
     #[test]
