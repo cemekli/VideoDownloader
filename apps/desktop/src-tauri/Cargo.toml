@@ -14,6 +14,12 @@ path = "src/lib.rs"
 name = "videovault"
 path = "src/main.rs"
 
+[features]
+# Test-only build used by apps/desktop/e2e-desktop (ADR-0001). Lets the E2E
+# runner open a WebView2 debugging port on 127.0.0.1 via VV_E2E_CDP_PORT.
+# Never enabled for the shipped executable.
+e2e-cdp = []
+
 [build-dependencies]
 tauri-build = { version = "=2.7.3", features = [] }
 

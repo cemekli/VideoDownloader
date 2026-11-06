@@ -17,15 +17,18 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 
 | Komut | Ne yapar |
 |---|---|
-| `npm run verify` | Tüm kapılar: fixture sır taraması, Rust fmt/clippy/test, TS tip kontrolü, Vitest, Vite build, Playwright E2E |
+| `npm run verify` | Tüm kapılar: fixture sır taraması, Rust fmt/clippy/test, TS tip kontrolü, Vitest, Vite build, Playwright E2E, Windows'ta gerçek uygulama E2E |
 | `npm run verify:fast` | E2E ve build hariç hızlı kontrol |
-| `node scripts/verify.mjs --only rust` | Yalnızca bir grup (`repo`, `rust`, `web`, `e2e`) veya adım kimliği |
+| `node scripts/verify.mjs --only rust` | Yalnızca bir grup (`repo`, `rust`, `web`, `e2e`, `desktop`) veya adım kimliği |
 | `npm run test:rust` | Rust testleri |
 | `npm run test:web` | Vitest |
 | `npm run e2e` | Playwright (fixture IPC, 3 görünüm) |
 | `npm run dev:fixture` | Arayüzü fixture verisiyle tarayıcıda açar |
 | `npm run desktop` | Masaüstü uygulamasını geliştirme modunda açar (Tauri + Vite) |
 | `npm run desktop:build` | Release derlemesi ve Windows installer |
+| `npm run desktop:exe` | Installer'sız release exe (`target/release/videovault.exe`) |
+| `npm run desktop:e2e-exe` | E2E test exe'si (`target/release/videovault-e2e.exe`, cargo özelliği `e2e-cdp`) |
+| `npm run e2e:desktop` | Gerçek uygulama E2E: test exe'sini açar, WebView2'ye bağlanır (yalnızca Windows, önce `desktop:e2e-exe`) |
 
 `verify` sonucu `test-artifacts/verify/report.md` ve `report.json` dosyalarına yazılır. Her adım “automated pass”, “automated fail” veya “not run” olarak raporlanır (SPEC §25.4). JUnit çıktıları `test-artifacts/vitest/` ve `test-artifacts/e2e/`, ekran görüntüleri `test-artifacts/screenshots/` altındadır.
 
@@ -40,13 +43,14 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | IPC komutu (yeni Tauri komutu) | `apps/desktop/src-tauri/tests/ipc.rs` + `tests/fixtures/ipc-contract.json` | Komut `build.rs` listesine ve `capabilities/main.json`'a da eklenir; aksi halde ACL reddeder |
 | UI bileşeni | `apps/desktop/src/**/<Bileşen>.test.tsx` | Fixture istemcisiyle |
 | Kullanıcı yolculuğu | `apps/desktop/e2e/*.spec.ts` | 3 görünümde çalışır |
+| Gerçek uygulama davranışı (IPC, yetki, CSP, pencere) | `apps/desktop/e2e-desktop/*.spec.ts` | Windows'ta gerçek exe ile; ADR-0001 |
 
 Kurallar:
 
 - Test adı veya yorumu ilgili SPEC kimliğini taşır (ör. `AC-29`, `INV-02`).
 - Fixture'lara gerçek URL'ler, çerezler, token'lar veya kişisel dosyalar konmaz. Redaksiyon testlerindeki sahte değerler `CANARY` kelimesini içerir. `verify` bunu denetler.
 - Fixture ile geçen test, canlı platform başarısı sayılmaz.
-- Fixture IPC ile geçen E2E testi, gerçek Tauri IPC'nin çalıştığını kanıtlamaz. `tests/ipc.rs` gerçek IPC yolunu sahte pencereyle test eder; gerçek pencerede E2E F0.4'tedir.
+- Fixture IPC ile geçen E2E testi, gerçek Tauri IPC'nin çalıştığını kanıtlamaz. `tests/ipc.rs` gerçek IPC yolunu sahte pencereyle test eder; gerçek pencere ve WebView2 için `e2e-desktop/` vardır (yalnızca Windows).
 
 ## Fixture'lar
 

@@ -10,7 +10,7 @@
 // Exit code is non-zero if any executed step fails.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -37,7 +37,19 @@ const steps = [
   { id: "web-unit", group: "web", title: "Vitest unit/component tests", run: () => sh("npx", ["vitest", "run"], web) },
   { id: "web-build", group: "web", title: "Vite production build", run: () => sh("npx", ["vite", "build", "--outDir", join(root, "test-artifacts", "web-build")], web) },
   { id: "e2e", group: "e2e", title: "Playwright E2E (fixture IPC, 3 viewports)", run: () => sh("npx", ["playwright", "test", "--trace", "off"], web) },
+  { id: "e2e-desktop", group: "desktop", title: "Real-app E2E on Windows (WebView2 + real IPC, ADR-0001)", run: desktopE2e },
 ];
+
+// Needs Windows and the E2E test build (`npm run desktop:e2e-exe`). Elsewhere it is
+// reported as "not run", never as a pass. CI sets VV_REQUIRE_DESKTOP_E2E=1 so a
+// missing build fails the gate instead of being skipped.
+function desktopE2e() {
+  const required = process.env.VV_REQUIRE_DESKTOP_E2E === "1";
+  const exe = process.env.VV_DESKTOP_E2E_EXE ?? join(root, "target", "release", "videovault-e2e.exe");
+  if (!isWin) return required ? { ok: false, detail: "required but this is not Windows" } : { skipped: true, detail: "Windows only" };
+  if (!existsSync(exe)) return required ? { ok: false, detail: `missing ${relative(root, exe)}` } : { skipped: true, detail: "no E2E build; run npm run desktop:e2e-exe" };
+  return sh("npx", ["playwright", "test", "-c", "playwright.desktop.config.ts", "--trace", "off"], web);
+}
 
 function sh(cmd, argv, cwd) {
   const r = spawnSync(cmd, argv, { cwd, stdio: "inherit", shell: isWin, env: process.env });
@@ -85,7 +97,8 @@ for (const s of steps) {
   console.log(`\n=== ${s.id}: ${s.title} ===`);
   const t = Date.now();
   const r = s.run();
-  results.push({ ...s, status: r.ok ? "automated pass" : "automated fail", detail: r.detail, ms: Date.now() - t });
+  const status = r.skipped ? "not run" : r.ok ? "automated pass" : "automated fail";
+  results.push({ ...s, status, detail: r.detail, ms: Date.now() - t });
 }
 
 const report = {

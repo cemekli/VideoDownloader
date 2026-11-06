@@ -13,6 +13,9 @@
     "e2e": "npm --prefix apps/desktop run e2e",
     "dev:fixture": "npm --prefix apps/desktop run dev:fixture",
     "desktop": "npm --prefix apps/desktop run desktop:dev",
-    "desktop:build": "npm --prefix apps/desktop run desktop:build"
+    "desktop:build": "npm --prefix apps/desktop run desktop:build",
+    "desktop:exe": "npm --prefix apps/desktop run desktop:exe",
+    "e2e:desktop": "npm --prefix apps/desktop run e2e:desktop",
+    "desktop:e2e-exe": "node scripts/build-e2e-exe.mjs"
   }
 }

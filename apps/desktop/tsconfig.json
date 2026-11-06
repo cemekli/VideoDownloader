@@ -16,5 +16,5 @@
     "types": ["vite/client", "vitest/globals", "node"],
     "paths": { "@fixtures/*": ["../../tests/fixtures/*"] }
   },
-  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
+  "include": ["src", "e2e", "e2e-desktop", "vite.config.ts", "playwright.config.ts", "playwright.desktop.config.ts"]
 }
