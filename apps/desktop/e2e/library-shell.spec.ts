@@ -7,6 +7,8 @@ test.describe("library shell", () => {
   test("lists fixture items and separates bookmark-only from downloaded", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+    // Fixture data must be labelled as such (F0.3 status badge).
+    await expect(page.getByTestId("backend-status")).toHaveText("Fixture data");
 
     const cards = page.getByTestId("library-card");
     await expect(cards).toHaveCount(6);

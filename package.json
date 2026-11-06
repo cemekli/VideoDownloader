@@ -11,6 +11,8 @@
     "test:rust": "cargo test --workspace",
     "test:web": "npm --prefix apps/desktop run test",
     "e2e": "npm --prefix apps/desktop run e2e",
-    "dev:fixture": "npm --prefix apps/desktop run dev:fixture"
+    "dev:fixture": "npm --prefix apps/desktop run dev:fixture",
+    "desktop": "npm --prefix apps/desktop run desktop:dev",
+    "desktop:build": "npm --prefix apps/desktop run desktop:build"
   }
 }

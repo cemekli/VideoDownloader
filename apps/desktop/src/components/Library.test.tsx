@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { Library } from "./Library";
-import { createFixtureClient, createTauriClient } from "../ipc/client";
+import { createFixtureClient } from "../ipc/client";
 import type { LibraryClient } from "../ipc/types";
 
 describe("Library", () => {
@@ -21,9 +21,10 @@ describe("Library", () => {
     expect(await screen.findByTestId("library-empty")).toBeInTheDocument();
   });
 
-  it("shows an honest error when the backend is not available", async () => {
-    render(<Library client={createTauriClient()} />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("not implemented yet");
+  it("shows an error when the backend call fails", async () => {
+    const failing: LibraryClient = { listItems: () => Promise.reject(new Error("backend down")) };
+    render(<Library client={failing} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("backend down");
   });
 
   it("shows a loading status before data arrives", () => {

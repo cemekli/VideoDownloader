@@ -7,7 +7,9 @@ const fixtures = fileURLToPath(new URL("../../tests/fixtures", import.meta.url))
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@fixtures": fixtures } },
-  server: { fs: { allow: [".", fixtures] } },
+  // Tauri (src-tauri/tauri.conf.json devUrl) expects exactly this port.
+  server: { port: 5173, strictPort: true, fs: { allow: [".", fixtures] } },
+  clearScreen: false,
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],

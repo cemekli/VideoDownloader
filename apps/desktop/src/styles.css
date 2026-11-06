@@ -12,6 +12,8 @@
 body { margin: 0; background: var(--bg); color: var(--text); }
 .topbar { height: 60px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #2a2d33; }
 .brand { font-weight: 600; }
+.backend-status { margin-left: auto; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #2a2d33; color: #a8b0bd; }
+.backend-status[data-state="down"], .backend-status[data-state="mismatch"] { border-color: #b4533a; color: #f0a58f; }
 main { padding: 16px; }
 h1 { font-size: 1.25rem; margin: 0 0 16px; }
 .library-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }

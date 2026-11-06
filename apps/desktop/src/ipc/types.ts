@@ -22,3 +22,40 @@ export interface LibraryItemDto {
 export interface LibraryClient {
   listItems(): Promise<LibraryItemDto[]>;
 }
+
+// ---- IPC contract v1 (tests/fixtures/ipc-contract.json, SPEC §18) ----
+
+export interface Pong {
+  nonce: number;
+  contractVersion: number;
+}
+
+export interface AppStatus {
+  appName: string;
+  appVersion: string;
+  contractVersion: number;
+  os: string;
+  arch: string;
+  buildProfile: "debug" | "release";
+}
+
+/** Where the UI gets its data from. Shown to the user so fixture data is never mistaken for a real library. */
+export type BackendKind = "desktop" | "fixture";
+
+/** SPEC §18.3. Codes are the stable strings from SPEC §19. */
+export interface DomainError {
+  code: string;
+  messageKey: string;
+  retryable: boolean;
+  suggestedAction: string | null;
+  diagnosticId: string;
+  safeDetails: Record<string, string>;
+}
+
+export interface StatusClient {
+  readonly kind: BackendKind;
+  ping(nonce: number): Promise<Pong>;
+  getStatus(): Promise<AppStatus>;
+}
+
+export type BackendClient = LibraryClient & StatusClient;
