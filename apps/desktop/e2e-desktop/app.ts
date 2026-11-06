@@ -1,9 +1,10 @@
 // Launches the real VideoVault executable and attaches Playwright to its
 // WebView2 over the Chrome DevTools Protocol (docs/decisions.md ADR-0001).
 //
-// Windows only: WebView2 is Chromium-based and honours
-// WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS. The debugging port is opened only for
-// this test process, on 127.0.0.1, and the app gets a throwaway WebView2 profile.
+// Windows only. The test build (cargo feature `e2e-cdp`) reads VV_E2E_CDP_PORT
+// and passes --remote-debugging-port to WebView2; the env var
+// WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS does not work because Tauri always
+// sets its own browser arguments. The app gets a throwaway WebView2 profile.
 
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -15,8 +16,11 @@ import { join, resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 
-/** Release build from `npm run desktop:exe`; override with VV_DESKTOP_EXE. */
-export const desktopExe = process.env.VV_DESKTOP_EXE ?? join(repoRoot, "target", "release", "videovault.exe");
+/**
+ * Test build from `npm run desktop:e2e-exe` (release + feature `e2e-cdp`).
+ * The shipped executable cannot open a debugging port. Override with VV_DESKTOP_E2E_EXE.
+ */
+export const desktopExe = process.env.VV_DESKTOP_E2E_EXE ?? join(repoRoot, "target", "release", "videovault-e2e.exe");
 
 export interface DesktopApp {
   page: Page;
@@ -52,14 +56,14 @@ async function waitFor<T>(what: string, timeoutMs: number, probe: () => Promise<
 }
 
 export async function launchDesktopApp(): Promise<DesktopApp> {
-  if (!existsSync(desktopExe)) throw new Error(`Desktop executable not found: ${desktopExe}. Run \`npm run desktop:exe\` first.`);
+  if (!existsSync(desktopExe)) throw new Error(`Desktop executable not found: ${desktopExe}. Run \`npm run desktop:e2e-exe\` first.`);
 
   const port = await freePort();
   const profile = mkdtempSync(join(tmpdir(), "vv-e2e-webview2-"));
   const proc = spawn(desktopExe, [], {
     env: {
       ...process.env,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      VV_E2E_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: profile,
     },
     stdio: "ignore",

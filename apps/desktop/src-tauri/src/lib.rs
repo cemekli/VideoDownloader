@@ -18,7 +18,33 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
 }
 
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(feature = "e2e-cdp")]
+    e2e::enable_cdp(context.config_mut());
     register(Builder::default())
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running VideoVault");
+}
+
+/// Test-only hook (feature `e2e-cdp`, ADR-0001). WebView2 ignores
+/// WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS when the app passes its own browser
+/// arguments, which Tauri always does, so the port has to be set here.
+#[cfg(feature = "e2e-cdp")]
+mod e2e {
+    /// Tauri/wry's default WebView2 arguments; setting our own replaces them.
+    const WRY_DEFAULT_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+
+    pub fn enable_cdp(config: &mut tauri::Config) {
+        let Ok(port) = std::env::var("VV_E2E_CDP_PORT") else {
+            return;
+        };
+        let Ok(port) = port.parse::<u16>() else {
+            return;
+        };
+        for window in &mut config.app.windows {
+            window.additional_browser_args =
+                Some(format!("{WRY_DEFAULT_ARGS} --remote-debugging-port={port}"));
+        }
+    }
 }

@@ -27,7 +27,8 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | `npm run desktop` | Masaüstü uygulamasını geliştirme modunda açar (Tauri + Vite) |
 | `npm run desktop:build` | Release derlemesi ve Windows installer |
 | `npm run desktop:exe` | Installer'sız release exe (`target/release/videovault.exe`) |
-| `npm run e2e:desktop` | Gerçek uygulama E2E: exe'yi açar, WebView2'ye bağlanır (yalnızca Windows, önce `desktop:exe`) |
+| `npm run desktop:e2e-exe` | E2E test exe'si (`target/release/videovault-e2e.exe`, cargo özelliği `e2e-cdp`) |
+| `npm run e2e:desktop` | Gerçek uygulama E2E: test exe'sini açar, WebView2'ye bağlanır (yalnızca Windows, önce `desktop:e2e-exe`) |
 
 `verify` sonucu `test-artifacts/verify/report.md` ve `report.json` dosyalarına yazılır. Her adım “automated pass”, “automated fail” veya “not run” olarak raporlanır (SPEC §25.4). JUnit çıktıları `test-artifacts/vitest/` ve `test-artifacts/e2e/`, ekran görüntüleri `test-artifacts/screenshots/` altındadır.
 

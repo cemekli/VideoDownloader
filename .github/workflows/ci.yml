@@ -38,6 +38,10 @@ jobs:
       - name: Install Playwright Chromium
         run: npx --prefix apps/desktop playwright install --with-deps chromium
       # Built before verify so the real-app E2E step (e2e-desktop) can launch it.
+      - name: Build E2E test app (Windows, feature e2e-cdp)
+        if: runner.os == 'Windows'
+        run: node scripts/build-e2e-exe.mjs
+      # Built last so target/release/videovault.exe is the shipped build, without e2e-cdp.
       - name: Build desktop app (Windows, release, no installer)
         if: runner.os == 'Windows'
         working-directory: apps/desktop

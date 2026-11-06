@@ -40,14 +40,14 @@ const steps = [
   { id: "e2e-desktop", group: "desktop", title: "Real-app E2E on Windows (WebView2 + real IPC, ADR-0001)", run: desktopE2e },
 ];
 
-// Needs Windows and a release build (`npm run desktop:exe`). Elsewhere it is
+// Needs Windows and the E2E test build (`npm run desktop:e2e-exe`). Elsewhere it is
 // reported as "not run", never as a pass. CI sets VV_REQUIRE_DESKTOP_E2E=1 so a
 // missing build fails the gate instead of being skipped.
 function desktopE2e() {
   const required = process.env.VV_REQUIRE_DESKTOP_E2E === "1";
-  const exe = process.env.VV_DESKTOP_EXE ?? join(root, "target", "release", "videovault.exe");
+  const exe = process.env.VV_DESKTOP_E2E_EXE ?? join(root, "target", "release", "videovault-e2e.exe");
   if (!isWin) return required ? { ok: false, detail: "required but this is not Windows" } : { skipped: true, detail: "Windows only" };
-  if (!existsSync(exe)) return required ? { ok: false, detail: `missing ${relative(root, exe)}` } : { skipped: true, detail: "no release build; run npm run desktop:exe" };
+  if (!existsSync(exe)) return required ? { ok: false, detail: `missing ${relative(root, exe)}` } : { skipped: true, detail: "no E2E build; run npm run desktop:e2e-exe" };
   return sh("npx", ["playwright", "test", "-c", "playwright.desktop.config.ts", "--trace", "off"], web);
 }
 

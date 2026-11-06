@@ -15,6 +15,7 @@
     "desktop": "npm --prefix apps/desktop run desktop:dev",
     "desktop:build": "npm --prefix apps/desktop run desktop:build",
     "desktop:exe": "npm --prefix apps/desktop run desktop:exe",
-    "e2e:desktop": "npm --prefix apps/desktop run e2e:desktop"
+    "e2e:desktop": "npm --prefix apps/desktop run e2e:desktop",
+    "desktop:e2e-exe": "node scripts/build-e2e-exe.mjs"
   }
 }
