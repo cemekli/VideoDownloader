@@ -1,0 +1,8 @@
+{
+  "name": "error-unsupported",
+  "kind": "metadata",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "null\n",
+  "stderr": "WARNING: [generic] Falling back on generic information extractor\nERROR: Unsupported URL: http://127.0.0.1:8765/\n"
+}

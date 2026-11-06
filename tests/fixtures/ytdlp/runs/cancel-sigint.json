@@ -1,0 +1,8 @@
+{
+  "name": "cancel-sigint",
+  "kind": "download",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "vv-progress {\"status\":\"downloading\",\"downloaded_bytes\":1024,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.0018148422241210938,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":3072,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.002394437789916992,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":7168,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":0,\"speed\":6079832.370475228,\"elapsed\":0.0028405189514160156,\"fragment_index\":NA,\"fragment_count\":NA}\n",
+  "stderr": "\nERROR: Interrupted by user\n"
+}

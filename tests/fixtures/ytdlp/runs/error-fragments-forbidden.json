@@ -1,0 +1,8 @@
+{
+  "name": "error-fragments-forbidden",
+  "kind": "download",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "ERROR: The downloaded file is empty\n"
+}

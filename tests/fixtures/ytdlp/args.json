@@ -1,0 +1,26 @@
+{
+  "_comment": "Fixed yt-dlp flags (SPEC §14.1, DL-05). Source of truth for crates/vv-ytdlp (args.rs) and scripts/capture-ytdlp-fixtures.mjs; a Rust test fails if they drift. URLs, paths, output templates and format selectors are added by the backend at run time, never taken from user input.",
+  "ytDlpVersion": "2026.10.26",
+  "common": [
+    "--ignore-config",
+    "--no-plugin-dirs",
+    "--no-cache-dir",
+    "--color",
+    "never"
+  ],
+  "metadata": [
+    "--dump-single-json",
+    "--no-playlist",
+    "--flat-playlist"
+  ],
+  "download": [
+    "--quiet",
+    "--progress",
+    "--newline",
+    "--no-playlist",
+    "--progress-template",
+    "download:vv-progress {\"status\":%(progress.status)j,\"downloaded_bytes\":%(progress.downloaded_bytes)j,\"total_bytes\":%(progress.total_bytes)j,\"total_bytes_estimate\":%(progress.total_bytes_estimate)j,\"eta\":%(progress.eta)j,\"speed\":%(progress.speed)j,\"elapsed\":%(progress.elapsed)j,\"fragment_index\":%(progress.fragment_index)j,\"fragment_count\":%(progress.fragment_count)j}",
+    "--progress-template",
+    "postprocess:vv-postprocess {\"status\":%(progress.status)j,\"postprocessor\":%(progress.postprocessor)j}"
+  ]
+}

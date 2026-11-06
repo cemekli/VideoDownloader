@@ -14,6 +14,8 @@ npm run desktop   # masaüstü uygulamasını aç (geliştirme modu)
 apps/desktop/          React + TypeScript + Vite arayüzü, Vitest ve Playwright testleri
 apps/desktop/src-tauri/ Tauri 2 kabuğu: IPC komutları, yetkiler (capabilities), CSP
 crates/vv-domain/      Saf Rust iş kuralları (IO yok)
+crates/vv-persistence/ SQLite, migration ve yedek (ADR-0002)
+crates/vv-ytdlp/       yt-dlp bayrakları ve çıktı ayrıştırma (ADR-0003)
 tests/fixtures/        Rust ve arayüz testlerinin paylaştığı deterministik fixture'lar
 scripts/verify.mjs     Tek komutla doğrulama ve rapor
 .github/workflows/     CI (Windows + Linux)

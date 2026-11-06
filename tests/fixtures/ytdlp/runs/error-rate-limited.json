@@ -1,0 +1,8 @@
+{
+  "name": "error-rate-limited",
+  "kind": "metadata",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "null\n",
+  "stderr": "ERROR: [generic] ratelimited: Unable to download webpage: HTTP Error 429: Too Many Requests (caused by <HTTPError 429: Too Many Requests>)\n"
+}

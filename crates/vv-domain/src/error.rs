@@ -16,19 +16,57 @@ pub enum ErrorCode {
     UrlBlocked,
     UrlHasCredentials,
     InternalError,
+    // yt-dlp outcomes (STATE.md F0.6, SPEC §19).
+    NetworkUnavailable,
+    RateLimited,
+    LoginRequired,
+    AccessDenied,
+    ContentUnavailable,
+    RegionRestricted,
+    DrmUnsupported,
+    ExtractorUnsupported,
+    ExtractorFailed,
+    PlaylistUnsupported,
+    DiskFull,
+    PathNotWritable,
+    ToolMissing,
+    Timeout,
+    Canceled,
 }
+
+/// Every code, in declaration order. Tests use it to check that each code has
+/// a message key, a retry rule and a suggested action.
+pub const ALL_ERROR_CODES: &[ErrorCode] = &[
+    ErrorCode::InvalidUrl,
+    ErrorCode::UrlBlocked,
+    ErrorCode::UrlHasCredentials,
+    ErrorCode::InternalError,
+    ErrorCode::NetworkUnavailable,
+    ErrorCode::RateLimited,
+    ErrorCode::LoginRequired,
+    ErrorCode::AccessDenied,
+    ErrorCode::ContentUnavailable,
+    ErrorCode::RegionRestricted,
+    ErrorCode::DrmUnsupported,
+    ErrorCode::ExtractorUnsupported,
+    ErrorCode::ExtractorFailed,
+    ErrorCode::PlaylistUnsupported,
+    ErrorCode::DiskFull,
+    ErrorCode::PathNotWritable,
+    ErrorCode::ToolMissing,
+    ErrorCode::Timeout,
+    ErrorCode::Canceled,
+];
 
 impl ErrorCode {
     /// Whether retrying the same request can succeed (SPEC §19 "İş davranışı").
     pub fn retryable(self) -> bool {
-        // None of the current codes is retryable; NETWORK_UNAVAILABLE,
-        // RATE_LIMITED and TIMEOUT will be when they are added.
-        match self {
-            ErrorCode::InvalidUrl
-            | ErrorCode::UrlBlocked
-            | ErrorCode::UrlHasCredentials
-            | ErrorCode::InternalError => false,
-        }
+        // Only transient conditions. EXTRACTOR_FAILED is not: SPEC §19 offers
+        // the user a retry, the job does not retry by itself.
+        matches!(
+            self,
+            ErrorCode::NetworkUnavailable | ErrorCode::RateLimited | ErrorCode::Timeout
+        )
     }
 
     /// Localization key; the UI owns the actual text.
@@ -38,6 +76,21 @@ impl ErrorCode {
             ErrorCode::UrlBlocked => "error.url_blocked",
             ErrorCode::UrlHasCredentials => "error.url_has_credentials",
             ErrorCode::InternalError => "error.internal",
+            ErrorCode::NetworkUnavailable => "error.network_unavailable",
+            ErrorCode::RateLimited => "error.rate_limited",
+            ErrorCode::LoginRequired => "error.login_required",
+            ErrorCode::AccessDenied => "error.access_denied",
+            ErrorCode::ContentUnavailable => "error.content_unavailable",
+            ErrorCode::RegionRestricted => "error.region_restricted",
+            ErrorCode::DrmUnsupported => "error.drm_unsupported",
+            ErrorCode::ExtractorUnsupported => "error.extractor_unsupported",
+            ErrorCode::ExtractorFailed => "error.extractor_failed",
+            ErrorCode::PlaylistUnsupported => "error.playlist_unsupported",
+            ErrorCode::DiskFull => "error.disk_full",
+            ErrorCode::PathNotWritable => "error.path_not_writable",
+            ErrorCode::ToolMissing => "error.tool_missing",
+            ErrorCode::Timeout => "error.timeout",
+            ErrorCode::Canceled => "error.canceled",
         }
     }
 }
@@ -48,6 +101,30 @@ impl ErrorCode {
 pub enum SuggestedAction {
     FixInput,
     ShowDiagnostics,
+    Retry,
+    SignIn,
+    RepairTool,
+    ChooseLocation,
+    FreeSpace,
+}
+
+impl ErrorCode {
+    /// SPEC §19 "İş davranışı" column, reduced to one closed action. `None`
+    /// means the UI only explains (e.g. DRM, region, a deliberate cancel).
+    pub fn suggested_action(self) -> Option<SuggestedAction> {
+        use ErrorCode::*;
+        match self {
+            InvalidUrl | UrlBlocked | UrlHasCredentials => Some(SuggestedAction::FixInput),
+            InternalError | ExtractorFailed => Some(SuggestedAction::ShowDiagnostics),
+            NetworkUnavailable | RateLimited | Timeout => Some(SuggestedAction::Retry),
+            LoginRequired => Some(SuggestedAction::SignIn),
+            ToolMissing => Some(SuggestedAction::RepairTool),
+            PathNotWritable => Some(SuggestedAction::ChooseLocation),
+            DiskFull => Some(SuggestedAction::FreeSpace),
+            AccessDenied | ContentUnavailable | RegionRestricted | DrmUnsupported
+            | ExtractorUnsupported | PlaylistUnsupported | Canceled => None,
+        }
+    }
 }
 
 /// SPEC §18.3 `DomainError`. On the wire fields are camelCase like every other
@@ -71,17 +148,11 @@ pub const MAX_SAFE_DETAIL_LEN: usize = 200;
 
 impl DomainError {
     pub fn new(code: ErrorCode, diagnostic_id: impl Into<String>) -> Self {
-        let suggested_action = match code {
-            ErrorCode::InvalidUrl | ErrorCode::UrlBlocked | ErrorCode::UrlHasCredentials => {
-                Some(SuggestedAction::FixInput)
-            }
-            ErrorCode::InternalError => Some(SuggestedAction::ShowDiagnostics),
-        };
         DomainError {
             code,
             message_key: code.message_key(),
             retryable: code.retryable(),
-            suggested_action,
+            suggested_action: code.suggested_action(),
             diagnostic_id: diagnostic_id.into(),
             safe_details: BTreeMap::new(),
         }
@@ -140,6 +211,23 @@ mod tests {
                 "UrlPolicyError::code() and ErrorCode must agree"
             );
         }
+    }
+
+    #[test]
+    fn every_code_has_a_unique_key_matching_its_wire_name() {
+        let mut keys = std::collections::BTreeSet::new();
+        for &code in ALL_ERROR_CODES {
+            let wire = serde_json::to_value(code).unwrap();
+            let wire = wire.as_str().unwrap().to_ascii_lowercase();
+            let key = code.message_key();
+            assert!(keys.insert(key), "duplicate key {key}");
+            if code != ErrorCode::InternalError {
+                assert_eq!(key, format!("error.{wire}"));
+            }
+        }
+        assert!(ErrorCode::RateLimited.retryable());
+        assert!(!ErrorCode::LoginRequired.retryable());
+        assert_eq!(ErrorCode::Canceled.suggested_action(), None);
     }
 
     #[test]

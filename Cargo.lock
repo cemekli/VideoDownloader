@@ -3870,6 +3870,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-ytdlp"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "vv-domain",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
