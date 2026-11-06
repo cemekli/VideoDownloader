@@ -33,25 +33,17 @@ jobs:
         run: npm --prefix apps/desktop ci
       - name: Install Playwright Chromium
         run: npx --prefix apps/desktop playwright install --with-deps chromium
-      - name: Verify (all gates)
-        run: node scripts/verify.mjs
-        env:
-          CI: "true"
+      # Built before verify so the real-app E2E step (e2e-desktop) can launch it.
       - name: Build desktop app (Windows, release, no installer)
         if: runner.os == 'Windows'
         working-directory: apps/desktop
         run: npx tauri build --no-bundle
-      - name: Smoke test - app starts and stays up (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $exe = "target/release/videovault.exe"
-          $p = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 15
-          if ($p.HasExited) { throw "videovault.exe exited early with code $($p.ExitCode)" }
-          $w = Get-Process -Id $p.Id
-          Write-Host "Running: $($w.ProcessName) pid=$($w.Id) window='$($w.MainWindowTitle)'"
-          Stop-Process -Id $p.Id -Force
+      - name: Verify (all gates)
+        run: node scripts/verify.mjs
+        env:
+          CI: "true"
+          # On Windows the real-app E2E must run; a missing build is a failure, not a skip.
+          VV_REQUIRE_DESKTOP_E2E: ${{ runner.os == 'Windows' && '1' || '0' }}
       - name: Upload desktop app (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7

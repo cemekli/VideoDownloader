@@ -13,7 +13,9 @@
     "e2e": "playwright test --trace off",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "desktop:exe": "tauri build --no-bundle",
+    "e2e:desktop": "playwright test -c playwright.desktop.config.ts --trace off"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
