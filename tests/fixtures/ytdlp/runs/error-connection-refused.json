@@ -1,0 +1,8 @@
+{
+  "name": "error-connection-refused",
+  "kind": "metadata",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "null\n",
+  "stderr": "ERROR: [generic] clip: Unable to download webpage: [Errno 111] Connection refused (caused by TransportError('[Errno 111] Connection refused'))\n"
+}

@@ -1,0 +1,114 @@
+{
+  "_comment": "Written by scripts/capture-ytdlp-fixtures.mjs. Real yt-dlp output against a local server; do not edit by hand.",
+  "ytDlpVersion": "2026.10.26",
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "capturedOn": "linux",
+  "capturedAt": "2026-11-06",
+  "runs": [
+    {
+      "name": "metadata-hls",
+      "kind": "metadata",
+      "file": "runs/metadata-hls.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "metadata-direct",
+      "kind": "metadata",
+      "file": "runs/metadata-direct.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "metadata-playlist",
+      "kind": "metadata",
+      "file": "runs/metadata-playlist.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "download-direct",
+      "kind": "download",
+      "file": "runs/download-direct.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "download-unknown-total",
+      "kind": "download",
+      "file": "runs/download-unknown-total.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "download-hls",
+      "kind": "download",
+      "file": "runs/download-hls.json",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "name": "cancel-sigint",
+      "kind": "download",
+      "file": "runs/cancel-sigint.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "cancel-killed",
+      "kind": "download",
+      "file": "runs/cancel-killed.json",
+      "exitCode": null,
+      "signal": "SIGKILL"
+    },
+    {
+      "name": "error-not-found",
+      "kind": "metadata",
+      "file": "runs/error-not-found.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-forbidden",
+      "kind": "metadata",
+      "file": "runs/error-forbidden.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-rate-limited",
+      "kind": "metadata",
+      "file": "runs/error-rate-limited.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-connection-refused",
+      "kind": "metadata",
+      "file": "runs/error-connection-refused.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-unsupported",
+      "kind": "metadata",
+      "file": "runs/error-unsupported.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-fragments-forbidden",
+      "kind": "download",
+      "file": "runs/error-fragments-forbidden.json",
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "name": "error-disk-full",
+      "kind": "download",
+      "file": "runs/error-disk-full.json",
+      "exitCode": 1,
+      "signal": null
+    }
+  ]
+}

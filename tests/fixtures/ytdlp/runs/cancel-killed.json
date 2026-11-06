@@ -1,0 +1,8 @@
+{
+  "name": "cancel-killed",
+  "kind": "download",
+  "exitCode": null,
+  "signal": "SIGKILL",
+  "stdout": "vv-progress {\"status\":\"downloading\",\"downloaded_bytes\":1024,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.0020303726196289062,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":3072,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.002649068832397461,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":7168,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":0,\"speed\":5896209.270837419,\"elapsed\":0.003052234649658203,\"fragment_index\":NA,\"fragment_count\":NA}\n",
+  "stderr": ""
+}

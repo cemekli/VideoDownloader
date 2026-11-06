@@ -1,0 +1,8 @@
+{
+  "name": "error-disk-full",
+  "kind": "download",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "vv-progress {\"status\":\"downloading\",\"downloaded_bytes\":1024,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.0024628639221191406,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":3072,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":NA,\"speed\":NA,\"elapsed\":0.003042459487915039,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":7168,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":0,\"speed\":6601838.180061485,\"elapsed\":0.003427743911743164,\"fragment_index\":NA,\"fragment_count\":NA}\nvv-progress {\"status\":\"downloading\",\"downloaded_bytes\":15360,\"total_bytes\":61758,\"total_bytes_estimate\":NA,\"eta\":0,\"speed\":10126455.429110343,\"elapsed\":0.003858804702758789,\"fragment_index\":NA,\"fragment_count\":NA}\n",
+  "stderr": "\n\nERROR: unable to write data: [Errno 28] No space left on device\n"
+}

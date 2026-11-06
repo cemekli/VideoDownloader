@@ -1,0 +1,8 @@
+{
+  "name": "error-forbidden",
+  "kind": "metadata",
+  "exitCode": 1,
+  "signal": null,
+  "stdout": "null\n",
+  "stderr": "ERROR: [generic] forbidden: Unable to download webpage: HTTP Error 403: Forbidden (caused by <HTTPError 403: Forbidden>)\n"
+}

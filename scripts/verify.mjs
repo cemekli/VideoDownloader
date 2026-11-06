@@ -69,8 +69,8 @@ function walk(dir) {
 function checkFixtures() {
   const patterns = [
     /set-cookie\s*:/i,
-    /\bauthorization\s*:\s*\S+/i,
-    /\bbearer\s+[a-z0-9._-]{16,}/i,
+    /\bauthorization\s*:\s*(?!(bearer\s+)?CANARY)\S+/i,
+    /\bbearer\s+(?!CANARY)[a-z0-9._-]{16,}/i,
     /\b(remixsid|sessionid|sid|__secure-[a-z0-9-]+)\s*=\s*(?!CANARY)[a-z0-9]{12,}/i,
     /^#\s*netscape http cookie file/im,
   ];

@@ -63,8 +63,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | Görsel inceleme | Playwright ekran görüntüleri | `test-artifacts/screenshots/` | `npm run e2e` | ✅ çalışıyor |
 | CI | GitHub Actions, Windows + Linux | `.github/workflows/ci.yml` | push/PR | ✅ ilk çalışma yeşil |
 | SQLite migration/integration | `cargo test` + geçici DB dosyaları | `crates/vv-persistence/tests/` | `npm run test:rust` | ✅ çalışıyor |
+| yt-dlp çıktı fixture'ları | gerçek yt-dlp 2026.10.26 çalışmaları (yerel sunucu) + kaynak metinleri | `crates/vv-ytdlp/tests/`, `tests/fixtures/ytdlp/` | `npm run test:rust`; yeniden yakalama `npm run fixtures:ytdlp` | ✅ çalışıyor |
 | Gerçek uygulama E2E | Playwright + WebView2 CDP, test exe'si (`e2e-cdp`) | `apps/desktop/e2e-desktop/` | `npm run desktop:e2e-exe` + `npm run e2e:desktop` | ✅ çalışıyor (yalnızca Windows) |
-| Güvenlik testleri | canary secret, kötü niyetli URL/yol | `tests/fixtures/` + Rust | — | 🟨 URL politikası var; gerisi F3–F4 |
+| Güvenlik testleri | canary secret, kötü niyetli URL/yol | `tests/fixtures/` + Rust | — | 🟨 URL politikası ve yt-dlp stderr redaksiyonu (CANARY) var; gerisi F3–F4 |
 | Erişilebilirlik | Playwright + axe | `apps/desktop/e2e/` | — | ⬜ F2.9 |
 | Performans | sürümlü veri üreticisi + benchmark | `tests/perf/` | — | ⬜ F0.12 |
 | Kapsama matrisi | P0 gereksinim ↔ AC ↔ test | `docs/testing.md` | — | ⬜ F0.11 |
@@ -86,7 +87,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.3 | Tauri 2 kabuğu, tipli `ping`/`status` komutu, gerçek Tauri IPC istemcisi | §10.1, §18 | Windows 11'de pencere açılır; IPC entegrasyon testi geçer | ✅ IPC testleri 9/9 (Windows + Linux), Vitest 17/17; [CI #42261547079](https://github.com/cemekli/VideoDownloader/actions/runs/42261547079) Windows açılış testi: pencere “VideoVault” açık kaldı; 6 Kas 2026 Windows 11'de elle açıldı, “Desktop v0.0.1” gösterdi |
 | F0.4 | Gerçek uygulama üzerinde E2E altyapısı seçimi ve ilk test | §25.1 | ADR + gerçek IPC ile bir E2E testi | ✅ ADR-0001 (`docs/decisions.md`); `e2e-desktop` 4/4 Windows'ta gerçek exe ile: durum rozeti, `ping`, yetki dışı komut reddi, CSP; [CI #42271413057](https://github.com/cemekli/VideoDownloader/actions/runs/42271413057) |
 | F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ✅ ADR-0002; `vv-persistence` 16/16 (Windows + Linux); gerçek exe'de `packaged SQLite 3.53.2, FTS5=true, schema v1`, `e2e-desktop` 5/5; [CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245) |
-| F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ⬜ |
+| F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | 🟨 ADR-0003; `vv-ytdlp` 31/31 (Linux): 15 gerçek yt-dlp çalışması + 20 kaynak metni vakası; Windows CI bekleniyor |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
 | F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ⬜ |
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ⬜ |

@@ -1,0 +1,145 @@
+{
+  "_comment": "yt-dlp 2026.10.26 error lines that cannot be produced by a local server. Each message is copied from the yt-dlp source file named in `source` (or, for `os`, the operating system's own error text) and composed the way ExtractorError formats it: 'ERROR: [extractor] id: message'. Captured runs live in runs/; these complement them and are not proof of live behaviour (SPEC §21.2).",
+  "cases": [
+    {
+      "name": "login-required-cookies",
+      "source": "yt_dlp/extractor/common.py raise_login_required + _login_hint('cookies')",
+      "stderr": "ERROR: [vk] -100000_200000: This video is only available for registered users. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies\n",
+      "exitCode": 1,
+      "expected": "LOGIN_REQUIRED"
+    },
+    {
+      "name": "private-video",
+      "source": "yt_dlp/extractor (several): 'Private video. Login if you have permissions to watch'",
+      "stderr": "ERROR: [example] abc123: Private video. Login if you have permissions to watch\n",
+      "exitCode": 1,
+      "expected": "LOGIN_REQUIRED"
+    },
+    {
+      "name": "geo-restricted",
+      "source": "yt_dlp/extractor/common.py raise_geo_restricted (GeoRestrictedError)",
+      "stderr": "ERROR: [example] abc123: This video is not available from your location due to geo restriction\n",
+      "exitCode": 1,
+      "expected": "REGION_RESTRICTED"
+    },
+    {
+      "name": "geo-country",
+      "source": "yt_dlp/extractor (several): 'The video is not available in your country'",
+      "stderr": "ERROR: [example] abc123: The video is not available in your country\n",
+      "exitCode": 1,
+      "expected": "REGION_RESTRICTED"
+    },
+    {
+      "name": "drm",
+      "source": "yt_dlp/extractor/common.py report_drm: 'This video is DRM protected'",
+      "stderr": "ERROR: [example] abc123: This video is DRM protected\n",
+      "exitCode": 1,
+      "expected": "DRM_UNSUPPORTED"
+    },
+    {
+      "name": "video-unavailable",
+      "source": "yt_dlp/extractor/youtube: 'Video unavailable'",
+      "stderr": "ERROR: [youtube] aaaaaaaaaaa: Video unavailable\n",
+      "exitCode": 1,
+      "expected": "CONTENT_UNAVAILABLE"
+    },
+    {
+      "name": "video-removed",
+      "source": "yt_dlp/extractor (several): 'Video has been removed'",
+      "stderr": "ERROR: [example] abc123: Video has been removed\n",
+      "exitCode": 1,
+      "expected": "CONTENT_UNAVAILABLE"
+    },
+    {
+      "name": "http-410",
+      "source": "yt_dlp/networking HTTPError, same shape as runs/error-not-found.json",
+      "stderr": "ERROR: [generic] gone: Unable to download webpage: HTTP Error 410: Gone (caused by <HTTPError 410: Gone>)\n",
+      "exitCode": 1,
+      "expected": "CONTENT_UNAVAILABLE"
+    },
+    {
+      "name": "ffmpeg-missing-postprocess",
+      "source": "yt_dlp/postprocessor/ffmpeg.py: 'ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location'",
+      "stderr": "ERROR: Postprocessing: ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location\n",
+      "exitCode": 1,
+      "expected": "TOOL_MISSING"
+    },
+    {
+      "name": "ffmpeg-missing-merge",
+      "source": "yt_dlp/YoutubeDL.py process_info: 'You have requested merging of multiple formats but ffmpeg is not installed'",
+      "stderr": "ERROR: You have requested merging of multiple formats but ffmpeg is not installed. Aborting due to --abort-on-error\n",
+      "exitCode": 1,
+      "expected": "TOOL_MISSING"
+    },
+    {
+      "name": "js-runtime-missing",
+      "source": "yt_dlp/extractor/youtube/_video.py warning 'No supported JavaScript runtime could be found' followed by a format error",
+      "stderr": "WARNING: [youtube] aaaaaaaaaaa: No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing.\nERROR: [youtube] aaaaaaaaaaa: Requested format is not available. Use --list-formats for a list of available formats\n",
+      "exitCode": 1,
+      "expected": "TOOL_MISSING"
+    },
+    {
+      "name": "format-unavailable",
+      "source": "yt_dlp/YoutubeDL.py: 'Requested format is not available. Use --list-formats for a list of available formats'",
+      "stderr": "ERROR: [generic] clip: Requested format is not available. Use --list-formats for a list of available formats\n",
+      "exitCode": 1,
+      "expected": "EXTRACTOR_FAILED"
+    },
+    {
+      "name": "not-writable-windows",
+      "source": "yt_dlp/downloader/http.py 'unable to open for writing: {err}' with a Windows PermissionError",
+      "stderr": "ERROR: unable to open for writing: [Errno 13] Permission denied: 'C:\\\\Users\\\\jdoe\\\\Videos\\\\abc123.mp4.part'\n",
+      "exitCode": 1,
+      "expected": "PATH_NOT_WRITABLE"
+    },
+    {
+      "name": "disk-full-windows",
+      "source": "yt_dlp/downloader/http.py 'unable to write data: {err}' with Windows ERROR_DISK_FULL",
+      "stderr": "ERROR: unable to write data: [Errno 28] No space left on device\n",
+      "exitCode": 1,
+      "expected": "DISK_FULL"
+    },
+    {
+      "name": "connection-refused-windows",
+      "source": "os: Windows WSAECONNREFUSED text inside yt-dlp's TransportError",
+      "stderr": "ERROR: [generic] clip: Unable to download webpage: [WinError 10061] No connection could be made because the target machine actively refused it (caused by TransportError('[WinError 10061] No connection could be made because the target machine actively refused it'))\n",
+      "exitCode": 1,
+      "expected": "NETWORK_UNAVAILABLE"
+    },
+    {
+      "name": "dns-failure-windows",
+      "source": "os: Windows getaddrinfo failure inside yt-dlp's TransportError",
+      "stderr": "ERROR: [generic] clip: Unable to download webpage: [Errno 11001] getaddrinfo failed (caused by TransportError('[Errno 11001] getaddrinfo failed'))\n",
+      "exitCode": 1,
+      "expected": "NETWORK_UNAVAILABLE"
+    },
+    {
+      "name": "read-timeout",
+      "source": "os/ssl: 'The read operation timed out' inside yt-dlp's TransportError",
+      "stderr": "ERROR: [generic] clip: Unable to download webpage: The read operation timed out (caused by TransportError('The read operation timed out'))\n",
+      "exitCode": 1,
+      "expected": "NETWORK_UNAVAILABLE"
+    },
+    {
+      "name": "unexpected-bug",
+      "source": "yt_dlp/utils/_utils.py ExtractorError with expected=False appends bug_reports_message()",
+      "stderr": "ERROR: [example] abc123: Unable to extract title; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\n",
+      "exitCode": 1,
+      "expected": "EXTRACTOR_FAILED"
+    },
+    {
+      "name": "usage-error",
+      "source": "yt_dlp/options.py optparse error: exit code 2 means our own arguments are wrong",
+      "stderr": "Usage: yt-dlp [OPTIONS] URL [URL...]\n\nyt-dlp: error: no such option: --bogus\n",
+      "exitCode": 2,
+      "expected": "INTERNAL_ERROR"
+    },
+    {
+      "name": "redaction-canary",
+      "source": "synthetic: canary secrets inside an error line must not survive redaction (SPEC §20.1, §25.2)",
+      "stderr": "ERROR: [generic] v: Unable to download webpage: HTTP Error 403: Forbidden for https://user:CANARYPASS@media.example.test/v.mp4?sig=CANARYSIG&expires=1#t=CANARYFRAG with Cookie: sid=CANARYCOOKIE; Authorization: Bearer CANARYTOKEN at C:\\Users\\jdoe\\AppData\\Local\\x and /home/jdoe/x\n",
+      "exitCode": 1,
+      "expected": "ACCESS_DENIED"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[package]
+name = "vv-ytdlp"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault yt-dlp adapter: fixed arguments and parsing of its JSON, progress and error output (no subprocess)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vv-domain = { path = "../vv-domain" }
