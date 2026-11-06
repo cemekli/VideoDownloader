@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the release target (SPEC §3); Linux keeps the domain crate portable.
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install web dependencies
+        run: npm --prefix apps/desktop ci
+      - name: Install Playwright Chromium
+        run: npx --prefix apps/desktop playwright install --with-deps chromium
+      - name: Verify (all gates)
+        run: node scripts/verify.mjs
+        env:
+          CI: "true"
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ matrix.os }}
+          path: test-artifacts/
+          retention-days: 14
