@@ -5,7 +5,7 @@
 | Son güncelleme | 6 Kasım 2026 |
 | Referans belge | [SPEC.md](./SPEC.md) v1.4 |
 | Aktif faz | **F0 — Temel ve test altyapısı** |
-| Genel ilerleme | 3 / 74 alt görev doğrulandı |
+| Genel ilerleme | 5 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
 | Son doğrulama | 6 Kasım 2026, Linux x64 (geliştirme ortamı): 8/8 adım geçti. GitHub Actions (windows-latest + ubuntu-latest): tüm kapılar geçti, [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546). |
 
@@ -54,6 +54,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | Fixture güvenliği | `scripts/verify.mjs` | `tests/fixtures/` | `npm run verify -- --only repo` | ✅ çalışıyor |
 | Rust birim testleri | `cargo test` | `crates/*/src` | `npm run test:rust` | ✅ çalışıyor |
 | Rust fixture testleri | `cargo test` + paylaşılan JSON | `crates/*/tests`, `tests/fixtures/` | `npm run test:rust` | ✅ çalışıyor |
+| Tauri IPC entegrasyonu | `tauri::test` (MockRuntime) + gerçek ACL ve origin denetimi | `apps/desktop/src-tauri/tests/ipc.rs` | `npm run test:rust` | ✅ çalışıyor |
+| IPC sözleşmesi | paylaşılan JSON; Rust ve Vitest aynı dosyayı kullanır | `tests/fixtures/ipc-contract.json` | `npm run verify` | ✅ çalışıyor |
+| Windows açılış testi | release exe 15 sn açık kalır | `.github/workflows/ci.yml` | push/PR (Windows) | ✅ çalışıyor |
 | Rust stil ve lint | `cargo fmt`, `cargo clippy -D warnings` | tüm crate'ler | `npm run verify -- --only rust` | ✅ çalışıyor |
 | TypeScript tip kontrolü | `tsc --noEmit` | `apps/desktop` | `npm run verify -- --only web` | ✅ çalışıyor |
 | UI birim/bileşen testleri | Vitest + Testing Library (jsdom) | `apps/desktop/src/**/*.test.tsx` | `npm run test:web` | ✅ çalışıyor |
@@ -67,7 +70,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | Performans | sürümlü veri üreticisi + benchmark | `tests/perf/` | — | ⬜ F0.12 |
 | Kapsama matrisi | P0 gereksinim ↔ AC ↔ test | `docs/testing.md` | — | ⬜ F0.11 |
 
-Önemli sınır: Playwright E2E testleri şu an fixture IPC ile çalışıyor. Bunların geçmesi gerçek Tauri IPC'nin veya Windows alt süreçlerinin çalıştığını kanıtlamaz (SPEC §25.1). Bu, F0.3 ve F0.4 ile kapanır.
+Önemli sınır: Playwright E2E testleri fixture IPC ile çalışıyor. Gerçek IPC yolu (komut yönlendirme, argüman çözme, ACL, origin) Rust tarafında `tests/ipc.rs` ile test ediliyor, ama pencere sistemi orada sahte (MockRuntime). Gerçek pencerede arayüz + IPC birlikte F0.4'te otomatik test edilecek. Windows alt süreçleri F0.10'a kadar test edilmiyor (SPEC §25.1).
 
 ---
 
@@ -81,7 +84,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 |---|---|---|---|---|
 | F0.1 | Depo iskeleti: Rust workspace, `vv-domain` crate, React + TypeScript + Vite arayüzü | §10.1, §10.3 | `npm run verify` 8/8 (6 Kas 2026, Linux) | ✅ |
 | F0.2 | Test altyapısı: Vitest, Playwright (3 görünüm), paylaşılan fixture'lar, `verify` betiği, fixture sır taraması, CI tanımı | §25.1, §25.2, §25.4 | `npm run verify` 8/8; sır taraması sahte bir sızıntıyı yakaladı | ✅ |
-| F0.3 | Tauri 2 kabuğu, tipli `ping`/`status` komutu, gerçek Tauri IPC istemcisi | §10.1, §18 | Windows 11'de pencere açılır; IPC entegrasyon testi geçer | ⬜ |
+| F0.3 | Tauri 2 kabuğu, tipli `ping`/`status` komutu, gerçek Tauri IPC istemcisi | §10.1, §18 | Windows 11'de pencere açılır; IPC entegrasyon testi geçer | ✅ IPC testleri 9/9 (Windows + Linux), Vitest 17/17; [CI #42261547079](https://github.com/cemekli/VideoDownloader/actions/runs/42261547079) Windows açılış testi: pencere “VideoVault” açık kaldı; 6 Kas 2026 Windows 11'de elle açıldı, “Desktop v0.0.1” gösterdi |
 | F0.4 | Gerçek uygulama üzerinde E2E altyapısı seçimi ve ilk test | §25.1 | ADR + gerçek IPC ile bir E2E testi | ⬜ |
 | F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ⬜ |
 | F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ⬜ |
@@ -283,14 +286,17 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | Tarih | Konu | Etki | Gereken |
 |---|---|---|---|
-| 6 Kas 2026 | `verify` Windows'ta CI'da geçti, yerel makinede çalıştırılmadı | Geliştirici makinesinde F0.3 öncesi kurulum doğrulanmadı | Yerelde `npm run setup` ve `npm run verify` |
+| 6 Kas 2026 | `verify` Windows'ta CI'da geçti, yerel makinede çalıştırılmadı | Geliştirici makinesinde kurulum doğrulanmadı | Yerelde `npm run setup`, `npm run verify` ve `npm run desktop` |
+| 6 Kas 2026 | Uygulama simgesi geçici (otomatik üretilmiş) | Görsel kimlik yok | F4 öncesi gerçek simge |
 
 ## Sonraki adım
 
-**F0.3 — Tauri 2 kabuğu.** Windows'ta Rust, Node 26 ve WebView2 gerekiyor. Başlamadan önce Windows'ta `npm run setup` ve `npm run verify` çalıştırılıp bu dosyadaki “Son doğrulama” satırı güncellenmeli.
+**F0.4 — gerçek uygulama üzerinde E2E.** Windows'ta WebView2'ye bağlanan bir E2E aracı seçilir (ADR) ve ilk test yazılır.
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 6 Kas 2026 | F0.3 ✅: Windows CI açılış testi ve Windows 11'de elle doğrulama. Test exe'lerine Windows manifesti gömüldü (0xC0000139 düzeltmesi). |
+| 6 Kas 2026 | F0.3 başladı: Tauri 2 kabuğu, `ping`/`get_status`, IPC sözleşme fixture'ı, ACL ve CSP testleri, Windows açılış testi. F0.13 ✅. |
 | 6 Kas 2026 | STATE.md oluşturuldu: 9 faz, 74 alt görev. F0.1, F0.2 ve F0.7 tamamlandı ve Linux'ta doğrulandı. |
