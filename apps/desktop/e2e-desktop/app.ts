@@ -7,7 +7,8 @@
 
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -58,7 +59,7 @@ export async function launchDesktopApp(): Promise<DesktopApp> {
   const proc = spawn(desktopExe, [], {
     env: {
       ...process.env,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
       WEBVIEW2_USER_DATA_FOLDER: profile,
     },
     stdio: "ignore",
@@ -96,7 +97,36 @@ export async function launchDesktopApp(): Promise<DesktopApp> {
       },
     };
   } catch (e) {
+    const diag = diagnostics(profile, exited);
     await close();
-    throw e;
+    throw new Error(`${(e as Error).message}\n--- diagnostics ---\n${diag}`);
   }
+}
+
+/** What WebView2 actually did, so a CI failure says why the port never opened. */
+function diagnostics(profile: string, exited: number | null): string {
+  const lines = [`app exited: ${exited === null ? "no (still running)" : `yes, code ${exited}`}`];
+  const walk = (dir: string, depth: number): string[] =>
+    depth > 3 ? [] : readdirSync(dir).flatMap((n) => {
+      const p = join(dir, n);
+      return statSync(p).isDirectory() ? walk(p, depth + 1) : [p];
+    });
+  try {
+    const files = walk(profile, 0);
+    lines.push(`profile files: ${files.length}`);
+    const port = files.find((f) => f.endsWith("DevToolsActivePort"));
+    lines.push(port ? `DevToolsActivePort: ${readFileSync(port, "utf8").replace(/\s+/g, " ")}` : "DevToolsActivePort: not found");
+    lines.push(...files.slice(0, 15).map((f) => `  ${f}`));
+  } catch (e) {
+    lines.push(`profile unreadable: ${String(e)}`);
+  }
+  if (process.platform === "win32") {
+    const ps = spawnSync(
+      "powershell",
+      ["-NoProfile", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe' or Name='videovault.exe'\" | Select-Object -First 4 ProcessId,Name,CommandLine | Format-List | Out-String -Width 400"],
+      { encoding: "utf8" },
+    );
+    lines.push(ps.stdout || ps.stderr || "no process info");
+  }
+  return lines.join("\n");
 }
