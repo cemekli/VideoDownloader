@@ -59,7 +59,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | UI birim/bileşen testleri | Vitest + Testing Library (jsdom) | `apps/desktop/src/**/*.test.tsx` | `npm run test:web` | ✅ çalışıyor |
 | E2E (fixture IPC) | Playwright; 1366×768, 1920×1080, 800 px | `apps/desktop/e2e/` | `npm run e2e` | ✅ çalışıyor |
 | Görsel inceleme | Playwright ekran görüntüleri | `test-artifacts/screenshots/` | `npm run e2e` | ✅ çalışıyor |
-| CI | GitHub Actions, Windows + Linux | `.github/workflows/ci.yml` | push/PR | ⬜ repo henüz yok |
+| CI | GitHub Actions, Windows + Linux | `.github/workflows/ci.yml` | push/PR | ⬜ yerel git var, remote yok |
 | SQLite migration/integration | `cargo test` + geçici DB | `crates/vv-persistence` | — | ⬜ F0.5 |
 | Gerçek Tauri IPC E2E | seçilecek desktop harness | — | — | ⬜ F0.4 |
 | Güvenlik testleri | canary secret, kötü niyetli URL/yol | `tests/fixtures/` + Rust | — | 🟨 URL politikası var; gerisi F3–F4 |
@@ -91,7 +91,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ⬜ |
 | F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md` var |
 | F0.12 | Benchmark ortamı ve sürümlü veri üreticisi (10.000 öğe, 100.000 segment) | NFR-01…07, DEC-17 | aynı seed ile aynı çıktı testi | ⬜ |
-| F0.13 | Git deposu ve CI'ın Windows'ta ilk yeşil çalışması | §25.1 | GitHub Actions'ta iki işletim sistemi de geçer | ⛔ |
+| F0.13 | Git deposu ve CI'ın Windows'ta ilk yeşil çalışması | §25.1 | GitHub Actions'ta iki işletim sistemi de geçer | 🟨 yerel depo hazır, remote ve ci.yml bekleniyor |
 
 **Çıkış kapısı**
 
@@ -283,7 +283,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | Tarih | Konu | Etki | Gereken |
 |---|---|---|---|
-| 6 Kas 2026 | Proje henüz bir git deposu değil; GitHub'da depo yok | F0.13: CI hiç çalışmadı | Depoyu oluşturup ilk push |
+| 6 Kas 2026 | Yerel git deposu var (main); GitHub remote yok, ci.yml elle eklenecek | F0.13: CI hiç çalışmadı | ci.yml kopyala, remote ekle, ilk push |
 | 6 Kas 2026 | Testler yalnızca Linux geliştirme ortamında çalıştırıldı | Windows'ta `verify` doğrulanmadı | Windows'ta `npm run setup` ve `npm run verify` |
 
 ## Sonraki adım
