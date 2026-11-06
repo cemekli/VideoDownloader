@@ -5,7 +5,7 @@
 | Son güncelleme | 6 Kasım 2026 |
 | Referans belge | [SPEC.md](./SPEC.md) v1.4 |
 | Aktif faz | **F0 — Temel ve test altyapısı** |
-| Genel ilerleme | 7 / 74 alt görev doğrulandı |
+| Genel ilerleme | 8 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
 | Son doğrulama | 6 Kasım 2026, Linux x64 (geliştirme ortamı): 8/8 adım geçti. GitHub Actions (windows-latest + ubuntu-latest): tüm kapılar geçti, [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546). |
 
@@ -87,7 +87,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.3 | Tauri 2 kabuğu, tipli `ping`/`status` komutu, gerçek Tauri IPC istemcisi | §10.1, §18 | Windows 11'de pencere açılır; IPC entegrasyon testi geçer | ✅ IPC testleri 9/9 (Windows + Linux), Vitest 17/17; [CI #42261547079](https://github.com/cemekli/VideoDownloader/actions/runs/42261547079) Windows açılış testi: pencere “VideoVault” açık kaldı; 6 Kas 2026 Windows 11'de elle açıldı, “Desktop v0.0.1” gösterdi |
 | F0.4 | Gerçek uygulama üzerinde E2E altyapısı seçimi ve ilk test | §25.1 | ADR + gerçek IPC ile bir E2E testi | ✅ ADR-0001 (`docs/decisions.md`); `e2e-desktop` 4/4 Windows'ta gerçek exe ile: durum rozeti, `ping`, yetki dışı komut reddi, CSP; [CI #42271413057](https://github.com/cemekli/VideoDownloader/actions/runs/42271413057) |
 | F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ✅ ADR-0002; `vv-persistence` 16/16 (Windows + Linux); gerçek exe'de `packaged SQLite 3.53.2, FTS5=true, schema v1`, `e2e-desktop` 5/5; [CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245) |
-| F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | 🟨 ADR-0003; `vv-ytdlp` 31/31 (Linux): 15 gerçek yt-dlp çalışması + 20 kaynak metni vakası; Windows CI bekleniyor |
+| F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ✅ ADR-0003; `vv-ytdlp` 31/31 (Windows + Linux): 15 gerçek yt-dlp 2026.10.26 çalışması + 20 kaynak metni vakası; [CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226) |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
 | F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ⬜ |
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ⬜ |
@@ -291,12 +291,15 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 ## Sonraki adım
 
-**F0.6 — yt-dlp fixture adaptörü.** yt-dlp'nin JSON, ilerleme ve hata çıktılarını sabit fixture'larla ayrıştıran adaptör ve integration testleri (DL-05, §14.1).
+Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
+
+**F0.8 — Araç ve lisans araştırması** (önerilen). yt-dlp + JS runtime (Deno), FFmpeg build'i ve WebView2 codec/container matrisi (DEC-02, DEC-03, DEC-04). Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance ve Job Object).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 6 Kas 2026 | F0.6 ✅: ADR-0003, `vv-ytdlp` crate'i, gerçek yt-dlp 2026.10.26 fixture'ları; Windows ve Linux CI'da geçti ([CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226)). Gün sonu devir notu: HANDOFF.md. |
 | 6 Kas 2026 | F0.5 ✅: ADR-0002 (rusqlite bundled, WAL, synchronous=FULL), checksum'lı migration altyapısı, migration öncesi yedek, FTS5 gerçek exe'de doğrulandı ([CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245)). |
 | 6 Kas 2026 | F0.4 ✅: ADR-0001 (Playwright + WebView2 CDP), ayrı test exe'si (`e2e-cdp`), 4 gerçek uygulama testi Windows CI'da geçti. |
 | 6 Kas 2026 | F0.3 ✅: Windows CI açılış testi ve Windows 11'de elle doğrulama. Test exe'lerine Windows manifesti gömüldü (0xC0000139 düzeltmesi). |
