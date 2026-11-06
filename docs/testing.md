@@ -4,7 +4,7 @@ Durum takibi [STATE.md](../STATE.md) içindedir. Bu belge testlerin nasıl çal�
 
 ## Kurulum (bir kez)
 
-Gerekenler: Rust (stable, `rustfmt` ve `clippy` ile), Node 22.
+Gerekenler: Rust (stable, `rustfmt` ve `clippy` ile), Node 26 (LTS, sürüm `.nvmrc` dosyasında).
 
 ```bash
 npm run setup        # web bağımlılıkları + Playwright Chromium
