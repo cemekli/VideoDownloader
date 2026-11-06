@@ -1,0 +1,63 @@
+{
+  "fixture": "library-small",
+  "version": 1,
+  "seed": 1,
+  "spec_refs": ["§25.2", "INV-02", "§9.2"],
+  "note": "Synthetic items only. No real private URLs, cookies or personal files (SPEC §25.2).",
+  "items": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "PostgreSQL replication deep dive",
+      "platform": "youtube",
+      "kind": "remote_video",
+      "localState": "local_ready",
+      "durationMs": 3725000,
+      "tags": ["database", "talk"]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Kısa tarif: ev yapımı ekmek",
+      "platform": "instagram",
+      "kind": "bookmark",
+      "localState": "bookmark_only",
+      "durationMs": null,
+      "tags": ["yemek"]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "An extremely long title that keeps going to make sure that the card layout never breaks or overflows horizontally even on narrow windows",
+      "platform": "tiktok",
+      "kind": "bookmark",
+      "localState": "bookmark_only",
+      "durationMs": 59000,
+      "tags": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Grup toplantısı kaydı",
+      "platform": "vk",
+      "kind": "remote_video",
+      "localState": "missing",
+      "durationMs": 1800000,
+      "tags": ["özel", "toplantı"]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "Holiday clip 🎉",
+      "platform": "local",
+      "kind": "local_video",
+      "localState": "local_ready",
+      "durationMs": 12000,
+      "tags": ["family"]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "title": "Thread with embedded video",
+      "platform": "x",
+      "kind": "bookmark",
+      "localState": "bookmark_only",
+      "durationMs": null,
+      "tags": []
+    }
+  ]
+}

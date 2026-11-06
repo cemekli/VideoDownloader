@@ -1,0 +1,16 @@
+{
+  "name": "videovault",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Local-first personal video library (see SPEC.md and STATE.md)",
+  "type": "module",
+  "scripts": {
+    "setup": "npm --prefix apps/desktop ci && npx --prefix apps/desktop playwright install chromium",
+    "verify": "node scripts/verify.mjs",
+    "verify:fast": "node scripts/verify.mjs --skip e2e,web-build",
+    "test:rust": "cargo test --workspace",
+    "test:web": "npm --prefix apps/desktop run test",
+    "e2e": "npm --prefix apps/desktop run e2e",
+    "dev:fixture": "npm --prefix apps/desktop run dev:fixture"
+  }
+}

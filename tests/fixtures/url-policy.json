@@ -1,0 +1,43 @@
+{
+  "fixture": "url-policy",
+  "version": 1,
+  "spec_refs": ["CAP-02", "CAP-08", "AC-29", "AC-52", "§20.2"],
+  "cases": [
+    { "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "expect": "ok" },
+    { "input": "https://youtu.be/dQw4w9WgXcQ", "expect": "ok" },
+    { "input": "https://vk.com/video-12345_67890", "expect": "ok" },
+    { "input": "https://www.tiktok.com/@someone/video/123", "expect": "ok" },
+    { "input": "HTTPS://Example.COM/Path", "expect": "ok" },
+    { "input": "https://93.184.216.34/v", "expect": "ok" },
+    { "input": "https://[2606:4700::1111]/v", "expect": "ok" },
+
+    { "input": "", "expect": "INVALID_URL" },
+    { "input": "not a url", "expect": "INVALID_URL" },
+    { "input": "file:///C:/Users/x/video.mp4", "expect": "INVALID_URL" },
+    { "input": "javascript:alert(1)", "expect": "INVALID_URL" },
+    { "input": "data:text/html,<script>1</script>", "expect": "INVALID_URL" },
+    { "input": "ms-settings:privacy", "expect": "INVALID_URL" },
+
+    { "input": "https://user:secret@example.com/v", "expect": "URL_HAS_CREDENTIALS" },
+    { "input": "https://token@example.com/v", "expect": "URL_HAS_CREDENTIALS" },
+
+    { "input": "http://127.0.0.1/", "expect": "URL_BLOCKED", "note": "AC-29 loopback" },
+    { "input": "http://127.1/", "expect": "URL_BLOCKED", "note": "shorthand IPv4" },
+    { "input": "http://2130706433/", "expect": "URL_BLOCKED", "note": "decimal IPv4 = 127.0.0.1" },
+    { "input": "http://0x7f.0.0.1/", "expect": "URL_BLOCKED", "note": "hex IPv4" },
+    { "input": "http://169.254.169.254/latest/meta-data/", "expect": "URL_BLOCKED", "note": "AC-29 cloud metadata" },
+    { "input": "http://10.0.0.5/", "expect": "URL_BLOCKED" },
+    { "input": "http://172.16.0.1/", "expect": "URL_BLOCKED" },
+    { "input": "http://192.168.1.1/", "expect": "URL_BLOCKED" },
+    { "input": "http://100.64.0.1/", "expect": "URL_BLOCKED", "note": "CGNAT" },
+    { "input": "http://0.0.0.0/", "expect": "URL_BLOCKED" },
+    { "input": "http://[::1]/", "expect": "URL_BLOCKED" },
+    { "input": "http://[::ffff:127.0.0.1]/", "expect": "URL_BLOCKED", "note": "AC-29 IPv4-mapped" },
+    { "input": "http://[::ffff:a9fe:a9fe]/", "expect": "URL_BLOCKED", "note": "mapped 169.254.169.254" },
+    { "input": "http://[fe80::1]/", "expect": "URL_BLOCKED" },
+    { "input": "http://[fd00::1]/", "expect": "URL_BLOCKED" },
+    { "input": "http://localhost:8080/", "expect": "URL_BLOCKED" },
+    { "input": "http://LOCALHOST./", "expect": "URL_BLOCKED" },
+    { "input": "http://foo.localhost/", "expect": "URL_BLOCKED" }
+  ]
+}

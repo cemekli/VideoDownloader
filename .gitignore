@@ -1,0 +1,48 @@
+# Rust / Cargo
+/target/
+**/target/
+
+# Node / web
+node_modules/
+apps/desktop/dist/
+.vite/
+*.tsbuildinfo
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Test outputs (verify, vitest, playwright)
+/test-artifacts/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+apps/desktop/blob-report/
+coverage/
+
+# Local env and secrets (never commit cookies, tokens, keys)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+cookies*.txt
+
+# Local app data / user media (SPEC: library lives outside the repo)
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
