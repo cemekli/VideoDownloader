@@ -300,6 +300,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | İlk referans sınıfı benchmark (Windows 11, i7-13700HX): BM-01 p95 2,8 ms, BM-02 3,8 ms, BM-03 11,3 ms; ADR-0009'a eklendi. |
 | 7 Kas 2026 | F0.11 ve F0.12 ✅ ([CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094); golden hash Windows'ta da tuttu). DEC-01 için ADR-0010. F0 çıkış kapısı işaretlendi. |
 | 7 Kas 2026 | F0.12 başladı: `vv-benchdata` sürümlü veri üreticisi (10.000 öğe, 100.000 segment, golden hash), `npm run bench` ve CI'da bilgi amaçlı benchmark adımı, referans makine tanımı. ADR-0009. |
 | 7 Kas 2026 | F0.10 ✅ (PR #10). F0.11 başladı: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`; `threat-model.md`'ye §20.1 durum tablosu; `docs/coverage.json` ve `scripts/coverage-matrix.mjs` ile 82 P0/INV/NFR satırlık kapsama matrisi (29 kimlikli manuel test, 5 benchmark), `verify` adımı. |

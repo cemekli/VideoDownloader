@@ -486,10 +486,19 @@ SPEC §22 (NFR-01…07), §25.2 ve DEC-17'yi karşılar (STATE.md F0.12). Kod: `
 - `vv-benchdata` testleri (7): SplitMix64 referans değerleri; varsayılan veri setinin golden hash'leri; aynı seed aynı bayt, başka seed başka bayt; segment sayısı öğeleri etkilemiyor; SPEC §25.2 içerik kuralları (sayılar, uzun başlık, NFD, emoji, Türkçe harfler, `.example`, sıralı ve çakışmasız segmentler); sorguların deterministik ve tırnaklı olması; küçük kütüphanede benchmark'ın satır döndürerek çalışması.
 - Geliştirme kapsayıcısında ilk ölçüm (Linux, Xeon 2.3 GHz, 4 mantıksal CPU; referans sınıfı **değil**): BM-01 p95 0,50 ms, BM-02 p95 3,3 ms, BM-03 p95 8,4 ms. Üretim ~1 s, yükleme 10.000 öğe 130 ms, 100.000 segment 327 ms, veritabanı 25,8 MiB. Bunlar yöntemin çalıştığını gösterir; bütçenin karşılandığını değil.
 - CI: Windows ve Linux'ta geçti, [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094). Golden hash Windows'ta da aynı çıktı. CI ölçümleri (2 mantıksal CPU, referans sınıfı değil): Windows Server 2025 BM-01 p95 2,5 ms, BM-02 p95 4,3 ms, BM-03 p95 12,1 ms; Linux BM-01 p95 3,6 ms, BM-02 p95 2,7 ms, BM-03 p95 7,7 ms.
+- **İlk referans sınıfı ölçüm**, 7 Kasım 2026, commit `bd00716`, `npm run bench` (Cuma'nın dizüstü bilgisayarı): Windows 11 Pro 10.0.26200, Intel Core i7-13700HX, 24 mantıksal CPU, 31,7 GiB RAM, NVMe SSD, güç modu Dengeli; rustc 1.99.1, Node 26.13.0, SQLite 3.53.2; veri seti v1, seed 20261107 (golden hash'lerle aynı). Yükleme: öğeler 158 ms, segmentler 349 ms.
+
+  | Kimlik | p50 ms | p95 ms | max ms | Bütçe (p95) |
+  |---|---|---|---|---|
+  | BM-01 bookmark kaydı | 2,0 | 2,8 | 18,5 | ≤ 500 |
+  | BM-02 lexical arama | 2,8 | 3,8 | 4,8 | ≤ 200 |
+  | BM-03 döküm araması | 7,5 | 11,3 | 13,3 | ≤ 500 |
+
+  Üçü de bütçenin en az 40 kat altında. Bu prototip tablolar ve yalnızca backend içindir; UI dahil görünür süre, başlangıç (BM-04) ve bellek (BM-05) henüz ölçülmedi.
 
 **Sonuçlar ve açık noktalar.**
 
-- Referans sınıfı bir Windows 11 makinesinde ölçüm yapılmadı. Cuma'nın dizüstü bilgisayarında `npm run bench` çalıştırılıp rapor buraya eklenebilir.
+- Bütçe kapısı F4.5'te gerçek şemada konur; bu ölçüm prototip tablolardadır.
 - FTS5 tokenizer'ı burada `unicode61 remove_diacritics 2`. Türkçe arama davranışının kararı F1.6'da Türkçe arama fixture'ıyla verilir; tokenizer değişirse benchmark da güncellenir.
 - NFR-01'in "görünür sonuç" kısmı (UI dahil) ve NFR-02 (kullanım testi) bu ölçümde yok; F1.8'de ölçülür.
 
