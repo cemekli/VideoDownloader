@@ -83,3 +83,34 @@ pub fn js_runtime_args(deno: Option<&std::path::Path>) -> Vec<std::ffi::OsString
         })
         .collect()
 }
+
+/// Network guard (STATE.md F0.9, ADR-0007). Every request goes through the
+/// app's local proxy, which checks each connection (`vv-netguard`).
+/// `--proxy` overrides `HTTP(S)_PROXY`, `ALL_PROXY` and `NO_PROXY` from the
+/// environment (verified with the pinned yt-dlp). `--downloader native`
+/// keeps yt-dlp from handing a protocol to FFmpeg, which would open its own
+/// connections; protocols the native downloader cannot handle fail instead.
+/// `--abort-on-unavailable-fragments` makes a blocked HLS/DASH segment fail
+/// the download rather than leave a gap.
+pub const NETWORK_GUARD: &[&str] = &[
+    "--proxy",
+    "{proxy}",
+    "--downloader",
+    "native",
+    "--abort-on-unavailable-fragments",
+];
+
+/// [`NETWORK_GUARD`] with the guard's proxy URL. The URL carries the
+/// per-run token: it is passed as one argv entry and never logged.
+pub fn network_guard_args(proxy_url: &str) -> Vec<std::ffi::OsString> {
+    NETWORK_GUARD
+        .iter()
+        .map(|a| {
+            if *a == "{proxy}" {
+                proxy_url.into()
+            } else {
+                (*a).into()
+            }
+        })
+        .collect()
+}

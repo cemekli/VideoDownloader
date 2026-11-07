@@ -120,6 +120,10 @@ fn fixed_args_match_the_capture_script() {
     );
     assert_eq!(strings(&a["common"]), args::COMMON);
     assert_eq!(strings(&a["jsRuntime"]), args::JS_RUNTIME);
+    assert_eq!(strings(&a["networkGuard"]), args::NETWORK_GUARD);
+    let g = args::network_guard_args("http://vv:t@127.0.0.1:1");
+    assert_eq!(g[1], "http://vv:t@127.0.0.1:1");
+    assert_eq!(g.len(), args::NETWORK_GUARD.len());
     assert_eq!(strings(&a["metadata"]), args::METADATA);
     assert_eq!(strings(&a["download"]), args::DOWNLOAD);
 }

@@ -28,5 +28,12 @@
     "--js-runtimes",
     "deno:{deno}",
     "--no-remote-components"
+  ],
+  "networkGuard": [
+    "--proxy",
+    "{proxy}",
+    "--downloader",
+    "native",
+    "--abort-on-unavailable-fragments"
   ]
 }

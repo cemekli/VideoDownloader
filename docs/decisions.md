@@ -10,6 +10,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0004](#adr-0004-webview2-oynatma-matrisi-ve-yerel-medya-protokolü) | WebView2 oynatma matrisi ve yerel medya protokolü (SPEC DEC-04) | Kabul edildi (CI ölçümü; geliştirici makinesi ölçümü açık) | 7 Kasım 2026 |
 | [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0007](#adr-0007-dış-araçların-ağ-denetimi-yerel-denetim-proxysi) | Dış araçların ağ denetimi: yerel denetim proxy'si (SPEC DEC-05, §20.2, AC-29) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -328,3 +329,77 @@ SPEC DEC-03, §14.1, IMP-02, DL-09 ve AC-59'u karşılar (STATE.md F0.8c). Kod: 
 - `scripts/fetch-tools.mjs` Linux'ta gerçek dosyalarla uçtan uca geçti: indirme, hash'ler, `tar.xz` açma, build ve lisans kontrolü, 14 dosyanın ffprobe çıktısının fixture'larla aynı olması, AC-59 reddi (0 HTTP isteği) ve remux.
 - Windows'ta aynı zincir gerçek `ffmpeg.exe` ve `ffprobe.exe` ile geçti: zip tek kez indirilip iki exe çıkarıldı, build ve LGPL kontrolü, 14 dosyanın fixture'larla aynı olması, 4 kısıtlı reddin 0 HTTP isteğiyle gerçekleşmesi, remux ve `-n` davranışı. Linux'ta da geçti: [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432).
 - Fixture'lar sabitlenen build ile yakalandı (`tests/fixtures/ffmpeg/`). İlk yakalama Ubuntu'nun ffmpeg 6.1.1'i ile yapılmıştı; tek fark 9.0'ın JSON'a eklediği boş `stream_groups` alanıydı.
+
+---
+
+## ADR-0007: Dış araçların ağ denetimi: yerel denetim proxy'si
+
+SPEC DEC-05, §20.2 ve AC-29'u karşılar (STATE.md F0.9). Kod: `crates/vv-netguard`, `crates/vv-ytdlp/src/args.rs` (`NETWORK_GUARD`), `scripts/netguard-probe.mjs`. Tehdit modeli: `docs/threat-model.md`.
+
+**Bağlam.** Kullanıcının verdiği URL'yi `vv-domain::url_policy` ile bir kez kontrol etmek yetmez. Kontrolden sonra yt-dlp kendi başına:
+
+- yönlendirmeleri izler,
+- sayfa, manifest ve playlist okur,
+- segment indirir.
+
+Bunların her biri loopback'e, özel ağa ya da bulut metadata adresine (169.254.169.254) gidebilir. Ayrıca DNS iki çözümlemede farklı cevap verebilir (DNS rebinding). SPEC'in kuralı: bağlantı başına politika garanti edilemiyorsa genel URL ağ çıkarımı kapalı kalır.
+
+**Seçenekler.**
+
+| Seçenek | Değerlendirme |
+|---|---|
+| URL'yi bir kez kontrol et | Yönlendirme, manifest ve rebinding açık kalır. SPEC açıkça yetersiz sayıyor. |
+| İşletim sistemi güvenlik duvarı (Windows Filtering Platform, süreç başına kural) | En güçlüsü, ama yönetici yetkisi ister ve kurulumu ağırlaştırır. DNS adına göre karar veremez. |
+| yt-dlp eklentisi ya da yamalı yt-dlp | Resmî imzalı exe'yi bırakmak gerekir (ADR-0005). Her yt-dlp sürümünde bakım yükü getirir. |
+| **Uygulama içinde yerel denetim proxy'si** (`--proxy`) | Yönetici yetkisi gerekmez. Her bağlantıda karar verilir. Resmî exe değişmez. Yalnızca yt-dlp'nin proxy'ye uyduğu yollarda geçerlidir; bu yollar aşağıda gerçek çalıştırmayla doğrulandı. |
+
+**Karar.**
+
+1. **Her yt-dlp çalışması kendi proxy'siyle başlar** (`vv_netguard::Guard`). Proxy `127.0.0.1` üzerinde rastgele bir portta dinler. yt-dlp'ye `args::NETWORK_GUARD` verilir: `--proxy <url> --downloader native --abort-on-unavailable-fragments`.
+   - `--downloader native`, yt-dlp'nin bir protokolü FFmpeg'e devretmesini önler; FFmpeg kendi bağlantısını açardı. Native indiricinin desteklemediği protokoller (RTMP, RTSP, MMS) indirilmez, hata verir.
+   - `--abort-on-unavailable-fragments`: engellenen bir segment indirmeyi durdurur, boşluklu bir dosya oluşmaz.
+2. **Bağlantı başına karar** (`Policy::vet`):
+   - Port 80 ya da 443 olmalı. Bu kontrol DNS sorgusundan önce yapılır.
+   - `localhost` ve `*.localhost` adları reddedilir.
+   - Literal IP ya da DNS'ten dönen **tüm** adresler `is_public_ip` kontrolünden geçmeli. Tek bir özel adres bile adı engeller, çünkü hangi adresin seçileceğini saldırgan belirler. IPv4-mapped, NAT64 ve IPv6 özel aralıkları da kapsanır.
+   - Proxy, kontrol ettiği adrese bağlanır ve adı ikinci kez çözümlemez. Böylece rebinding işe yaramaz.
+   - HTTPS `CONNECT` tünelleri ve mutlak biçimli HTTP istekleri desteklenir. Mutlak biçimde `https://`, URL içinde kimlik bilgisi ya da başka bir şema `400` alır.
+   - HTTP bağlantısı tek istekle sınırlıdır (`Connection: close`). Böylece yeniden kullanılan bir bağlantı ikinci bir hosta ulaşamaz.
+3. **Erişim jetonu:** proxy her çalışmada 144 bitlik rastgele bir jeton üretir (`Proxy-Authorization: Basic`). Jetonu bilmeyen başka bir yerel süreç proxy'yi kullanamaz ve `407` alır. Jeton proxy URL'sinin içindedir: tek argv öğesi olarak geçer, loglanmaz.
+4. **Kayıt:** her karar `Event` olarak tutulur. İçinde yalnızca yöntem, host, port ve karar vardır; yol, sorgu ve jeton yoktur (redaksiyon, SPEC §20.3).
+5. **Hata eşleme:** proxy'de herhangi bir engel kaydı olan iş, yt-dlp ne yazmış olursa olsun `URL_BLOCKED` ile biter (`Guard::blocked`). yt-dlp'nin metni bunu güvenilir biçimde söylemez; gerçek çıktılar "HTTP Error 403: Forbidden", "Tunnel connection failed: 403" ve "fragment … unable to continue" gibi.
+6. **Ortam:** `--proxy`, ortamdaki `HTTP(S)_PROXY`, `ALL_PROXY` ve `NO_PROXY=*` değerlerini geçersiz kılıyor; bu, gerçek çalıştırmayla doğrulandı. F0.10'da alt süreçler yine temiz ortamla başlatılır (ADR-0005); bu ikinci bir savunma katmanıdır.
+7. **Kapsam sınırı:**
+   - Deno, ağ izni olmadan çalışır (ADR-0005).
+   - FFmpeg yalnızca `file` protokolünü kullanır (ADR-0006).
+   - Uygulamadan dışarı giden tek araç trafiği yt-dlp'nin HTTP trafiğidir ve hepsi bu proxy'den geçer.
+
+**Kanıt.**
+
+- `vv-netguard`: 7 test. Politika: 16 engel vakası (rebinding cevabı, metadata, mapped IPv6, özel IPv6, `localhost.`, portlar) ve bir port engelinin DNS sorgusu yapmadığı. Proxy, yerel sunucularla şunları gösteriyor:
+  - origin-form'a yeniden yazma ve `Proxy-Authorization`'ın silinmesi;
+  - CONNECT ve HTTP için 403;
+  - jetonsuz ve yanlış jetonlu istekler için 407;
+  - yeniden kullanılan bağlantının ikinci hosta gitmemesi;
+  - kayıtlarda yol, sorgu ve jeton olmaması.
+
+  Kanarya sunucu hiçbir vakada bağlantı almadı.
+- `scripts/netguard-probe.mjs`, sabitlenen yt-dlp 2026.10.26 ile, ortam değişkenleri kanaryayı gösterirken çalıştı. 12 vakanın hepsinde kanarya 0 bağlantı aldı:
+  - doğrudan dosya indirmesi (izinli; başarılı);
+  - kanaryaya, 127.0.0.1:80'e, `[::ffff:127.0.0.1]`'e, 169.254.169.254'e ve 10.0.0.1'e yönlendirme;
+  - 127.0.0.1'e çözümlenen bir ada (`localtest.me`) yönlendirme;
+  - segmenti kanaryada olan HLS;
+  - bir segmenti izinli, bir segmenti yasak HLS (indirme durdu, dosya oluşmadı);
+  - kanaryayı gömen sayfa;
+  - `https://` kanarya (CONNECT engellendi);
+  - `localhost`.
+
+  Kontrol olarak proxy'siz yt-dlp aynı yönlendirmeyle kanaryaya 1 bağlantı açtı; bu, kanaryanın gerçekten çalıştığını gösterir. Windows ve Linux CI'da gerçek `yt-dlp.exe` ile geçti: [CI #42369808856](https://github.com/cemekli/VideoDownloader/actions/runs/42369808856). CI'da `localtest.me` gerçekten 127.0.0.1'e çözümlendi ve `non_public` olarak engellendi; DNS'i olmayan geliştirme kapsayıcısında aynı vaka `unresolved` olarak engellenmişti. Her CI çalışmasında tekrarlanır.
+
+**Sonuçlar ve açık noktalar.**
+
+- **İzin listesi hâlâ gerekli:** proxy ağ sınırını uygular, hangi sitelerin destekleneceğini belirlemez. Desteklenen konektörler F3'te platform matrisiyle doğrulanır.
+- **curl_cffi (tarayıcı taklidi) ve websockets:** resmî exe'de bulunuyorlar ve yt-dlp ikisine de proxy'yi geçiriyor. Ancak burada yalnızca varsayılan HTTP yolu sınandı. Bu iki yolu kullanan bir konektör açılırsa (F3), aynı kanarya testi o yol için de eklenir.
+- **QUIC/HTTP3 ve UDP:** yt-dlp kullanmıyor. Proxy'yi aşan bir yol bulunursa SPEC kuralı geçerli olur: o yol kapatılır, gerekirse genel URL çıkarımı kapalı kalır.
+- **İşletim sistemi düzeyinde ek katman:** M2 öncesinde süreç başına WFP kuralı değerlendirilebilir. Yönetici yetkisi gerektirdiği için ayrı bir karar konusudur.
+- **Port politikası:** yalnızca 80 ve 443. Başka porttan servis veren bir medya sunucusu desteklenmez. Gerekirse konektör bazında genişletilir.

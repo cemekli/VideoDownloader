@@ -51,6 +51,7 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | Gerçek uygulama davranışı (IPC, yetki, CSP, pencere) | `apps/desktop/e2e-desktop/*.spec.ts` | Windows'ta gerçek exe ile; ADR-0001 |
 | Yönetilen araçlar: manifest, hash, sürüm, JS runtime, FFmpeg lisansı | `crates/vv-tools/tests/tools.rs` + `tools/manifest.json` + `tests/fixtures/tools/` | Araç sürümü değişince `health-output.json` yeniden yakalanır; ADR-0005, ADR-0006 |
 | FFmpeg/ffprobe bayrakları, biçim sınıflandırma, referanslı girdi reddi (AC-59) | `crates/vv-ffmpeg/tests/ffmpeg.rs` + `tests/fixtures/ffmpeg/` | Gerçek build ile `npm run tools:fetch` (CI'da her çalışmada); yeni build: `node scripts/ffmpeg-probe.mjs --ffmpeg … --ffprobe … --update`; ADR-0006 |
+| Ağ denetimi: politika, proxy, gerçek yt-dlp (AC-29) | `crates/vv-netguard/tests/netguard.rs` + `scripts/netguard-probe.mjs` → `test-artifacts/netguard/` | Yeni yönlendirme/manifest vakası probe'un `cases` listesine; kanarya her vakada 0 bağlantı almalı; ADR-0007 |
 | Yerel medya protokolü (range, yol sınırı) | `apps/desktop/src-tauri/tests/media_protocol.rs` | ADR-0004 |
 | WebView2 oynatma matrisi (DEC-04) | `apps/desktop/e2e-desktop/playback-matrix.spec.ts` → `test-artifacts/playback-matrix/` | Yalnızca MP4 H.264/AAC zorunlu; diğerleri ölçüm. Yeni format: `make-playback-media.mjs` `MATRIX` satırı |
 
