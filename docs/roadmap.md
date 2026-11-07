@@ -8,7 +8,7 @@ Son güncelleme: 7 Kasım 2026, F0.11.
 
 | Kilometre taşı | Faz | Çıkış koşulu (SPEC §3) | Durum |
 |---|---|---|---|
-| M0 — Temel ve uygulanabilirlik | F0 | Uygulama açılır; tip/lint/test akışı çalışır; dış araç ve depolama kararlarının kanıtı kayıtlı | Devam ediyor: F0.1–F0.10 ve F0.13 ✅; F0.11 ve F0.12 PR'da |
+| M0 — Temel ve uygulanabilirlik | F0 | Uygulama açılır; tip/lint/test akışı çalışır; dış araç ve depolama kararlarının kanıtı kayıtlı | Tamamlandı: F0.1–F0.13 ✅, çıkış kapısı işaretli (STATE.md) |
 | M1 — Çalışan Windows kütüphanesi | F1, F2 | Ağsız kaydet, düzenle, ara, oynat akışı yeniden başlatmada veriyi korur | Başlanmadı |
 | M2 — İndirme ve Windows MVP | F3, F4 | En az bir izinli gerçek indirme uçtan uca; destek iddiaları platform matrisiyle sınırlı; §26.1 kapıları | Başlanmadı |
 | M3 — Yetkili oturum PoC | F5 | Gerçek ve fixture testleri ayrı; özel VK başarısı yalnızca gerçek yetkili testle (§26.3) | Başlanmadı |

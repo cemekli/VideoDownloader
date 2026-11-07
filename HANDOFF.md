@@ -4,7 +4,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.10 ve F0.13, toplam 11/74. Tek süreç ve alt süreç yönetimi (F0.10, ADR-0008) PR #10 ile main'de.
+- **Tamamlananlar:** F0'ın tamamı, 13/74 (F0.11 ve F0.12 PR #11'de, CI yeşil: [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094)). DEC-01 sürüm kaydı ADR-0010.
 - **Açık PR #11:** F0.11 (zorunlu dokümanlar ve kapsama matrisi) ve F0.12 (benchmark). Dal: `claude/project-thread-t0tup8`.
   - Yeni: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`. `threat-model.md` artık SPEC §20.1'in her satırının durumunu gösteriyor.
   - Kapsama matrisi `docs/coverage.json`'da: 82 P0/INV/NFR satırının her biri bir AC'ye, kimlikli manuel teste (MT) ya da benchmark'a (BM) bağlı. `npm run coverage:write` tabloyu `docs/testing.md`'ye yazar; `verify` eksik bağı ve eskimiş tabloyu reddeder.
@@ -14,7 +14,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 1. PR #11'i merge et, ardından `git checkout main && git pull`.
 2. İstersen dizüstünde `npm run bench` çalıştır: referans sınıfı bir Windows 11 ölçümü olur (`test-artifacts/bench/report.md`).
-3. F0 çıkış kapısı kontrol edilir, ardından F1.1 (alan şeması ve repository'ler).
+3. Sıradaki iş F1.1 (alan şeması ve repository'ler), ardından F1.2 (bookmark kaydı).
 
 ## Bilinmesi gerekenler
 

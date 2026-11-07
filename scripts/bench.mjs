@@ -41,7 +41,7 @@ const { manifest, report } = JSON.parse(bench.stdout);
 rmSync(join(out, "db"), { recursive: true, force: true });
 
 function powerMode() {
-  if (isWin) return first("powercfg", ["/getactivescheme"])?.replace(/^.*?:\s*/, "") ?? "unknown";
+  if (isWin) return (first("powercfg", ["/getactivescheme"])?.match(/\(([^)]+)\)\s*$/)?.[1] ?? "unknown");
   return first("cat", ["/sys/firmware/acpi/platform_profile"]) ?? "unknown";
 }
 function storage() {

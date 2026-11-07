@@ -1,6 +1,6 @@
 # Karar kayıtları (ADR)
 
-SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kanıtlarıyla buraya yazılacak (STATE.md F0.8, F0.9, F0.11). Her kayıt: bağlam, seçenekler, karar, sonuçlar ve kanıt.
+SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kanıtlarıyla buraya yazılır. M0 kararları (DEC-01…06, DEC-17) ADR-0002, ADR-0004…0007, ADR-0009 ve ADR-0010'dadır; diğerleri ilgili fazda eklenir. Her kayıt: bağlam, seçenekler, karar, sonuçlar ve kanıt.
 
 | ADR | Konu | Durum | Tarih |
 |---|---|---|---|
@@ -13,6 +13,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0007](#adr-0007-dış-araçların-ağ-denetimi-yerel-denetim-proxysi) | Dış araçların ağ denetimi: yerel denetim proxy'si (SPEC DEC-05, §20.2, AC-29) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0008](#adr-0008-tek-süreç-kütüphane-kilidi-ve-alt-süreç-ağacı) | Tek süreç, kütüphane kilidi ve alt süreç ağacı (SPEC INV-13, §13.2, AC-38) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0009](#adr-0009-benchmark-ortamı-ve-sürümlü-veri-üreticisi) | Benchmark ortamı ve sürümlü veri üreticisi (SPEC §22, §25.2, DEC-17) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0010](#adr-0010-sabitlenen-sürümler-ve-güncelleme-kuralı) | Sabitlenen sürümler ve güncelleme kuralı (SPEC DEC-01) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -484,10 +485,47 @@ SPEC §22 (NFR-01…07), §25.2 ve DEC-17'yi karşılar (STATE.md F0.12). Kod: `
 
 - `vv-benchdata` testleri (7): SplitMix64 referans değerleri; varsayılan veri setinin golden hash'leri; aynı seed aynı bayt, başka seed başka bayt; segment sayısı öğeleri etkilemiyor; SPEC §25.2 içerik kuralları (sayılar, uzun başlık, NFD, emoji, Türkçe harfler, `.example`, sıralı ve çakışmasız segmentler); sorguların deterministik ve tırnaklı olması; küçük kütüphanede benchmark'ın satır döndürerek çalışması.
 - Geliştirme kapsayıcısında ilk ölçüm (Linux, Xeon 2.3 GHz, 4 mantıksal CPU; referans sınıfı **değil**): BM-01 p95 0,50 ms, BM-02 p95 3,3 ms, BM-03 p95 8,4 ms. Üretim ~1 s, yükleme 10.000 öğe 130 ms, 100.000 segment 327 ms, veritabanı 25,8 MiB. Bunlar yöntemin çalıştığını gösterir; bütçenin karşılandığını değil.
-- CI: Windows ve Linux, PR'da.
+- CI: Windows ve Linux'ta geçti, [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094). Golden hash Windows'ta da aynı çıktı. CI ölçümleri (2 mantıksal CPU, referans sınıfı değil): Windows Server 2025 BM-01 p95 2,5 ms, BM-02 p95 4,3 ms, BM-03 p95 12,1 ms; Linux BM-01 p95 3,6 ms, BM-02 p95 2,7 ms, BM-03 p95 7,7 ms.
 
 **Sonuçlar ve açık noktalar.**
 
 - Referans sınıfı bir Windows 11 makinesinde ölçüm yapılmadı. Cuma'nın dizüstü bilgisayarında `npm run bench` çalıştırılıp rapor buraya eklenebilir.
 - FTS5 tokenizer'ı burada `unicode61 remove_diacritics 2`. Türkçe arama davranışının kararı F1.6'da Türkçe arama fixture'ıyla verilir; tokenizer değişirse benchmark da güncellenir.
 - NFR-01'in "görünür sonuç" kısmı (UI dahil) ve NFR-02 (kullanım testi) bu ölçümde yok; F1.8'de ölçülür.
+
+---
+
+## ADR-0010: Sabitlenen sürümler ve güncelleme kuralı
+
+SPEC DEC-01'i ("kesin Tauri/Rust/Node/React/SQLite sürümleri") karşılar. Sürümler F0.1–F0.10 boyunca seçildi ve kullanıldı; bu kayıt onları ve güncelleme kuralını tek yerde toplar.
+
+**Bağlam.** SPEC §10.2 sürümlerin varsayımla değil, resmî kaynak, lockfile ve Windows build/test kanıtıyla sabitlenmesini istiyor. Bir bağımlılığın sessizce güncellenmesi test edilen ile dağıtılan arasında fark yaratır (ör. SQLite'ın FTS5 ile derlenip derlenmediği, Tauri'nin capability davranışı).
+
+**Karar: sürümler.**
+
+| Katman | Sürüm | Nerede sabit |
+|---|---|---|
+| Tauri (Rust) | `tauri` 2.12.4, `tauri-build` 2.7.3, `tauri-plugin-single-instance` 2.5.5 (wry 0.57.1) | `apps/desktop/src-tauri/Cargo.toml` (`=` ile) + `Cargo.lock` |
+| Tauri (JS) | `@tauri-apps/api` 2.12.4, `@tauri-apps/cli` 2.12.3 | `apps/desktop/package.json` (tam sürüm) + `package-lock.json` |
+| UI | React 19.3.1, TypeScript 7.0.2, Vite 8.3.6 | `package.json` + lockfile |
+| Test | Vitest 5.1.0, Playwright 1.63.0 | `package.json` + lockfile |
+| SQLite | 3.53.2, `rusqlite` 0.40.2 `bundled` (libsqlite3-sys 0.38.2), FTS5 dahil | `crates/vv-persistence/Cargo.toml` (`=`) + `Cargo.lock`; ADR-0002 |
+| Node | 26 (LTS) | `.nvmrc`; CI `setup-node` bunu okur (son CI: 26.13.0) |
+| Rust | stable, edition 2021 | CI `dtolnay/rust-toolchain@stable` (son CI: 1.99.1); geliştirme kapsayıcısı 1.97.0 |
+| Dış araçlar | yt-dlp 2026.10.26, Deno 2.9.8, FFmpeg/ffprobe 9.0.2 LGPL | `tools/manifest.json`; ADR-0005, ADR-0006 |
+| WebView2 | Sistem runtime'ı (CI'da 156) | Sabit değil; installer stratejisi F4.1 |
+
+**Karar: güncelleme kuralı.**
+
+1. Doğrudan bağımlılıklar tam sürümle yazılır (npm'de `^`/`~` yok; Rust'ta güvenliği ya da davranışı etkileyenler `=` ile). Geçişli bağımlılıkları lockfile'lar sabitler ve depoya girer.
+2. Bir sürüm yalnızca kendi PR'ında yükseltilir. PR'da sürüm notu linki, `npm run verify` ve Windows CI sonucu bulunur. Sürüm bu tabloda güncellenir.
+3. SQLite yükseltmesinde FTS5 testi (`vv-persistence`) ve paketlenen exe'deki `get_diagnostics` E2E kontrolü geçmelidir. Tauri yükseltmesinde IPC/ACL/CSP testleri (`tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts`) geçmelidir.
+4. Rust ve Node şimdilik "stable" ve "26" ile izlenir, tam sürüme bağlanmaz. Kod yeni dil özelliklerine dayanırsa (ör. `File::try_lock`, Rust 1.89+) bu not düşülür.
+
+**Kanıt.** Bu sürümlerle Windows ve Linux CI'da tüm kapılar geçti; son çalışma [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094). Paketlenen exe'de SQLite 3.53.2 ve FTS5, gerçek uygulama E2E testiyle doğrulandı (ADR-0002).
+
+**Sonuçlar ve açık noktalar.**
+
+- Rust ve Node'un tam sürüme bağlanmaması, iki CI çalışması arasında derleyicinin değişebileceği anlamına geliyor. Dağıtım derlemesi için `rust-toolchain.toml` ile tam sürüm F4.1'de sabitlenir.
+- Geliştirme kapsayıcısında Node 22 vardı; `.nvmrc` 26 diyor. Testler iki sürümde de geçti, ama referans Node 26'dır.
+- WebView2 sürümü kullanıcının makinesine bağlıdır; desteklenen en düşük sürüm F4.1'de belirlenir.
