@@ -9,6 +9,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0003](#adr-0003-yt-dlp-adaptörü-sabit-bayraklar-progress-protokolü-ve-hata-eşleme) | yt-dlp adaptörü: sabit bayraklar, progress protokolü, hata eşleme (SPEC DL-05, §14.1) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0004](#adr-0004-webview2-oynatma-matrisi-ve-yerel-medya-protokolü) | WebView2 oynatma matrisi ve yerel medya protokolü (SPEC DEC-04) | Kabul edildi (CI ölçümü; geliştirici makinesi ölçümü açık) | 7 Kasım 2026 |
 | [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi (Windows CI kanıtı bekleniyor) | 7 Kasım 2026 |
 
 ---
 
@@ -249,3 +250,80 @@ SPEC DEC-02, §10.2, §14.1 ve §23.1'i karşılar (STATE.md F0.8b). Kod: `tools
   - Git for Windows'un `gpg --import` komutu geçici dizinde başarısız oluyor; bu yüzden ajan gerektirmeyen `gpgv` kullanılıyor.
   - `gpgv`, `C:/...` gibi yolları URL sanıyor; bu yüzden göreli yol veriliyor.
 
+---
+
+## ADR-0006: FFmpeg build, lisans ve yerel dosya sınırı
+
+SPEC DEC-03, §14.1, IMP-02, DL-09 ve AC-59'u karşılar (STATE.md F0.8c). Kod: `tools/manifest.json` (`ffmpeg`, `ffprobe`), `crates/vv-tools` (manifest kuralları, `FfmpegBanner`), yeni `crates/vv-ffmpeg` (sabit bayraklar, ffprobe sonucunun sınıflandırılması), `scripts/ffmpeg-probe.mjs`, `scripts/fetch-tools.mjs`. Bu kayıt hukuki görüş değildir; lisans ve patent maddeleri dağıtım öncesinde ayrıca doğrulanır (SPEC §22, DEC-15).
+
+**Bağlam.** FFmpeg ve ffprobe; yerel import'ta biçim doğrulama (IMP-02), küçük resim, remux (PLAY-07) ve ileride ses çıkarma için gerekir. SPEC'in istekleri:
+
+- Build'in lisansı, codec'leri ve yeniden dağıtım koşulları belli olmalı.
+- İki araç ağsız çalışmalı: protokol izin listesi (yalnızca `file`) ve tek, doğrulanmış bir dosya yolu.
+- Başka dosyaya ya da URL'ye referans veren girdiler (HLS/DASH manifesti, concat listesi, playlist) `INPUT_REJECTED` ile reddedilmeli. AC-59: böyle bir girdide FFmpeg/ffprobe ağa bağlanmamalı ve kök dışındaki bir dosyayı okumamalı.
+
+**Seçenekler.**
+
+| Seçenek | Artı | Eksi |
+|---|---|---|
+| **BtbN/FFmpeg-Builds, `lgpl` statik** | GitHub sürüm sayfası; tarihli etiketler; ay sonu build'leri 2 yıl saklanıyor; Windows ve Linux aynı yapılandırma; `checksums.sha256` | İmza yok; iki exe toplam 252 MiB |
+| BtbN `lgpl-shared` | Zip 73 MiB (statik 161 MiB); exe'ler DLL'leri paylaşıyor | Artifact başına çok dosya: manifest şeması genişlemeli; DLL arama sırası dikkat ister |
+| BtbN `gpl` | libx264/libx265 kodlayıcıları | GPL; ihtiyacımız olmayan kodlayıcılar için tüm araç GPL olur |
+| gyan.dev | Yaygın | Yalnızca Windows; varsayılan build'ler GPL; sürüm başına kalıcı URL zayıf |
+| Kendi build'imiz | Tam denetim, en küçük boyut | CI'da bakım yükü; M0 için gereksiz |
+
+**Doğrulanan gerçekler (7 Kasım 2026, sabitlenen dosyalarla).**
+
+- **Build:** FFmpeg `n9.0.2-39-g7adfbe40dc`, release/9.0 dalı, BtbN etiketi `autobuild-2026-10-31-12-59` (Ekim'in ay sonu build'i). `-version` çıktısı: `ffmpeg version n9.0.2-39-g7adfbe40dc-20261031`, gcc 16.2.0.
+- **Lisans:** yapılandırmada `--enable-version3` var; `--enable-gpl` ve `--enable-nonfree` yok. Sonuç LGPL-3.0-or-later. libx264, libx265, libxvid, libfdk-aac kapalı. H.264 kodlayıcı olarak yalnızca libopenh264 var.
+- **Codec'ler:** oynatma matrisindeki 14 dosyanın hepsi doğru okunuyor: MP4/MOV/MKV/WebM × H.264/HEVC/VP8/VP9/AV1, AAC/Opus/Vorbis. HEVC çözücüsü FFmpeg'in kendi (LGPL) çözücüsü.
+- **Boyut:** `ffmpeg.exe` 132.190.720 bayt, `ffprobe.exe` 131.990.016 bayt; zip 168.715.328 bayt. Linux'ta `tar.xz` 136.027.168 bayt.
+- **Ağ ve dosya erişimi** (`scripts/ffmpeg-probe.mjs`, yerel bir HTTP "kanarya" sunucusuyla; Linux'ta ek olarak `strace` ile):
+  - Yalnızca `-protocol_whitelist file` **yetmiyor**. HLS listesi `../outside/secret.ts` satırını içerdiğinde ffprobe biçimi `hls` olarak açıyor ve kök dışındaki dosyayı okuyor (`strace`: 1 `openat`). HTTP satırı engelleniyor, yani yalnızca ağ korunmuş oluyor.
+  - `-format_whitelist` eklenince HLS ve concat listeleri açılmadan reddediliyor: `[hls @ …] Format not on whitelist`. Kök dışı okuma yok (`strace`: 0), HTTP isteği yok (kanarya: 0).
+  - Biçim uzantıdan değil içerikten belirleniyor: `.mkv` uzantılı bir concat listesi `concat` olarak tanınıyor ve reddediliyor.
+  - Girdi olarak verilen bir URL `Protocol 'http' not on whitelist 'file'!` ile reddediliyor. Kontrol olarak kısıtsız ffprobe aynı URL'ye 1 istek atıyor; bu, kanaryanın gerçekten çalıştığını gösterir.
+- **Remux:** MKV H.264/AAC → MP4 `-c copy` çalışıyor, sonuç H.264/AAC MP4. 1.212 sn'lik (31,8 MB) bir MKV, Linux CI kapsayıcısında yaklaşık 1 sn'de remux edildi (yaklaşık 30 MB/sn, gerçek zamanın yaklaşık 1.000 katı). Windows ölçümü CI'dan gelecek.
+- **`-n` tuzağı:** çıktı dosyası varsa FFmpeg üzerine yazmıyor ama **çıkış kodu 0** dönüyor (6.1.1 ve 9.0.2'de aynı). Yani başarı yalnızca çıkış koduna bakılarak anlaşılamaz.
+
+**Karar.**
+
+1. **Build:** BtbN `lgpl` statik, FFmpeg 9.0.2 (`n9.0.2-39-g7adfbe40dc-20261031`). `ffmpeg` ve `ffprobe` manifestte iki ayrı araç olarak durur ama aynı arşivden gelir; manifest bunu zorunlu tutar (aynı URL, hash, boyut ve build).
+2. **Sabitleme kodda:** FFmpeg URL'si sürüm dizini yerine tarihli BtbN etiketiyle sabitlenir. `vv-tools` şunları zorunlu tutar:
+   - etiket `autobuild-YYYY-MM-DD-HH-MM` biçiminde ve tarihi build tarihiyle aynı;
+   - dosya adı tam bu build'in adı ve platformu (`win64`/`linux64`);
+   - yalnızca `-lgpl-` varyantı (`gpl`, `nonfree` ve `latest` reddedilir);
+   - build bir release dalından (`n9.0.2-…`); `N-…` master build'leri reddedilir.
+
+   Arşiv içindeki yol (`archivePath`) göreli, düz parçalardan oluşmalı ve executable adıyla bitmeli. Desteklenen arşivler `zip` ve `tar.xz`. 15 yeni bozma vakası bunları test ediyor.
+3. **Lisans kontrolü çalışma anında da yapılır.** Açılış sağlık kontrolü (`FfmpegBanner::check`) şunları ister: doğru program, tam olarak sabitlenen build string'i ve LGPL yapılandırması. GPL ya da nonfree bir FFmpeg (örneğin dağıtımın kendi ffmpeg'i) sürümü tutsa bile kullanılmaz ve `TOOL_MISSING` olarak raporlanır. `fetch-tools` aynı kontrolü her CI çalışmasında gerçek dosyayla yapar.
+4. **Her FFmpeg/ffprobe çağrısının sabit bayrakları** (`vv-ffmpeg::args`, `tests/fixtures/ffmpeg/args.json`):
+   - Girdiden önce `-protocol_whitelist file -format_whitelist mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac`. Listede başka dosyaya referans veren hiçbir demuxer yok. mov demuxer'ının harici veri referansları varsayılan olarak kapalı (`enable_drefs=0`).
+   - Girdi ve çıktı `file:<mutlak yol>` olarak, tek argv öğesiyle verilir. Böylece `concat:` ya da `http:` ile başlayan bir dosya adı protokol olarak okunmaz. Göreli yol kabul edilmez.
+   - ffprobe yalnızca okunan alanları JSON olarak ister: `format_name`, süre, boyut; akışların türü ve codec'i.
+   - Remux: `-nostdin`, ilk video ve varsa ilk ses akışı, `-c copy`, `-movflags +faststart`, çıktıda da `-protocol_whitelist file`, `-n`.
+   - `pipe` protokolü şimdilik açılmaz; gerekirse ayrı bir kararla eklenir.
+5. **Hata eşleme** (`vv-ffmpeg::probe::classify`), iki yeni kod:
+   - `INPUT_REJECTED`: ffprobe'un "not on whitelist" satırında adı geçen demuxer referans veren bir biçimse (`hls`, `dash`, `concat`, `imf`, `webm_dash_manifest`, `sdp`, `image2`) ya da reddedilen bir ağ protokolüyse.
+   - `MEDIA_CORRUPT`: izin listesinde olmayan başka bir biçim (ör. AVI), okunamayan veri ya da hiç ses/görüntü akışı olmayan dosya.
+   - Derinlemesine savunma: ffprobe bir şekilde izin listesi dışındaki bir `format_name` döndürürse bu da reddedilir.
+6. **Remux sonucu doğrulanır.** Çağıran taraf her zaman var olmayan yeni bir geçici ad kullanır. Başarı için üç koşul gerekir: çıkış kodu 0, dosya var ve aynı kısıtlı ffprobe dosyayı beklenen biçim ve codec'lerle okuyor. Ancak bundan sonra dosya yerine taşınır.
+7. **Dağıtım yükümlülükleri** (dağıtım kontrol listesine):
+   - `ffmpeg.exe` ve `ffprobe.exe` ayrı programlardır ve süreç olarak çağrılır; uygulamaya bağlanmaz.
+   - Kurulum paketi şunları içermeli: LGPLv3 metni (arşivdeki `LICENSE.txt`); FFmpeg'in tam kaynağına (commit `7adfbe40dc`) ve BtbN build betiklerine (etiketin commit'i) erişim; statik bağlanan kütüphanelerin lisans bildirimleri.
+   - H.264, HEVC ve AAC gibi codec'lerin **patent** durumu lisanstan ayrı bir konudur; DEC-15 kapsamında değerlendirilir. libopenh264 statik bağlandığı için Cisco'nun kendi ikili dosyalarına tanıdığı patent lisansı bu build'i kapsamaz. Bu yüzden H.264 **kodlama** planlanmıyor; HEVC dosyaları dönüştürülmez, ADR-0004'teki gibi harici oynatıcı yolu sunulur.
+
+**Sonuçlar ve açık noktalar.**
+
+- **Boyut:** iki statik exe açılmış hâlde 252 MiB tutuyor. Kurulum paketi aşamasında (F4) `lgpl-shared` varyantına geçmek değerlendirilecek (zip 73 MiB). Bunun için manifestte artifact başına birden çok dosya gerekir; geçiş kendi PR'ında yapılır ve bu ADR güncellenir.
+- **Güven halkası:** BtbN'nin `checksums.sha256` dosyası imzalı değil. Güven, GitHub sürüm sayfası ve depoya yazılmış hash'tir; Deno ile aynı düzeyde (ADR-0005).
+- **Sürüm takibi:** güvenlik düzeltmesi geldiğinde ya da yeni bir ay sonu build'i gerektiğinde manifest güncellenir, `node scripts/ffmpeg-probe.mjs --update` ile fixture'lar yeniden yakalanır. BtbN ay sonu build'lerini 2 yıl tuttuğu için sabitlenen URL bu süre boyunca indirilebilir; kurulum paketi dosyaları zaten kendisi taşır.
+- **F0.10 için:** FFmpeg süreçleri ADR-0005'teki temiz ortamla, süre ve kaynak sınırıyla (Job Object) başlatılır. `-loglevel error` dışında çıktı saklanmaz.
+- **DL-09:** tanılama ekranı, manifestteki `build` ve `source` alanlarını gösterir.
+
+**Kanıt.**
+
+- `vv-ffmpeg`: 6 test. Kapsam: bayrakların `args.json` ile sapmaması, izin listesinde referans veren demuxer olmaması, yolların bölünmemesi ve mutlak olması, 14 matris dosyasının ffprobe çıktısının sınıflandırılması, 4 kısıtlı reddin `INPUT_REJECTED` olması ve kontrol vakası, diğer hataların `MEDIA_CORRUPT` olması.
+- `vv-tools`: 9 test. 39 bozma vakası (15'i FFmpeg) ve gerçek `-version` çıktıları: sabitlenen build kabul ediliyor, GPL'li dağıtım build'i reddediliyor.
+- `scripts/fetch-tools.mjs` Linux'ta gerçek dosyalarla uçtan uca geçti: indirme, hash'ler, `tar.xz` açma, build ve lisans kontrolü, 14 dosyanın ffprobe çıktısının fixture'larla aynı olması, AC-59 reddi (0 HTTP isteği) ve remux.
+- Fixture'lar sabitlenen build ile yakalandı (`tests/fixtures/ffmpeg/`). İlk yakalama Ubuntu'nun ffmpeg 6.1.1'i ile yapılmıştı; tek fark 9.0'ın JSON'a eklediği boş `stream_groups` alanıydı.

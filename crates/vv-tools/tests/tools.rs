@@ -34,7 +34,7 @@ fn tampered(edit: impl FnOnce(&mut Value)) -> Result<Manifest, ManifestError> {
 #[test]
 fn shipped_manifest_is_valid_and_complete() {
     let m = Manifest::parse(&manifest_text()).expect("tools/manifest.json is valid");
-    for id in [ToolId::YtDlp, ToolId::Deno] {
+    for &id in REQUIRED_TOOLS {
         for platform in ["windows-x86_64", "linux-x86_64"] {
             assert!(
                 m.artifact(id, platform).is_some(),
@@ -171,8 +171,109 @@ fn manifest_cannot_point_elsewhere() {
         (
             "missing deno",
             Box::new(|v| {
+                v["tools"].as_array_mut().unwrap().remove(1);
+            }),
+        ),
+        (
+            "missing ffprobe",
+            Box::new(|v| {
                 v["tools"].as_array_mut().unwrap().pop();
             }),
+        ),
+        // FFmpeg (ADR-0006).
+        (
+            "ffmpeg gpl variant",
+            Box::new(|v| {
+                let u = v["tools"][2]["artifacts"][0]["url"]
+                    .as_str()
+                    .unwrap()
+                    .replace("-lgpl-", "-gpl-");
+                v["tools"][2]["artifacts"][0]["url"] = u.into();
+            }),
+        ),
+        (
+            "ffmpeg nonfree variant",
+            Box::new(|v| {
+                let u = v["tools"][2]["artifacts"][0]["url"]
+                    .as_str()
+                    .unwrap()
+                    .replace("-lgpl-", "-nonfree-");
+                v["tools"][2]["artifacts"][0]["url"] = u.into();
+            }),
+        ),
+        (
+            "ffmpeg latest tag",
+            Box::new(|v| {
+                let u = v["tools"][2]["artifacts"][0]["url"]
+                    .as_str()
+                    .unwrap()
+                    .replace("autobuild-2026-10-31-12-59", "latest");
+                v["tools"][2]["artifacts"][0]["url"] = u.into();
+            }),
+        ),
+        (
+            "ffmpeg tag of another day",
+            Box::new(|v| {
+                let u = v["tools"][2]["artifacts"][0]["url"]
+                    .as_str()
+                    .unwrap()
+                    .replace("2026-10-31", "2026-10-30");
+                v["tools"][2]["artifacts"][0]["url"] = u.into();
+            }),
+        ),
+        (
+            "ffmpeg master snapshot",
+            Box::new(|v| v["tools"][2]["build"] = "N-123456-g7adfbe40dc-20261031".into()),
+        ),
+        (
+            "ffmpeg without build",
+            Box::new(|v| {
+                v["tools"][2].as_object_mut().unwrap().remove("build");
+            }),
+        ),
+        (
+            "build on yt-dlp",
+            Box::new(|v| v["tools"][0]["build"] = "n9.0.2-39-g7adfbe40dc-20261031".into()),
+        ),
+        (
+            "ffmpeg linux file for windows",
+            Box::new(|v| {
+                let u = v["tools"][2]["artifacts"][1]["url"].clone();
+                v["tools"][2]["artifacts"][0]["url"] = u;
+            }),
+        ),
+        (
+            "ffprobe from another archive",
+            Box::new(|v| v["tools"][3]["artifacts"][0]["sha256"] = "1".repeat(64).into()),
+        ),
+        (
+            "ffprobe other build",
+            Box::new(|v| {
+                v["tools"][3]["build"] = "n9.0.2-40-g7adfbe40dd-20261031".into();
+            }),
+        ),
+        (
+            "archive path escapes",
+            Box::new(|v| v["tools"][2]["artifacts"][0]["archivePath"] = "../bin/ffmpeg.exe".into()),
+        ),
+        (
+            "archive path is another file",
+            Box::new(|v| {
+                v["tools"][2]["artifacts"][0]["archivePath"] =
+                    "ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0/bin/ffplay.exe".into()
+            }),
+        ),
+        (
+            "absolute archive path",
+            Box::new(|v| v["tools"][2]["artifacts"][1]["archivePath"] = "/usr/bin/ffmpeg".into()),
+        ),
+        (
+            "archive kind does not match URL",
+            Box::new(|v| v["tools"][2]["artifacts"][1]["archive"] = "zip".into()),
+        ),
+        (
+            "ffmpeg signed provenance",
+            Box::new(|v| v["tools"][2]["provenance"] = v["tools"][0]["provenance"].clone()),
         ),
         (
             "duplicate platform",
@@ -359,5 +460,69 @@ fn deno_is_started_without_permissions() {
     );
     for (what, result) in s["results"].as_object().unwrap() {
         assert_eq!(result, "NotCapable", "{what}");
+    }
+}
+
+#[test]
+fn ffmpeg_banner_and_licence() {
+    let m = Manifest::parse(&manifest_text()).unwrap();
+    let ff = m.tool(ToolId::Ffmpeg).unwrap();
+    let pinned = ff.build.as_deref().unwrap();
+    assert_eq!(ff.version, "9.0.2");
+    assert_eq!(
+        m.tool(ToolId::Ffprobe).unwrap().build.as_deref(),
+        Some(pinned)
+    );
+
+    let h: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("tests/fixtures/ffmpeg/version-output.json")).unwrap(),
+    )
+    .unwrap();
+    // Real output of the pinned build.
+    let banner = h["pinned-linux-x86_64"]["ffmpeg"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let probe = parse_ffmpeg_banner(h["pinned-linux-x86_64"]["ffprobe"].as_str().unwrap()).unwrap();
+    assert_eq!(probe.check("ffprobe", pinned), VersionCheck::Ok);
+    let b = parse_ffmpeg_banner(&banner).unwrap();
+    assert_eq!(b.licence(), FfmpegLicence::Lgpl { version3: true });
+    assert_eq!(b.check("ffmpeg", pinned), VersionCheck::Ok);
+    assert_eq!(b.check("ffprobe", pinned), VersionCheck::Unrecognised);
+    assert_eq!(
+        b.check("ffmpeg", "n9.0.3-1-gabcdef1234-20261130"),
+        VersionCheck::Mismatch {
+            expected: Version([9, 0, 3]),
+            found: Version([9, 0, 2])
+        }
+    );
+
+    // A real distro build: GPL, so never accepted even at the "right" version.
+    for program in ["ffmpeg", "ffprobe"] {
+        let d = parse_ffmpeg_banner(h["distro"][program].as_str().unwrap()).unwrap();
+        assert_eq!(d.program, program);
+        assert_eq!(d.build, "6.1.1-3ubuntu5");
+        assert_eq!(d.licence(), FfmpegLicence::Gpl);
+        assert_eq!(
+            d.check(program, "6.1.1-3ubuntu5"),
+            VersionCheck::Unrecognised
+        );
+        assert_eq!(
+            d.check(program, pinned).code(),
+            Some(ErrorCode::ToolMissing)
+        );
+    }
+    let nonfree = banner.replace("--enable-version3", "--enable-nonfree");
+    assert_eq!(
+        parse_ffmpeg_banner(&nonfree).unwrap().licence(),
+        FfmpegLicence::Nonfree
+    );
+    for junk in [
+        "",
+        "ffmpeg",
+        "ffplay version n9.0.2 x\nconfiguration: \n",
+        "Access is denied.",
+    ] {
+        assert_eq!(parse_ffmpeg_banner(junk), None, "{junk:?}");
     }
 }

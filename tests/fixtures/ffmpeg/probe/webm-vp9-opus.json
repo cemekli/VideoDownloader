@@ -1,0 +1,21 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "vp9",
+      "codec_type": "video"
+    },
+    {
+      "index": 1,
+      "codec_name": "opus",
+      "codec_type": "audio"
+    }
+  ],
+  "format": {
+    "format_name": "matroska,webm",
+    "duration": "3.008000",
+    "size": "100489"
+  }
+}

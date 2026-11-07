@@ -1,0 +1,12 @@
+[package]
+name = "vv-ffmpeg"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault FFmpeg/ffprobe adapter: fixed sandboxing arguments and classification of ffprobe output (no subprocess)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vv-domain = { path = "../vv-domain" }

@@ -89,7 +89,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ✅ ADR-0002; `vv-persistence` 16/16 (Windows + Linux); gerçek exe'de `packaged SQLite 3.53.2, FTS5=true, schema v1`, `e2e-desktop` 5/5; [CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245) |
 | F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ✅ ADR-0003; `vv-ytdlp` 31/31 (Windows + Linux): 15 gerçek yt-dlp 2026.10.26 çalışması + 20 kaynak metni vakası; [CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226) |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
-| F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi. Üç PR: **a** oynatma matrisi (DEC-04), **b** yt-dlp + JS runtime (DEC-02), **c** FFmpeg (DEC-03) | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | 🟨 a ✅: ADR-0004; WebView2 156'da 14 dosyanın 11'i oynuyor, HEVC yalnızca sesle (`partial`); MP4 H.264/AAC zorunlu testi geçti; [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985). b ✅: ADR-0005; `vv-tools` 8/8; `tools/manifest.json`; gerçek yt-dlp.exe + deno.exe Windows'ta doğrulandı, PATH'teki Deno yok sayılıyor; [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585); c ⬜ |
+| F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi. Üç PR: **a** oynatma matrisi (DEC-04), **b** yt-dlp + JS runtime (DEC-02), **c** FFmpeg (DEC-03) | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | 🟨 a ✅: ADR-0004; WebView2 156'da 14 dosyanın 11'i oynuyor, HEVC yalnızca sesle (`partial`); MP4 H.264/AAC zorunlu testi geçti; [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985). b ✅: ADR-0005; `vv-tools` 8/8; `tools/manifest.json`; gerçek yt-dlp.exe + deno.exe Windows'ta doğrulandı, PATH'teki Deno yok sayılıyor; [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585). c 🟨 PR'da: ADR-0006; BtbN FFmpeg 9.0.2 LGPL; `vv-ffmpeg` 6/6, `vv-tools` 9/9; izin listeleriyle HLS/concat/URL reddi (0 HTTP isteği), remux ölçümü; Linux'ta gerçek dosyalarla geçti, Windows CI bekleniyor |
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ⬜ |
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ⬜ |
 | F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md` var |
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0.8b** (yt-dlp + Deno, ADR-0005) PR'da. Ardından F0.8c (FFmpeg build'i, lisansı ve remux süresi, DEC-03). Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance ve Job Object).
+**F0.8c** (FFmpeg, ADR-0006) PR'da. Merge sonrası F0.8 ✅ olur. Ardından F0.9 (ağ denetimi, DEC-05) ya da F0.10 (single-instance, Job Object, temiz ortam).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F0.8c başladı: `tools/manifest.json`'a FFmpeg/ffprobe 9.0.2 (BtbN LGPL, tarihli etiket), `vv-ffmpeg` crate'i (`-protocol_whitelist file` + `-format_whitelist`, `file:` yolları), `INPUT_REJECTED` ve `MEDIA_CORRUPT` hata kodları, `scripts/ffmpeg-probe.mjs` (AC-59 kanaryası, remux ölçümü). ADR-0006. |
 | 7 Kas 2026 | F0.8b başladı: `tools/manifest.json` (yt-dlp 2026.10.26 GPG imzalı, Deno 2.9.8), `vv-tools` crate'i, `CHECKSUM_MISMATCH` hata kodu, `--no-js-runtimes --js-runtimes deno:<yol> --no-remote-components`, `scripts/fetch-tools.mjs` ve CI adımı. ADR-0005. |
 | 7 Kas 2026 | F0.8a ölçüldü (Windows CI, WebView2 156): MKV/MOV/MP4/WebM, H.264/VP9/AV1 ile oynuyor; HEVC yalnızca ses. Kararlar ADR-0004'te: HEVC oynatılamaz sayılır, PLAY-07 kapsamı daralır. |
 | 7 Kas 2026 | F0.8 üç PR'a bölündü. F0.8a başladı: 14 test videosu, Range destekli medya protokolü prototipi (yalnızca test derlemesinde), WebView2 oynatma matrisi testi, ADR-0004. |

@@ -3861,6 +3861,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-ffmpeg"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "vv-domain",
+]
+
+[[package]]
 name = "vv-persistence"
 version = "0.0.1"
 dependencies = [

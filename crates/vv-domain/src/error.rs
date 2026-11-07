@@ -34,6 +34,9 @@ pub enum ErrorCode {
     Canceled,
     // Managed tools (STATE.md F0.8b, SPEC §19).
     ChecksumMismatch,
+    // Local media checks (STATE.md F0.8c, SPEC §14.1, §19).
+    InputRejected,
+    MediaCorrupt,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -59,6 +62,8 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::Timeout,
     ErrorCode::Canceled,
     ErrorCode::ChecksumMismatch,
+    ErrorCode::InputRejected,
+    ErrorCode::MediaCorrupt,
 ];
 
 impl ErrorCode {
@@ -95,6 +100,8 @@ impl ErrorCode {
             ErrorCode::Timeout => "error.timeout",
             ErrorCode::Canceled => "error.canceled",
             ErrorCode::ChecksumMismatch => "error.checksum_mismatch",
+            ErrorCode::InputRejected => "error.input_rejected",
+            ErrorCode::MediaCorrupt => "error.media_corrupt",
         }
     }
 }
@@ -127,6 +134,8 @@ impl ErrorCode {
             DiskFull => Some(SuggestedAction::FreeSpace),
             AccessDenied | ContentUnavailable | RegionRestricted | DrmUnsupported
             | ExtractorUnsupported | PlaylistUnsupported | Canceled => None,
+            // SPEC §19: do not import, explain why.
+            InputRejected | MediaCorrupt => None,
         }
     }
 }

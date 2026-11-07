@@ -1,0 +1,73 @@
+{
+  "_comment": "Written by scripts/ffmpeg-probe.mjs --update; compared on every run. AC-59 evidence.",
+  "cases": [
+    {
+      "case": "hls-restricted",
+      "restricted": true,
+      "exitOk": false,
+      "formatName": null,
+      "rejectedDemuxer": "hls",
+      "httpRequests": 0,
+      "stderr": [
+        "[hls @ <addr>] Format not on whitelist 'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac'",
+        "file:<work>/import/playlist.m3u8: Invalid argument"
+      ]
+    },
+    {
+      "case": "hls-http-only-restricted",
+      "restricted": true,
+      "exitOk": false,
+      "formatName": null,
+      "rejectedDemuxer": "hls",
+      "httpRequests": 0,
+      "stderr": [
+        "[hls @ <addr>] Format not on whitelist 'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac'",
+        "file:<work>/import/remote.m3u8: Invalid argument"
+      ]
+    },
+    {
+      "case": "concat-as-mkv-restricted",
+      "restricted": true,
+      "exitOk": false,
+      "formatName": null,
+      "rejectedDemuxer": "concat",
+      "httpRequests": 0,
+      "stderr": [
+        "[concat @ <addr>] Format not on whitelist 'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac'",
+        "file:<work>/import/movie.mkv: Invalid argument"
+      ]
+    },
+    {
+      "case": "url-input-restricted",
+      "restricted": true,
+      "exitOk": false,
+      "formatName": null,
+      "rejectedDemuxer": null,
+      "httpRequests": 0,
+      "stderr": [
+        "[http @ <addr>] Protocol 'http' not on whitelist 'file'!",
+        "http://127.0.0.1:<port>/seg.ts: Invalid argument"
+      ]
+    },
+    {
+      "case": "hls-protocol-whitelist-only",
+      "restricted": false,
+      "exitOk": true,
+      "formatName": "hls",
+      "rejectedDemuxer": null,
+      "httpRequests": 0,
+      "stderr": []
+    },
+    {
+      "case": "url-input-unrestricted",
+      "restricted": false,
+      "exitOk": false,
+      "formatName": null,
+      "rejectedDemuxer": null,
+      "httpRequests": 1,
+      "stderr": [
+        "http://127.0.0.1:<port>/seg.ts: Server returned 404 Not Found"
+      ]
+    }
+  ]
+}
