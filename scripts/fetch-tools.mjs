@@ -75,9 +75,6 @@ function dearmor(armored) {
   return Buffer.from(body.join(""), "base64");
 }
 
-// MSYS programs accept C:/x/y; forward slashes avoid any backslash mangling.
-const posixish = (p) => (isWin ? p.replace(/\\/g, "/") : p);
-
 async function verifyYtDlpSignature(t, a) {
   const p = t.provenance;
   const work = mkdtempSync(join(tmpdir(), "vv-gpg-"));
@@ -91,7 +88,9 @@ async function verifyYtDlpSignature(t, a) {
     // The key is committed (tools/yt-dlp-public.key): downloading it from the
     // same place as the binary would make the check circular.
     writeFileSync(keyring, dearmor(readFileSync(join(root, "tools", "yt-dlp-public.key"), "utf8")));
-    const v = spawnSync(gpgv, ["--status-fd", "1", "--keyring", posixish(keyring), posixish(sig), posixish(sums)], { encoding: "utf8" });
+    // Relative paths from inside the work directory: gpg reads "C:/..." as a
+    // URL scheme ("invalid key resource URL"); "./x" is a plain file.
+    const v = spawnSync(gpgv, ["--status-fd", "1", "--keyring", "./yt-dlp.gpg", "SHA2-256SUMS.sig", "SHA2-256SUMS"], { cwd: work, encoding: "utf8" });
     const valid = /\[GNUPG:\] VALIDSIG ([0-9A-F]{40})/.exec(v.stdout ?? "");
     if (v.status !== 0 || !valid || valid[1] !== YTDLP_KEY) {
       fail(`SHA2-256SUMS signature is not valid for key ${YTDLP_KEY} (gpgv exit ${v.status})\n${v.stderr ?? ""}${v.error ?? ""}`);
