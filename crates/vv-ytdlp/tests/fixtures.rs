@@ -119,6 +119,7 @@ fn fixed_args_match_the_capture_script() {
         args::PINNED_VERSION
     );
     assert_eq!(strings(&a["common"]), args::COMMON);
+    assert_eq!(strings(&a["jsRuntime"]), args::JS_RUNTIME);
     assert_eq!(strings(&a["metadata"]), args::METADATA);
     assert_eq!(strings(&a["download"]), args::DOWNLOAD);
 }

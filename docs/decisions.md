@@ -8,6 +8,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0002](#adr-0002-sqlite-erişimi-wal-ve-migration-stratejisi) | SQLite erişimi, WAL ve migration stratejisi (SPEC DEC-06) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0003](#adr-0003-yt-dlp-adaptörü-sabit-bayraklar-progress-protokolü-ve-hata-eşleme) | yt-dlp adaptörü: sabit bayraklar, progress protokolü, hata eşleme (SPEC DL-05, §14.1) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0004](#adr-0004-webview2-oynatma-matrisi-ve-yerel-medya-protokolü) | WebView2 oynatma matrisi ve yerel medya protokolü (SPEC DEC-04) | Kabul edildi (CI ölçümü; geliştirici makinesi ölçümü açık) | 7 Kasım 2026 |
+| [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Önerildi: Windows CI kanıtı bekleniyor | 7 Kasım 2026 |
 
 ---
 
@@ -178,4 +179,70 @@ Tüm `plays` satırlarında seek 2,0 sn'ye tam oturdu ve oynatma sürdü. İlk k
 - F2.4 bu protokolü dağıtılan uygulamaya taşır. Orada istek bir dosya adı değil `MediaAsset` kimliği taşır; yol veritabanından çözülür ve storage root içinde doğrulanır. Büyük dosyalar parça parça okunur.
 - Remux süresi (MKV'den MP4'e, `-c copy`) FFmpeg kararına (F0.8c, DEC-03) bağlıdır ve orada ölçülür.
 - CI makinesi tek bir veri noktasıdır: GPU ve HEVC eklentisi yoktur. Geliştirici makinesinde (Windows 11, GPU'lu) ölçüm açık bir işdir. `npm run desktop:e2e-exe` ve ardından `npm run e2e:desktop` aynı tabloyu `test-artifacts/playback-matrix/` altına yazar. HEVC orada oynasa bile, kullanıcı makinelerinde garanti olmadığı için yukarıdaki HEVC kararı değişmez.
+
+---
+
+## ADR-0005: yt-dlp ve JS runtime dağıtımı ve güven modeli
+
+SPEC DEC-02, §10.2, §14.1 ve §23.1'i karşılar (STATE.md F0.8b). Kod: `tools/manifest.json`, `crates/vv-tools`, `crates/vv-ytdlp/src/args.rs` (`JS_RUNTIME`), `scripts/fetch-tools.mjs`. Bu kayıt hukuki görüş değildir; lisans maddeleri dağıtım öncesinde ayrıca doğrulanır (SPEC §22, DEC-15).
+
+**Bağlam.** yt-dlp, YouTube için harici bir JavaScript runtime'ı ister. SPEC'in istekleri:
+
+- Runtime da yönetilen bir araç olmalı ve yalnızca manifestteki yoldan kullanılmalı; kullanıcının `PATH`'indeki bir runtime kullanılmamalı.
+- Her aracın sürümü, kaynağı, hash'i, varsa imzası ve lisansı kayıtlı olmalı.
+- Bilinmeyen bir internet konumundan executable indirilip çalıştırılmamalı.
+
+**Doğrulanan gerçekler (7 Kasım 2026, birincil kaynaklar ve gerçek çalıştırma).**
+
+- **yt-dlp 2026.10.26** (ADR-0003'te sabitlenen sürüm):
+  - Kaynak kodu Unlicense. PyInstaller ile paketlenen `yt-dlp.exe`, GPLv3+ kod içerdiği için bütün olarak GPLv3+ sayılıyor (yt-dlp README).
+  - Sürüm dosyaları `SHA2-256SUMS` ile yayımlanıyor ve bu dosya GPG ile imzalı. İmza anahtarı: Simon Sawicki, rsa4096, parmak izi `AC0CBBE6848D6A873464AF4E57CF65933B5A7581`. İmza bu oturumda doğrulandı ("Good signature").
+  - Resmi exe, EJS çözücüsünü içinde taşıyor: `yt_dlp_ejs-0.8.0`, `-v` başlığında görülüyor. Çalışma anında bir şey indirmesi gerekmiyor.
+- **Deno 2.9.8** (21 Ekim 2026): MIT lisanslı. Sürüm dosyalarının yanında yalnızca bir `.sha256sum` dosyası var; bağımsız bir imza bulamadım. `deno.exe` 98.081.568 bayt (zip olarak 42.917.472 bayt). `yt-dlp.exe` 23.575.744 bayt.
+- **yt-dlp'nin Deno beklentisi:** en az 2.3.0 (`yt_dlp/utils/_jsruntime.py` içinde `DenoJsRuntime.MIN_SUPPORTED_VERSION`). Daha eski bir Deno `deno-1.46.3 (unsupported)` olarak raporlanıyor ve kullanılmıyor.
+- **yt-dlp'nin varsayılanı SPEC'e aykırı.** Hiç bayrak verilmezse yt-dlp `PATH`'teki Deno'yu buluyor ve kullanıyor. `--no-js-runtimes --js-runtimes deno:<yol>` verildiğinde `PATH` yok sayılıyor; yol yoksa sonuç `none` oluyor. İki durum da gerçek çalıştırmayla kayda geçti: `tests/fixtures/tools/health-output.json`.
+- **Deno korumalı çalışıyor.** yt-dlp, Deno'yu `run --no-remote --no-npm --cached-only --no-prompt ...` ile başlatıyor; hiçbir `--allow-*` bayrağı yok (`jsc/_builtin/deno.py`). Aynı bayraklarla çalıştırılan bir deneme betiğinde ağ, dosya okuma, dosya yazma, ortam değişkeni ve süreç başlatma girişimlerinin hepsi `NotCapable` hatası verdi. Bu, Node'a göre önemli bir artı: yt-dlp Node'u izin sınırı olmadan çalıştırır.
+
+**Karar.**
+
+1. **JS runtime Deno olacak.** Gerekçeler:
+   - yt-dlp'nin varsayılan olarak açık tuttuğu tek runtime bu.
+   - Yukarıda görüldüğü gibi izinsiz, korumalı çalışıyor.
+   - Lisansı MIT.
+
+   Bedeli boyut: kurulum dosyasına yaklaşık 41 MB sıkıştırılmış, 94 MiB açılmış veri ekliyor. QuickJS daha küçük ama yavaş; boyut sorun olursa yeniden değerlendirilir.
+2. **Sürüm sabitlenir ve sabitleme `tools/manifest.json`'da tutulur.** Her araç için sürüm, kaynak, lisans, platform başına URL, indirilen dosyanın boyutu ve SHA-256'sı, ayrıca açılmış executable'ın SHA-256'sı yazılır. Güven çapaları JSON'da değil kodda durur (`vv-tools::manifest`):
+   - İzinli URL ön ekleri; sürüm URL'nin içinde geçmek zorunda, yani "latest" bağlantısı kabul edilmez.
+   - yt-dlp imza anahtarının parmak izi.
+
+   JSON'da yapılan bir yönlendirme reddedilir; bunu 23 bozma vakası test ediyor.
+3. **Uygulama executable indirmez.** M0–M2 boyunca araçlar kurulum paketinin içinde gelir. Araç güncellemesi yalnızca imzalı bir uygulama güncellemesiyle gelir; böylece araçların güven modeli uygulamanınkiyle aynı olur. Ayrı bir araç güncelleyici sonraya bırakıldı: yapılırsa aynı manifest doğrulamasını kullanacak ve kendi ADR'si olacak.
+4. **Doğrulama zinciri:**
+   - Derleme ve CI anında, `scripts/fetch-tools.mjs` ile:
+     - indirilen dosyanın boyutu ve SHA-256'sı kontrol edilir;
+     - yt-dlp için `SHA2-256SUMS` imzası depoya konmuş anahtarla (`tools/yt-dlp-public.key`) ve sabit parmak iziyle doğrulanır; imzalı listede manifestteki hash'in bulunduğu kontrol edilir;
+     - executable'ın SHA-256'sı kontrol edilir;
+     - `--version` çıktısı ve JS runtime yoklaması çalıştırılır.
+   - Deno için imza yok. Güven, denoland'ın GitHub sürüm sayfası ve yayımlanan SHA-256'dır. Bu daha zayıf bir halka ve öyle olduğu kayıtlı.
+   - Çalışma anında (F0.10): ilk çalıştırmadan önce boyut ve SHA-256 kontrol edilir (`vv_tools::verify_file`); açılışta sürüm sorgusu yapılır (`check_version`). Dosya eksikse `TOOL_MISSING` döner. Boyut ya da hash tutmuyorsa yeni hata kodu `CHECKSUM_MISMATCH` döner ve araç çalıştırılmaz (AC-25). Sürüm farklıysa ya da çıktı tanınmıyorsa da `TOOL_MISSING` döner.
+5. **yt-dlp bayrakları** (`args::JS_RUNTIME`): `--no-js-runtimes --js-runtimes deno:<yönetilen yol> --no-remote-components`. Yol tek bir argv öğesi olarak geçer. Yönetilen Deno yoksa yalnızca `--no-js-runtimes --no-remote-components` verilir; YouTube bu durumda ADR-0003'teki kuralla `TOOL_MISSING` olur.
+6. **Lisans yükümlülükleri (dağıtım kontrol listesine):**
+   - `yt-dlp.exe` ayrı bir program olarak dağıtılır ve uygulamaya bağlanmaz. Kurulum paketi GPLv3 metnini ve ilgili sürümün kaynak koduna erişimi (etiketli kaynak arşivi) içermeli.
+   - Deno için MIT telif bildirimi NOTICE dosyasına girer.
+
+**Sonuçlar ve açık noktalar.**
+
+- **F0.10 (süreç başlatma) için iki kural:**
+  - yt-dlp, Deno'ya kendi ortam değişkenlerini olduğu gibi geçiriyor. Bu yüzden alt süreçler temizlenmiş bir ortamla başlatılır: `DENO_*` ve proxy değişkenleri kullanıcıdan alınmaz, `DENO_DIR` uygulamanın önbellek dizinine çevrilir (yt-dlp, Deno'nun analiz önbelleğinin kapatılamadığını not ediyor).
+  - `yt-dlp -v` başlığı proxy haritasını ve ortamdan gelen değerleri yazıyor. `-v` çıktısı ham olarak saklanmaz; tanılamaya yalnızca ayrıştırılmış `JS runtimes` satırı girer.
+- **Sürüm takibi:** stable kanal kullanılır. YouTube kırıldığında yeni yt-dlp sürümü tek bir PR olarak gelir: manifest güncellenir, fixture'lar yeniden yakalanır (ADR-0003), `fetch-tools` tekrar çalıştırılır. Deno sürümü yalnızca güvenlik düzeltmesi geldiğinde ya da yt-dlp'nin alt sınırı yükseldiğinde güncellenir.
+- **Canlı YouTube doğrulanmadı.** Çözücünün gerçekten çalıştığı canlı platform matrisinde (F3.11) gösterilir. Bu ADR yalnızca runtime'ın bulunduğunu, sürümünün uyduğunu ve kısıtlı çalıştığını kanıtlar.
+- **Doğrulama mekanizması (ayrı karar):** uygulama güncellemelerinin imzası ve code-signing (SPEC §24) bu ADR'nin dışındadır.
+
+**Kanıt.**
+
+- `vv-tools`: 8 test. Kapsam: gerçek manifest, 23 bozma vakası, boyut/hash/eksik dosya, FIPS SHA-256 test vektörü, gerçek sürüm çıktıları, 6 gerçek `JS runtimes` satırı, Deno izin kaydı.
+- `vv-ytdlp` arg sapma testi `jsRuntime` dizisini de kapsıyor.
+- `scripts/fetch-tools.mjs` Linux'ta uçtan uca geçti: indirme, GPG imzası, iki hash, sürüm, yönetilen Deno'nun kullanılması ve `PATH`'teki Deno'nun yok sayılması. Tek bayt değiştirilmiş bir `deno` dosyası reddedildi.
+- Windows CI kanıtı bu PR'ın CI çalışmasıyla eklenecek.
 

@@ -22,5 +22,11 @@
     "download:vv-progress {\"status\":%(progress.status)j,\"downloaded_bytes\":%(progress.downloaded_bytes)j,\"total_bytes\":%(progress.total_bytes)j,\"total_bytes_estimate\":%(progress.total_bytes_estimate)j,\"eta\":%(progress.eta)j,\"speed\":%(progress.speed)j,\"elapsed\":%(progress.elapsed)j,\"fragment_index\":%(progress.fragment_index)j,\"fragment_count\":%(progress.fragment_count)j}",
     "--progress-template",
     "postprocess:vv-postprocess {\"status\":%(progress.status)j,\"postprocessor\":%(progress.postprocessor)j}"
+  ],
+  "jsRuntime": [
+    "--no-js-runtimes",
+    "--js-runtimes",
+    "deno:{deno}",
+    "--no-remote-components"
   ]
 }

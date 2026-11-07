@@ -52,3 +52,34 @@ pub const DOWNLOAD: &[&str] = &[
     "--progress-template",
     "postprocess:vv-postprocess {\"status\":%(progress.status)j,\"postprocessor\":%(progress.postprocessor)j}",
 ];
+
+/// JavaScript runtime (STATE.md F0.8b, ADR-0005). yt-dlp's own default enables
+/// Deno from `PATH`; `--no-js-runtimes` clears that so only the managed Deno at
+/// an explicit path is used (SPEC §14.1). `--no-remote-components` keeps
+/// yt-dlp from fetching the EJS solver scripts at run time: the official
+/// executables already bundle the pinned `yt-dlp-ejs`.
+pub const JS_RUNTIME: &[&str] = &[
+    "--no-js-runtimes",
+    "--js-runtimes",
+    "deno:{deno}",
+    "--no-remote-components",
+];
+
+/// [`JS_RUNTIME`] with the managed Deno executable filled in, as separate argv
+/// entries. Without a path no runtime is enabled at all.
+pub fn js_runtime_args(deno: Option<&std::path::Path>) -> Vec<std::ffi::OsString> {
+    let Some(deno) = deno else {
+        return vec!["--no-js-runtimes".into(), "--no-remote-components".into()];
+    };
+    JS_RUNTIME
+        .iter()
+        .map(|a| match *a {
+            "deno:{deno}" => {
+                let mut v = std::ffi::OsString::from("deno:");
+                v.push(deno.as_os_str());
+                v
+            }
+            other => other.into(),
+        })
+        .collect()
+}
