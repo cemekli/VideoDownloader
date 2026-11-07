@@ -443,7 +443,7 @@ Ayrıca ADR-0005 ve ADR-0007, araçların temiz bir ortamla başlatılmasını �
 - `vv-persistence` kilit testleri (4): aynı süreçte ikinci kilit reddedilir; alt süreç kilidi miras almaz; başka bir süreç kilidi tutarken alınamaz, o süreç öldürülünce alınır ve dosya yerinde kalır.
 - `vv-process` testleri: ortamda yalnızca izin listesi ve açık değişkenler var (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `DENO_DIR`, `PYTHONPATH` geçmiyor); iptal, zaman aşımı ve drop torunu da öldürüyor; normal çıkış raporlanıyor. Windows'a özgü test: "uygulamayı" oynayan yardımcı süreç `TerminateProcess` ile öldürülünce çocuğu ve torunu 5 saniye içinde ölüyor.
 - Gerçek uygulama E2E (Windows): ikinci açılış 0 koduyla çıkıyor, ilk pencere açık kalıyor ve `secondLaunches` 1 oluyor. Eklenti kapalıyken ikinci süreç kilidi bulup 3 koduyla çıkıyor. İlk süreç bitince kilit yeniden alınabiliyor.
-- CI: Windows ve Linux, PR'da.
+- CI: Windows ve Linux'ta geçti, [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361). Windows'ta `vv-process` 6/6 (çökme testi dahil). Gerçek uygulama E2E 3/3: ikinci açılış 22 ms'de 0 koduyla çıktı; eklenti kapalıyken ikinci süreç 766 ms'de 3 koduyla çıktı.
 
 **Sonuçlar ve açık noktalar.**
 

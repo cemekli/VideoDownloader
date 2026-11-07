@@ -4,12 +4,13 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 10/74. Ağ denetimi (F0.9, ADR-0007) PR #9 ile main'de.
+- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 11/74 (F0.10 PR'da, CI yeşil). Ağ denetimi (F0.9, ADR-0007) PR #9 ile main'de.
 - **Açık PR:** F0.10, yani tek süreç ve alt süreç yönetimi (ADR-0008). Dal: `claude/project-thread-t0tup8`.
   - İkinci açılış `tauri-plugin-single-instance` ile çalışan pencereye devredilir ve 0 koduyla çıkar.
   - Veri dizinindeki `videovault.lock` ikinci katmandır: kilidi alamayan süreç 3 koduyla çıkar, DB'yi açmaz.
   - Yeni `vv-process` crate'i: alt süreçler temiz ortamla, Windows'ta Job Object içinde başlar. İptal, zaman aşımı ve uygulama çökmesi tüm ağacı (yt-dlp → Deno/FFmpeg) öldürür.
   - `get_diagnostics` artık `libraryLock` ve `secondLaunches` döndürüyor.
+  - Windows ve Linux CI'da geçti: [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361).
 
 ## Sonraki ilk adımlar
 
