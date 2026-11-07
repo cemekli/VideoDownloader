@@ -4,17 +4,18 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 10/74 (F0.9 PR'da, CI yeşil). FFmpeg (F0.8c, ADR-0006) PR #8 ile main'de.
-- **Açık PR:** F0.9, yani dış araçların ağ denetimi (ADR-0007). Dal: `claude/project-thread-t0tup8`.
-  - Yeni `vv-netguard` crate'i: yt-dlp'nin her bağlantısı uygulamanın yerel proxy'sinden geçiyor. Kurallar: port 80/443, DNS sonrası tüm adresler public, kontrol edilen adrese bağlanma (rebinding yok), çalışma başına jeton.
-  - yt-dlp bayrakları: `--proxy <url> --downloader native --abort-on-unavailable-fragments` (`args::NETWORK_GUARD`).
-  - `scripts/netguard-probe.mjs` gerçek yt-dlp ile 12 vaka çalıştırıyor (yönlendirme, HLS segmenti, gömülü video, CONNECT, localhost). Kanarya sunucu hiçbirinde bağlantı almıyor; Windows ve Linux CI'da geçti: [CI #42369808856](https://github.com/cemekli/VideoDownloader/actions/runs/42369808856).
-  - `docs/threat-model.md` ağ bölümüyle başladı.
+- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 11/74 (F0.10 PR'da, CI yeşil). Ağ denetimi (F0.9, ADR-0007) PR #9 ile main'de.
+- **Açık PR:** F0.10, yani tek süreç ve alt süreç yönetimi (ADR-0008). Dal: `claude/project-thread-t0tup8`.
+  - İkinci açılış `tauri-plugin-single-instance` ile çalışan pencereye devredilir ve 0 koduyla çıkar.
+  - Veri dizinindeki `videovault.lock` ikinci katmandır: kilidi alamayan süreç 3 koduyla çıkar, DB'yi açmaz.
+  - Yeni `vv-process` crate'i: alt süreçler temiz ortamla, Windows'ta Job Object içinde başlar. İptal, zaman aşımı ve uygulama çökmesi tüm ağacı (yt-dlp → Deno/FFmpeg) öldürür.
+  - `get_diagnostics` artık `libraryLock` ve `secondLaunches` döndürüyor.
+  - Windows ve Linux CI'da geçti: [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361).
 
 ## Sonraki ilk adımlar
 
-1. F0.9 PR'ını merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş: F0.10 (single-instance, Job Object, alt süreçlerin temiz ortamla başlatılması; ADR-0005 ve ADR-0007'deki kurallar burada uygulanacak).
+1. F0.10 PR'ını merge et, ardından `git checkout main && git pull`.
+2. Sıradaki iş: F0.11 (zorunlu dokümanlar ve kapsama matrisi) ya da F0.12 (benchmark veri üreticisi). F0 bitince F1'e geçilir.
 
 ## Bilinmesi gerekenler
 
@@ -26,7 +27,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 - **yt-dlp fixture'larını yeniden yakalamak** yalnızca yt-dlp sürümü değişince gerekir: `VV_YTDLP=<yol> npm run fixtures:ytdlp`. ffmpeg PATH'te olmalıdır; ayrıntılar ADR-0003'te.
 - **Açık noktalar (ADR-0003):**
   - `MEDIA_URL_EXPIRED` henüz üretilmiyor.
-  - Windows'a özgü ağ hata metinleri işletim sistemi metinlerinden yazıldı; gerçek Windows yakalaması F0.10'da yapılacak.
+  - Windows'a özgü ağ hata metinleri işletim sistemi metinlerinden yazıldı; gerçek Windows yakalaması, indirme işleri `vv-process` üzerinden çalışınca (F2) yapılacak.
   - Video ve sesin ayrı indirildiği durumda ilerlemeyi birleştirme işi F2'de.
 - **FFmpeg kurulum boyutu (ADR-0006):** iki statik exe 252 MiB tutuyor. F4'te `lgpl-shared` varyantına geçmek değerlendirilecek.
 - **Engeller:** STATE.md "Engeller ve açık noktalar" bölümünde. Uygulama simgesi hâlâ geçici.

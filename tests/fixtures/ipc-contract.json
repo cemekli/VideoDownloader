@@ -34,7 +34,9 @@
       "response": {
         "sqliteVersion": "3.53.2",
         "sqliteFts5": true,
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "libraryLock": true,
+        "secondLaunches": 0
       }
     }
   },

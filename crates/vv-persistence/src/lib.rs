@@ -5,6 +5,7 @@
 //! pending migrations, after taking a consistent backup when the database
 //! already holds data.
 
+pub mod lock;
 pub mod migrations;
 
 use migrations::{recorded_version, Migration, MigrationError, Migrator, MIGRATIONS};

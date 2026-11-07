@@ -11,6 +11,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0007](#adr-0007-dış-araçların-ağ-denetimi-yerel-denetim-proxysi) | Dış araçların ağ denetimi: yerel denetim proxy'si (SPEC DEC-05, §20.2, AC-29) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0008](#adr-0008-tek-süreç-kütüphane-kilidi-ve-alt-süreç-ağacı) | Tek süreç, kütüphane kilidi ve alt süreç ağacı (SPEC INV-13, §13.2, AC-38) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -403,3 +404,49 @@ Bunların her biri loopback'e, özel ağa ya da bulut metadata adresine (169.254
 - **QUIC/HTTP3 ve UDP:** yt-dlp kullanmıyor. Proxy'yi aşan bir yol bulunursa SPEC kuralı geçerli olur: o yol kapatılır, gerekirse genel URL çıkarımı kapalı kalır.
 - **İşletim sistemi düzeyinde ek katman:** M2 öncesinde süreç başına WFP kuralı değerlendirilebilir. Yönetici yetkisi gerektirdiği için ayrı bir karar konusudur.
 - **Port politikası:** yalnızca 80 ve 443. Başka porttan servis veren bir medya sunucusu desteklenmez. Gerekirse konektör bazında genişletilir.
+
+---
+
+## ADR-0008: Tek süreç, kütüphane kilidi ve alt süreç ağacı
+
+SPEC INV-13, §13.2 ve AC-38'i karşılar (STATE.md F0.10). Kod: `crates/vv-persistence/src/lock.rs`, `crates/vv-process`, `apps/desktop/src-tauri/src/instance.rs`. Testler: `crates/vv-persistence/tests/lock.rs`, `crates/vv-process/tests/process.rs`, `apps/desktop/e2e-desktop/single-instance.spec.ts`.
+
+**Bağlam.** İki sorun var:
+
+- Aynı kütüphaneyi iki süreç açarsa iş kuyruğu iki kez işlenir ve aynı hedef dosyaya iki indirme yazabilir. SPEC bunu yasaklıyor (INV-13).
+- yt-dlp, Deno'yu ve gerektiğinde FFmpeg'i kendisi başlatır. Uygulama çökerse ya da iş iptal edilirse bu torun süreçler yaşamaya devam edebilir. Sahipsiz bir süreç hedef dosyaya yazmayı sürdürür, kilitli tutar ya da ağ trafiği yapar.
+
+Ayrıca ADR-0005 ve ADR-0007, araçların temiz bir ortamla başlatılmasını şart koşuyor: kullanıcının `HTTP_PROXY`, `DENO_*`, `PYTHONPATH` gibi değişkenleri araca geçmemeli.
+
+**Seçenekler (tek süreç).**
+
+| Seçenek | Değerlendirme |
+|---|---|
+| Yalnızca `tauri-plugin-single-instance` | Pencereyi öne getirir ve argümanı iletir. Ama tanıyıcıya (identifier) bağlı adlandırılmış mutex kullanır: başka bir derleme, taşınabilir kopya ya da başka bir oturum aynı klasörü açabilir. Tek başına INV-13'ü garanti etmez. |
+| Yalnızca kilit dosyası | Veriyi korur, ama ikinci açılış pencereyi öne getirmez, URL iletilmez. |
+| **İkisi birlikte** | Eklenti kullanıcı deneyimini sağlar, kilit veriyi korur. |
+
+**Karar.**
+
+1. **Katman 1, eklenti:** `tauri-plugin-single-instance` 2.5.5 (Tauri 2.12 ile uyumlu son 2.x; 3.0 alfa Tauri 3 içindir). Eklenti builder'a ilk eklenir. İkinci açılış, pencere ya da veritabanı oluşmadan argümanlarını çalışan sürece iletir ve 0 koduyla çıkar. Çalışan süreç pencereyi küçültülmüşse geri getirir, gösterir ve odaklar; sayaç `get_diagnostics.secondLaunches` ile okunur. Argümanlar (URL ya da dosya yolu) içe alma akışı yazılınca (F1) ona verilir. Yol içerebildikleri için loglanmaz.
+2. **Katman 2, kütüphane kilidi:** veri dizinindeki `videovault.lock`, sürecin ömrü boyunca özel kilitle (`File::try_lock`, Windows'ta `LockFileEx`) tutulur. Kilit `setup` içinde, veritabanı ve worker'lardan önce alınır. Alınamazsa süreç **3** koduyla çıkar ve veritabanını açmaz (`EXIT_LIBRARY_LOCKED`). İşletim sistemi kilidi süreç bitince, çökme dahil, bırakır. Bu yüzden eski bir dosya hiçbir zaman engel olmaz. Dosyaya PID yazılır, ama yalnızca bilgi içindir. Windows kilitli aralığın okunmasını reddettiği için PID orada çoğu zaman okunamaz.
+3. **Lease farklı bir iş görür:** SPEC'teki lease mekanizması tek süreç içindeki worker'lar ve çökme sonrası uzlaştırma içindir; çok süreçli erişimin yerine geçmez (§13.2).
+4. **Alt süreçler `vv_process::ManagedCommand` ile başlatılır:**
+   - **Temiz ortam:** `env_clear()` ve kısa bir izin listesi. Windows'ta `SystemRoot`, `SystemDrive`, `windir`, `TEMP`, `TMP`, `PATHEXT`, `NUMBER_OF_PROCESSORS`, `PROCESSOR_ARCHITECTURE` ve sistem dizinlerinden oluşan bir `PATH`. Unix'te `HOME`, `TMPDIR`, `LANG` ve `/usr/bin:/bin`. Gerisini (ör. `DENO_DIR`) çağıran açıkça verir.
+   - **Windows Job Object:** çocuk `CREATE_SUSPENDED | CREATE_NO_WINDOW` ile oluşturulur, kendi job'ına alınır, ancak ondan sonra devam ettirilir. Böylece job'a girmeden bir torun başlatamaz. Job `KILL_ON_JOB_CLOSE` ve `DIE_ON_UNHANDLED_EXCEPTION` taşır. Uygulama çıkarsa ya da çökerse işletim sistemi job tanıtıcısını kapatır ve tüm ağaç ölür.
+   - **İptal ve zaman aşımı** tüm ağacı öldürür (`TerminateJobObject`), sonra çocuğu toplar. Çocuk kendisi çıktığında da job'da kalanlar öldürülür. `Managed` düşürülürse (drop) ağaç yine öldürülür.
+   - **Unix (yalnızca geliştirme):** çocuk kendi süreç grubunu yönetir; iptal ve zaman aşımı gruba `SIGKILL` gönderir. Uygulama çökerse grup yaşamaya devam eder. Bu kabul edildi, çünkü dağıtılan hedef Windows'tur.
+5. **Test kancaları yalnızca test derlemelerinde:** `VV_DATA_DIR` (veri dizini) debug ve `e2e-cdp` derlemelerinde, `VV_E2E_NO_SINGLE_INSTANCE` (eklentiyi kapatır, kilit katmanını sınamak için) yalnızca `e2e-cdp` derlemesinde okunur. Dağıtılan exe ikisini de yok sayar.
+
+**Kanıt.**
+
+- `vv-persistence` kilit testleri (4): aynı süreçte ikinci kilit reddedilir; alt süreç kilidi miras almaz; başka bir süreç kilidi tutarken alınamaz, o süreç öldürülünce alınır ve dosya yerinde kalır.
+- `vv-process` testleri: ortamda yalnızca izin listesi ve açık değişkenler var (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `DENO_DIR`, `PYTHONPATH` geçmiyor); iptal, zaman aşımı ve drop torunu da öldürüyor; normal çıkış raporlanıyor. Windows'a özgü test: "uygulamayı" oynayan yardımcı süreç `TerminateProcess` ile öldürülünce çocuğu ve torunu 5 saniye içinde ölüyor.
+- Gerçek uygulama E2E (Windows): ikinci açılış 0 koduyla çıkıyor, ilk pencere açık kalıyor ve `secondLaunches` 1 oluyor. Eklenti kapalıyken ikinci süreç kilidi bulup 3 koduyla çıkıyor. İlk süreç bitince kilit yeniden alınabiliyor.
+- CI: Windows ve Linux'ta geçti, [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361). Windows'ta `vv-process` 6/6 (çökme testi dahil). Gerçek uygulama E2E 3/3: ikinci açılış 22 ms'de 0 koduyla çıktı; eklenti kapalıyken ikinci süreç 766 ms'de 3 koduyla çıktı.
+
+**Sonuçlar ve açık noktalar.**
+
+- Uygulama henüz alt süreç başlatmıyor. İlk kullanıcılar F2'deki indirme işleri olacak (yt-dlp, Deno, FFmpeg). yt-dlp'nin `--js-runtimes deno:<yol>` ile başlattığı Deno da aynı job'da kalır.
+- İkinci açılışta kilit nedeniyle çıkan süreç kullanıcıya bir şey göstermez. Bu durum yalnızca eklentinin göremediği yollarla oluşur. Gerekirse F4'te yerel bir uyarı penceresi eklenir.
+- ADR-0003'teki Windows'a özgü ağ hata metinlerinin gerçek yakalaması hâlâ açık. Bu iş, gerçek indirme işleri `vv-process` üzerinden çalışmaya başlayınca (F2) yapılacak.

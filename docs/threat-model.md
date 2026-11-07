@@ -15,6 +15,14 @@ Saldırgan modeli: kullanıcının yapıştırdığı URL'nin arkasındaki site 
 
 Engellenen bir bağlantı işin `URL_BLOCKED` ile bitmesine yol açar. Bookmark kaydı korunur (SPEC §20.2).
 
+## Süreç sınırı
+
+| Tehdit | Önlem | Kanıt |
+|---|---|---|
+| Kullanıcı ortamındaki değişkenler araca geçer (`HTTP_PROXY`, `DENO_*`, `PYTHONPATH`) | `vv_process::ManagedCommand`: boş ortam ve kısa izin listesi | ADR-0008; `vv-process` testleri |
+| Uygulama çöker, yt-dlp/Deno/FFmpeg sahipsiz kalıp yazmaya ya da ağa çıkmaya devam eder | Windows Job Object (`KILL_ON_JOB_CLOSE`), çocuk job'a girmeden çalışmaz | ADR-0008; Windows çökme testi |
+| İki uygulama süreci aynı kütüphaneyi açar | single-instance eklentisi + veri dizininde özel kilit; kilitsiz süreç DB'yi açmaz | ADR-0008; AC-38 E2E |
+
 ## Açık noktalar
 
 - curl_cffi ve websockets yolları ayrı sınanmadı (ADR-0007).
