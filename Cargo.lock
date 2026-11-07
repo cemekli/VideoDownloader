@@ -4191,6 +4191,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-import"
+version = "0.0.1"
+dependencies = [
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "vv-domain",
+ "vv-ffmpeg",
+ "vv-persistence",
+ "vv-process",
+]
+
+[[package]]
 name = "vv-netguard"
 version = "0.0.1"
 dependencies = [

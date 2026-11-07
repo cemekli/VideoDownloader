@@ -35,7 +35,7 @@ pub const INPUT: &[&str] = &[
 /// ffprobe output: only the fields [`crate::probe`] reads, as JSON.
 pub const PROBE: &[&str] = &[
     "-show_entries",
-    "format=format_name,duration,size:stream=index,codec_type,codec_name",
+    "format=format_name,duration,size:stream=index,codec_type,codec_name,width,height,channels:stream_tags=language",
     "-of",
     "json",
 ];
@@ -57,6 +57,28 @@ pub const REMUX_OUTPUT: &[&str] = &[
     "file",
     "-f",
     "mp4",
+    "-n",
+];
+
+/// One JPEG frame from the first video stream, 320 px wide (IMP-06). Seeking
+/// happens before `-i` (fast, keyframe based); `-n` never overwrites.
+pub const THUMBNAIL_OUTPUT: &[&str] = &[
+    "-map",
+    "0:v:0",
+    "-frames:v",
+    "1",
+    "-vf",
+    "scale=320:-2",
+    "-c:v",
+    "mjpeg",
+    "-q:v",
+    "5",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "image2",
+    "-update",
+    "1",
     "-n",
 ];
 
@@ -105,6 +127,22 @@ pub fn remux_args(input: &Path, output: &Path) -> Result<Vec<OsString>, ArgsErro
     v.push("-i".into());
     v.push(file_arg(input));
     v.extend(strs(REMUX_OUTPUT));
+    v.push(file_arg(output));
+    Ok(v)
+}
+
+/// Full ffmpeg argv for one thumbnail frame taken at `at_ms` into the video.
+pub fn thumbnail_args(input: &Path, output: &Path, at_ms: u64) -> Result<Vec<OsString>, ArgsError> {
+    absolute(input)?;
+    absolute(output)?;
+    let mut v: Vec<OsString> = strs(COMMON).collect();
+    v.push("-nostdin".into());
+    v.extend(strs(INPUT));
+    v.push("-ss".into());
+    v.push(format!("{}.{:03}", at_ms / 1000, at_ms % 1000).into());
+    v.push("-i".into());
+    v.push(file_arg(input));
+    v.extend(strs(THUMBNAIL_OUTPUT));
     v.push(file_arg(output));
     Ok(v)
 }

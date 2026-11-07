@@ -5,12 +5,21 @@
     {
       "index": 0,
       "codec_name": "h264",
-      "codec_type": "video"
+      "codec_type": "video",
+      "width": 320,
+      "height": 180,
+      "tags": {
+        "language": "und"
+      }
     },
     {
       "index": 1,
       "codec_name": "aac",
-      "codec_type": "audio"
+      "codec_type": "audio",
+      "channels": 2,
+      "tags": {
+        "language": "und"
+      }
     }
   ],
   "format": {

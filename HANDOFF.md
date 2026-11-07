@@ -4,17 +4,17 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0'ın tamamı, 13/74. DEC-01 sürüm kaydı ADR-0010.
-- **Açık PR #13** (dal `claude/project-thread-t0tup8`): F1.1–F1.3 (ADR-0011). Benchmark kaydı PR #12 ile merge edildi.
-  - Şema: migration 0002 ile `storage_root`, `library_item`, `media_asset`, `url_alias`, `duplicate_candidate` ve FTS5 `search_document`. Repository'ler `crates/vv-persistence/src/library/repo.rs`.
-  - Kayıt: `library::bookmark::save_bookmark` ağsız çalışır; aynı içerik ikinci kez kaydedilince mevcut öğe döner, eşzamanlı kayıt tek öğede biter, imza/sır değerleri diske yazılmaz.
-  - Normalizasyon: `vv-domain::normalize` (sürüm 1), fixture `tests/fixtures/normalize.json`. Kural değişince sürüm artar; `library::renormalize` eski kayıtları yeniden hesaplar (AC-44).
-  - Uygulama henüz veritabanını açmıyor; `save_bookmark` komutu ve Add URL ekranı F1.8'de bağlanacak.
+- **Tamamlananlar:** F0'ın tamamı ve F1.1–F1.3 (PR #13), 16/74.
+- **Açık PR #14** (dal `claude/project-thread-t0tup8`): F1.4–F1.6 (ADR-0012). 2026-11-07 akşamı burada ara verildi; CI sonucu ve STATE'e CI kanıtı (F1.4–F1.6 ✅, 19/74) ertesi gün eklenecek.
+  - `crates/vv-import`: dosya/klasör import (yerinde referans, kısıtlı ffprobe, SHA-256, duplicate adayı), thumbnail, relink ve `roots::check_storage` (çıkarılan disk `disconnected`, kaybolan dosya `missing`).
+  - Arama: `vv-persistence::library::search`; güvenli sorgu oluşturucu, filtre, sıralama, sayfa, snippet. Türkçe davranış `tests/fixtures/search-tr.json`'da.
+  - Import testleri gerçek ffprobe/FFmpeg ister: yerelde `node scripts/fetch-tools.mjs` çalışmadıysa atlanır, CI'da zorunludur.
+  - Uygulama bu servisleri henüz çağırmıyor; Library ekranı (F1.7) ve Add URL (F1.8) bağlayacak.
 
 ## Sonraki ilk adımlar
 
-1. PR #13'ü merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş F1.4 (yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail).
+1. PR'ı merge et, ardından `git checkout main && git pull`.
+2. Sıradaki iş F1.7 (Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları) ve F1.8 (Add URL, `Ctrl+K`).
 
 ## Bilinmesi gerekenler
 

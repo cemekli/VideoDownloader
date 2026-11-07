@@ -37,6 +37,7 @@ fn fixed_args_match_the_probe_script() {
     assert_eq!(strings(&a["input"]), args::INPUT);
     assert_eq!(strings(&a["probe"]), args::PROBE);
     assert_eq!(strings(&a["remuxOutput"]), args::REMUX_OUTPUT);
+    assert_eq!(strings(&a["thumbnailOutput"]), args::THUMBNAIL_OUTPUT);
     // The build the fixtures are checked against is the one the manifest pins.
     let m = json("tools/manifest.json");
     let ff = m["tools"]

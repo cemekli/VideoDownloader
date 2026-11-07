@@ -116,9 +116,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F1.1 | `LibraryItem`, `MediaAsset`, `StorageRoot`, `UrlAlias`, `DuplicateCandidate` şeması ve repository'ler | §11 | migration ve repository testleri: `vv-persistence/tests/library_schema.rs` (11 test; enum↔CHECK, unique, cascade, revision, veriyle ileri/geri migration). ADR-0011 ; Windows + Linux CI [CI #42382304235](https://github.com/cemekli/VideoDownloader/actions/runs/42382304235) | ✅ |
 | F1.2 | Bookmark kaydı: atomik kayıt + `SearchDocument`, duplicate ve alias kontrolü | CAP-01…06, CAP-08 | AC-01, AC-02, AC-03, AC-36, AC-52: `vv-persistence/tests/bookmark.rs` (9 test; AC-45 sinyali dahil). CAP-01'in ekran kısmı F1.8'de ; Windows + Linux CI [CI #42382304235](https://github.com/cemekli/VideoDownloader/actions/runs/42382304235) | ✅ |
 | F1.3 | Platform tanıma ve URL normalizasyonu, `normalization_version` | §6, §11.7 | normalizasyon fixture'ı (`tests/fixtures/normalize.json`, 33 vaka) + AC-44 (`vv-persistence/tests/renormalize.rs`) ; Windows + Linux CI [CI #42382304235](https://github.com/cemekli/VideoDownloader/actions/runs/42382304235) | ✅ |
-| F1.4 | Yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail | IMP-01…07, §14.1 | AC-04, AC-34, AC-35, AC-59 | ⬜ |
-| F1.5 | Depolama kökü durumu: `missing` ve `disconnected` ayrımı | DATA-09 | AC-47 | ⬜ |
-| F1.6 | FTS5 arama, güvenli sorgu oluşturucu, sıralama, Türkçe arama fixture'ı | SEA-01…05, §16.1 | AC-05, AC-31, Türkçe fixture | ⬜ |
+| F1.4 | Yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail | IMP-01…07, §14.1 | AC-04, AC-34, AC-35, AC-59: `vv-import/tests/import.rs` (gerçek ffprobe/FFmpeg 9.0.2; thumbnail, iptal, link testleri dahil). Dosya seçici ve sürükle-bırak (IMP-01) F1.7'de. ADR-0012 | 🟨 CI bekleniyor |
+| F1.5 | Depolama kökü durumu: `missing` ve `disconnected` ayrımı | DATA-09 | AC-47: `vv-import/tests/import.rs` (kök çıkarılınca `disconnected`, varlıklar `missing` olmuyor, geri gelince doğrulanıyor) | 🟨 CI bekleniyor |
+| F1.6 | FTS5 arama, güvenli sorgu oluşturucu, sıralama, Türkçe arama fixture'ı | SEA-01…05, §16.1 | AC-05, AC-31, Türkçe fixture (`tests/fixtures/search-tr.json`, 21 vaka): `vv-persistence/tests/search.rs`. Filtre chip'leri (SEA-02 UI) F1.7'de | 🟨 CI bekleniyor |
 | F1.7 | Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları | §9.2, §9.3 | E2E + 3 görünümde ekran görüntüsü | ⬜ |
 | F1.8 | Add URL ekranı ve `Ctrl+K` | §8.1, §9.4 | Yolculuk 1 E2E; NFR-01, NFR-02 ölçümü | ⬜ |
 
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 PR #13'te (şema, bookmark kaydı, normalizasyon; ADR-0011). Sıradaki: F1.4 (yerel import).
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 PR'da (yerel import, kök durumu, arama; ADR-0012). Sıradaki: F1.7 (Library ekranı).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F1.4–F1.6 başladı: `vv-import` crate'i (import, hash, duplicate adayı, thumbnail, relink, `check_storage`), ffprobe'a çözünürlük/kanal/dil, FTS sorgu oluşturucu ve Türkçe arama fixture'ı, `FILE_MISSING` ve `STORAGE_ROOT_UNAVAILABLE` hata kodları. ADR-0012. |
 | 7 Kas 2026 | F1.1, F1.2 ve F1.3 ✅: Windows ve Linux CI'da geçti ([CI #42382304235](https://github.com/cemekli/VideoDownloader/actions/runs/42382304235)). SPEC v1.5 (§11.7 kenar durumu). |
 | 7 Kas 2026 | F1.1–F1.3 başladı: migration 0002 (kütüphane şeması, STRICT, FTS5 `search_document`), `vv-persistence::library` repository'leri, `save_bookmark` (BEGIN IMMEDIATE, eşleşme sırası kanonik URL → alias → platform kimliği), `vv-domain::normalize` (sürüm 1, 7 platform), yeniden normalizasyon (AC-44), `DUPLICATE_ITEM` ve `REVISION_CONFLICT` hata kodları. ADR-0011. |
 | 7 Kas 2026 | İlk referans sınıfı benchmark (Windows 11, i7-13700HX): BM-01 p95 2,8 ms, BM-02 3,8 ms, BM-03 11,3 ms; ADR-0009'a eklendi. |

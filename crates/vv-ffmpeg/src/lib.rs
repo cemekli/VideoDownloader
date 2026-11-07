@@ -8,4 +8,6 @@
 pub mod args;
 pub mod probe;
 
-pub use probe::{classify, parse_probe_json, Container, ProbeError, ProbeReport, Probed};
+pub use probe::{
+    classify, parse_probe_json, AudioTrack, Container, ProbeError, ProbeReport, Probed,
+};

@@ -40,6 +40,9 @@ pub enum ErrorCode {
     // Library writes (STATE.md F1.1/F1.2, SPEC §19).
     DuplicateItem,
     RevisionConflict,
+    // Local files and storage roots (STATE.md F1.4/F1.5, SPEC §19).
+    FileMissing,
+    StorageRootUnavailable,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -69,6 +72,8 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::MediaCorrupt,
     ErrorCode::DuplicateItem,
     ErrorCode::RevisionConflict,
+    ErrorCode::FileMissing,
+    ErrorCode::StorageRootUnavailable,
 ];
 
 impl ErrorCode {
@@ -109,6 +114,8 @@ impl ErrorCode {
             ErrorCode::MediaCorrupt => "error.media_corrupt",
             ErrorCode::DuplicateItem => "error.duplicate_item",
             ErrorCode::RevisionConflict => "error.revision_conflict",
+            ErrorCode::FileMissing => "error.file_missing",
+            ErrorCode::StorageRootUnavailable => "error.storage_root_unavailable",
         }
     }
 }
@@ -128,6 +135,10 @@ pub enum SuggestedAction {
     OpenExisting,
     /// Load the current data and apply the change again (`REVISION_CONFLICT`).
     Reload,
+    /// Point the item at the file's new location (`FILE_MISSING`, IMP-07).
+    Relink,
+    /// Connect the drive or locate the folder again (`STORAGE_ROOT_UNAVAILABLE`).
+    ReconnectStorage,
 }
 
 impl ErrorCode {
@@ -149,6 +160,8 @@ impl ErrorCode {
             InputRejected | MediaCorrupt => None,
             DuplicateItem => Some(SuggestedAction::OpenExisting),
             RevisionConflict => Some(SuggestedAction::Reload),
+            FileMissing => Some(SuggestedAction::Relink),
+            StorageRootUnavailable => Some(SuggestedAction::ReconnectStorage),
         }
     }
 }

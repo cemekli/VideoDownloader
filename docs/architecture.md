@@ -18,6 +18,7 @@ apps/desktop/src-tauri      Tauri 2 kabuğu: komutlar, tek süreç, medya protok
         +-- crates/vv-process      alt süreç: temiz ortam, Windows Job Object, ağaç öldürme
         |       +-- crates/vv-ytdlp     yt-dlp argümanları, JSON/progress/hata ayrıştırma
         |       +-- crates/vv-ffmpeg    ffprobe/FFmpeg argümanları, biçim sınıflandırma
+        +-- crates/vv-import       yerel import, kök durumu, relink, thumbnail
         +-- crates/vv-netguard     araçların ağ trafiği için yerel denetim proxy'si
         +-- crates/vv-tools        yönetilen araç manifesti, hash/imza, sürüm ve lisans kontrolü
 
@@ -29,7 +30,8 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | `apps/desktop/src` | Library kabuğu, IPC istemcisi (gerçek ve fixture), bileşenler | UI | İskelet: kütüphane listesi fixture verisiyle | F0.1, F0.3 |
 | `apps/desktop/src-tauri` | Pencere, komutlar (`ping`, `get_status`, `get_diagnostics`), tek süreç, test derlemesinde medya protokolü | application (giriş) | Çalışıyor; iş komutları yok | ADR-0001, ADR-0004, ADR-0008 |
 | `vv-domain` | Hata kodları ve `DomainError`, yakalama URL politikası, platform tanıma ve URL normalizasyonu (sürüm 1) | domain, security | Kısmen | F0.7, ADR-0011 |
-| `vv-persistence` | Bağlantı ayarları (WAL, `synchronous=FULL`), checksum'lı migration, migration öncesi yedek, `videovault.lock`; `library`: kütüphane şeması (migration 0002), repository'ler, `save_bookmark`, yeniden normalizasyon | persistence | Şema ve bookmark kaydı hazır; uygulamaya F1.8'de bağlanır | ADR-0002, ADR-0008, ADR-0011 |
+| `vv-persistence` | Bağlantı ayarları (WAL, `synchronous=FULL`), checksum'lı migration, migration öncesi yedek, `videovault.lock`; `library`: kütüphane şeması (migration 0002), repository'ler, `save_bookmark`, yeniden normalizasyon, FTS arama (`search`) | persistence | Şema ve bookmark kaydı hazır; uygulamaya F1.8'de bağlanır | ADR-0002, ADR-0008, ADR-0011 |
+| `vv-import` | Yerel dosya/klasör import, kök erişilebilirliği ve `missing` durumu, relink, thumbnail | media, library | Hazır; uygulamaya F1.7'de bağlanır | ADR-0012 |
 | `vv-process` | Araç süreçlerini temiz ortamla, Job Object içinde başlatma; iptal ve zaman aşımı | jobs (süreç denetimi) | Hazır; henüz çağıran yok (F3) | ADR-0008 |
 | `vv-ytdlp` | yt-dlp için sabit argümanlar, çıktı ayrıştırma, hata eşleme | connectors | Fixture ile test edildi | ADR-0003 |
 | `vv-ffmpeg` | Kısıtlı ffprobe/FFmpeg çağrıları, referanslı girdilerin reddi | media | Fixture ve gerçek build ile test edildi | ADR-0006 |
@@ -40,7 +42,7 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |
 | Yerel AI sağlayıcıları | Döküm, embedding, OCR | ai | Yok | F6, F7 |
 
-Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir, `vv-persistence` yalnızca `vv-domain`'e bağlıdır; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
+Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir, `vv-persistence` yalnızca `vv-domain`'e, `vv-import` `vv-persistence`, `vv-ffmpeg` ve `vv-process`'e bağlıdır; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
 
 ## Güven sınırları
 

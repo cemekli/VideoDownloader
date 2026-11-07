@@ -1,0 +1,225 @@
+{
+ "version": 1,
+ "note": "SPEC §16.1, §25.2: Turkish search behaviour (STATE.md F1.6, ADR-0012). Each case's status: match / no_match / limitation (documented, accepted behaviour). 'prefix' defaults to true (search as you type).",
+ "docs": [
+  {
+   "key": "istanbul",
+   "title": "İstanbul gezisi"
+  },
+  {
+   "key": "istanbul-combining",
+   "title": "i̇stanbul notları",
+   "note": "i + U+0307 COMBINING DOT ABOVE"
+  },
+  {
+   "key": "istanbulda",
+   "title": "İstanbul'da bir gün"
+  },
+  {
+   "key": "isik",
+   "title": "Işık hızı belgeseli"
+  },
+  {
+   "key": "isik-upper",
+   "title": "ISIK TESTİ"
+  },
+  {
+   "key": "gunes",
+   "title": "Güneş batışı"
+  },
+  {
+   "key": "gunes-nfd",
+   "title": "Güneş doğuşu",
+   "note": "NFD"
+  },
+  {
+   "key": "bogaz",
+   "title": "Boğaz Köprüsü gece",
+   "notes": "çay, simit ve martılar"
+  },
+  {
+   "key": "kirk",
+   "title": "Kırk yıl sonra"
+  },
+  {
+   "key": "kitap",
+   "title": "kitap"
+  },
+  {
+   "key": "replication",
+   "title": "PostgreSQL replication deep dive"
+  }
+ ],
+ "cases": [
+  {
+   "query": "istanbul",
+   "expect": [
+    "istanbul",
+    "istanbul-combining",
+    "istanbulda"
+   ],
+   "status": "match",
+   "note": "İ ↔ i; apostrophe splits İstanbul'da"
+  },
+  {
+   "query": "İSTANBUL",
+   "expect": [
+    "istanbul",
+    "istanbul-combining",
+    "istanbulda"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "i̇stanbul",
+   "expect": [
+    "istanbul",
+    "istanbul-combining",
+    "istanbulda"
+   ],
+   "status": "match",
+   "note": "query with combining dot"
+  },
+  {
+   "query": "ışık",
+   "expect": [
+    "isik",
+    "isik-upper"
+   ],
+   "status": "match",
+   "note": "ı ↔ i folded in index and query"
+  },
+  {
+   "query": "ISIK",
+   "expect": [
+    "isik",
+    "isik-upper"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "isik",
+   "expect": [
+    "isik",
+    "isik-upper"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "Gunes",
+   "expect": [
+    "gunes",
+    "gunes-nfd"
+   ],
+   "status": "match",
+   "note": "no diacritics typed"
+  },
+  {
+   "query": "GÜNEŞ",
+   "expect": [
+    "gunes",
+    "gunes-nfd"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "güneş",
+   "expect": [
+    "gunes",
+    "gunes-nfd"
+   ],
+   "status": "match",
+   "note": "NFD query"
+  },
+  {
+   "query": "dogusu",
+   "expect": [
+    "gunes-nfd"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "boğaz, köprüsü!",
+   "expect": [
+    "bogaz"
+   ],
+   "status": "match",
+   "note": "punctuation separates words"
+  },
+  {
+   "query": "\"köprüsü gece\"",
+   "expect": [
+    "bogaz"
+   ],
+   "status": "match",
+   "note": "quoted phrase"
+  },
+  {
+   "query": "\"gece köprüsü\"",
+   "expect": [],
+   "status": "no_match",
+   "note": "phrase order matters"
+  },
+  {
+   "query": "martilar simit",
+   "expect": [
+    "bogaz"
+   ],
+   "status": "match",
+   "note": "words in any order, notes field"
+  },
+  {
+   "query": "İstanbul'da",
+   "expect": [
+    "istanbulda"
+   ],
+   "status": "match",
+   "note": "phrase istanbul + da"
+  },
+  {
+   "query": "istanbulda",
+   "prefix": false,
+   "expect": [],
+   "status": "limitation",
+   "note": "no stemming or suffix splitting: Turkish suffixes must be typed as written"
+  },
+  {
+   "query": "kitaplar",
+   "prefix": false,
+   "expect": [],
+   "status": "limitation",
+   "note": "plural does not find the singular (no stemming)"
+  },
+  {
+   "query": "kita",
+   "expect": [
+    "kitap"
+   ],
+   "status": "match",
+   "note": "last word is a prefix while typing"
+  },
+  {
+   "query": "kirk",
+   "expect": [
+    "kirk"
+   ],
+   "status": "limitation",
+   "note": "ı folded to i: 'kirk' also finds 'kırk' (over-match accepted)"
+  },
+  {
+   "query": "replication",
+   "expect": [
+    "replication"
+   ],
+   "status": "match"
+  },
+  {
+   "query": "REPLICATİON",
+   "expect": [
+    "replication"
+   ],
+   "status": "match",
+   "note": "Turkish keyboard capital İ in an English word"
+  }
+ ]
+}
