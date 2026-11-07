@@ -3870,6 +3870,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-netguard"
+version = "0.0.1"
+dependencies = [
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "url",
+ "vv-domain",
+]
+
+[[package]]
 name = "vv-persistence"
 version = "0.0.1"
 dependencies = [

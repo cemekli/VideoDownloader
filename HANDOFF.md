@@ -4,19 +4,17 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.8 ve F0.13, toplam 9/74. F0.8a (oynatma matrisi, ADR-0004) ve F0.8b (yt-dlp + Deno, ADR-0005) main'de; F0.8c PR'da, CI yeşil.
-- **Açık PR:** F0.8c, yani FFmpeg (ADR-0006). Dal: `claude/project-thread-t0tup8`.
-  - `tools/manifest.json` artık FFmpeg ve ffprobe 9.0.2'yi de sabitliyor: BtbN LGPL build'i, tarihli etiket (`autobuild-2026-10-31-12-59`).
-  - Yeni `vv-ffmpeg` crate'i: her çağrının sabit bayrakları ve ffprobe sonucunun sınıflandırılması.
-  - Önemli bulgu: yalnızca protokol izin listesi yetmiyor; HLS listesi kök dışındaki dosyayı okuyabiliyor. `-format_whitelist` ile bu kapandı.
-  - Yeni hata kodları `INPUT_REJECTED` ve `MEDIA_CORRUPT`.
-  - `npm run tools:fetch` artık FFmpeg'i de indirip doğruluyor, AC-59 yoklamasını ve remux ölçümünü yapıyor. Windows ve Linux CI'da gerçek exe'lerle geçti: [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432). 20 dakikalık MKV, Windows'ta 609 ms'de MP4'e remux edildi.
+- **Tamamlananlar:** F0.1–F0.8 ve F0.13, toplam 9/74. FFmpeg (F0.8c, ADR-0006) PR #8 ile main'de.
+- **Açık PR:** F0.9, yani dış araçların ağ denetimi (ADR-0007). Dal: `claude/project-thread-t0tup8`.
+  - Yeni `vv-netguard` crate'i: yt-dlp'nin her bağlantısı uygulamanın yerel proxy'sinden geçiyor. Kurallar: port 80/443, DNS sonrası tüm adresler public, kontrol edilen adrese bağlanma (rebinding yok), çalışma başına jeton.
+  - yt-dlp bayrakları: `--proxy <url> --downloader native --abort-on-unavailable-fragments` (`args::NETWORK_GUARD`).
+  - `scripts/netguard-probe.mjs` gerçek yt-dlp ile 12 vaka çalıştırıyor (yönlendirme, HLS segmenti, gömülü video, CONNECT, localhost). Kanarya sunucu hiçbirinde bağlantı almıyor. CI'da yeni bir adım.
+  - `docs/threat-model.md` ağ bölümüyle başladı.
 
 ## Sonraki ilk adımlar
 
-1. F0.8c PR'ını merge et, ardından `git checkout main && git pull`.
-2. Kendi makinende `npm run tools:fetch` çalıştır. İlk çalıştırma yaklaşık 210 MB indirir.
-3. Sıradaki iş: F0.9 (ağ denetimi, DEC-05) ya da F0.10 (single-instance, Job Object; ADR-0005'teki ortam temizleme kuralı burada uygulanacak).
+1. F0.9 PR'ını merge et, ardından `git checkout main && git pull`.
+2. Sıradaki iş: F0.10 (single-instance, Job Object, alt süreçlerin temiz ortamla başlatılması; ADR-0005 ve ADR-0007'deki kurallar burada uygulanacak).
 
 ## Bilinmesi gerekenler
 

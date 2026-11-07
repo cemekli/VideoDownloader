@@ -90,9 +90,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ✅ ADR-0003; `vv-ytdlp` 31/31 (Windows + Linux): 15 gerçek yt-dlp 2026.10.26 çalışması + 20 kaynak metni vakası; [CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226) |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
 | F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi. Üç PR: **a** oynatma matrisi (DEC-04), **b** yt-dlp + JS runtime (DEC-02), **c** FFmpeg (DEC-03) | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ✅ a ✅: ADR-0004; WebView2 156'da 14 dosyanın 11'i oynuyor, HEVC yalnızca sesle (`partial`); MP4 H.264/AAC zorunlu testi geçti; [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985). b ✅: ADR-0005; `vv-tools` 8/8; `tools/manifest.json`; gerçek yt-dlp.exe + deno.exe Windows'ta doğrulandı, PATH'teki Deno yok sayılıyor; [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585). c ✅: ADR-0006; BtbN FFmpeg 9.0.2 LGPL; `vv-ffmpeg` 6/6, `vv-tools` 9/9; izin listeleriyle HLS/concat/URL reddi (0 HTTP isteği); 20 dk'lık MKV remux Windows'ta 609 ms; gerçek exe'lerle Windows ve Linux'ta [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432) |
-| F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ⬜ |
+| F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | 🟨 PR'da: ADR-0007; yerel denetim proxy'si `vv-netguard` 7/7; gerçek yt-dlp ile 12 vakada kanaryaya 0 bağlantı (kontrolde 1); Linux'ta geçti, Windows CI bekleniyor |
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ⬜ |
-| F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md` var |
+| F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md`, `decisions.md` var; `threat-model.md` ağ bölümüyle başladı |
 | F0.12 | Benchmark ortamı ve sürümlü veri üreticisi (10.000 öğe, 100.000 segment) | NFR-01…07, DEC-17 | aynı seed ile aynı çıktı testi | ⬜ |
 | F0.13 | Git deposu ve CI'ın Windows'ta ilk yeşil çalışması | §25.1 | GitHub Actions'ta iki işletim sistemi de geçer | ✅ [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546) |
 
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0.8** ✅ (son parça F0.8c, ADR-0006, PR'da). Ardından F0.9 (ağ denetimi, DEC-05) ya da F0.10 (single-instance, Job Object, temiz ortam).
+**F0.9** (ağ denetimi, ADR-0007) PR'da. Ardından F0.10 (single-instance, Job Object, temiz ortam). Ardından F0.9 (ağ denetimi, DEC-05) ya da F0.10 (single-instance, Job Object, temiz ortam).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F0.9 başladı: `vv-netguard` (yerel denetim proxy'si: port 80/443, DNS sonrası public IP, rebinding yok, jeton), yt-dlp `NETWORK_GUARD` bayrakları, `scripts/netguard-probe.mjs` ve CI adımı, `docs/threat-model.md`. ADR-0007. |
 | 7 Kas 2026 | F0.8 ✅ (F0.8c, Windows ve Linux CI'da gerçek exe'lerle geçti). F0.8c: `tools/manifest.json`'a FFmpeg/ffprobe 9.0.2 (BtbN LGPL, tarihli etiket), `vv-ffmpeg` crate'i (`-protocol_whitelist file` + `-format_whitelist`, `file:` yolları), `INPUT_REJECTED` ve `MEDIA_CORRUPT` hata kodları, `scripts/ffmpeg-probe.mjs` (AC-59 kanaryası, remux ölçümü). ADR-0006. |
 | 7 Kas 2026 | F0.8b başladı: `tools/manifest.json` (yt-dlp 2026.10.26 GPG imzalı, Deno 2.9.8), `vv-tools` crate'i, `CHECKSUM_MISMATCH` hata kodu, `--no-js-runtimes --js-runtimes deno:<yol> --no-remote-components`, `scripts/fetch-tools.mjs` ve CI adımı. ADR-0005. |
 | 7 Kas 2026 | F0.8a ölçüldü (Windows CI, WebView2 156): MKV/MOV/MP4/WebM, H.264/VP9/AV1 ile oynuyor; HEVC yalnızca ses. Kararlar ADR-0004'te: HEVC oynatılamaz sayılır, PLAY-07 kapsamı daralır. |
