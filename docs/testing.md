@@ -89,7 +89,7 @@ Kurallar:
 
 SPEC §22 performans hedeflerini **önerilen bütçeler** olarak verir ve M0'da referans cihaz ile yöntemin buraya yazılmasını ister. Karar ve gerekçe: ADR-0009.
 
-**Referans makine (DEC-17).** Windows 11 x64, SSD, en az 8 GB RAM, en az 4 mantıksal CPU, prize takılı, güç modu "Dengeli" ya da daha yüksek. Bütçe karşılaştırması yalnızca bu sınıftaki, CI dışındaki bir makinede anlamlıdır. `scripts/bench.mjs` makineyi bu ölçütlerle sınıflar ve raporun başına yazar (`reference-class` ya da `not reference`). Henüz referans makinede ölçüm yapılmadı.
+**Referans makine (DEC-17).** Windows 11 x64, SSD, en az 8 GB RAM, en az 4 mantıksal CPU, prize takılı, güç modu "Dengeli" ya da daha yüksek. Bütçe karşılaştırması yalnızca bu sınıftaki, CI dışındaki bir makinede anlamlıdır. `scripts/bench.mjs` makineyi bu ölçütlerle sınıflar ve raporun başına yazar (`reference-class` ya da `not reference`). İlk referans sınıfı ölçüm 7 Kasım 2026'da yapıldı (ADR-0009, Kanıt).
 
 **Veri.** `crates/vv-benchdata` sürümlü bir üreticidir: kendi SplitMix64 PRNG'si, yalnızca tam sayılar, sıralı JSON ve `\n` satır sonları. Aynı `(GENERATOR_VERSION, seed, sayılar)` her işletim sisteminde aynı baytları verir; varsayılan veri setinin SHA-256 değerleri `tests/fixtures/benchdata/golden.json`'dadır ve Windows ile Linux'ta test edilir. Varsayılanlar: seed 20261107, 10.000 öğe (bookmark, indirilmiş ve yerel video; Türkçe, İngilizce ve karışık; çok uzun başlık, emoji, NFD yazım, bilinmeyen süre, eksik küçük resim, çoklu etiket ve koleksiyon), 100.000 transkript segmenti (yalnızca medyası olan öğelerde, sıralı ve çakışmasız). URL'ler `.example` alan adlarındadır.
 

@@ -12,9 +12,8 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Sonraki ilk adımlar
 
-1. PR #11'i merge et, ardından `git checkout main && git pull`.
-2. İstersen dizüstünde `npm run bench` çalıştır: referans sınıfı bir Windows 11 ölçümü olur (`test-artifacts/bench/report.md`).
-3. Sıradaki iş F1.1 (alan şeması ve repository'ler), ardından F1.2 (bookmark kaydı).
+1. Bu küçük PR'ı merge et, ardından `git checkout main && git pull`.
+2. Sıradaki iş F1.1 (alan şeması ve repository'ler), ardından F1.2 (bookmark kaydı).
 
 ## Bilinmesi gerekenler
 
