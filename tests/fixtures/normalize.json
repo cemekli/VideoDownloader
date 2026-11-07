@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "normalizationVersion": 1,
+  "note": "STATE.md F1.3 / SPEC §6, §7.1, §11.7. Synthetic ids only. 'expect' null fields mean absent; error cases carry 'error' instead of 'expect'. 'redacted' omitted means the input is returned unchanged.",
+  "cases": [
+    { "input": "https://www.youtube.com/watch?v=vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
+    { "input": "https://youtube.com/watch?v=vvTestVid01&si=TRACK123&t=42s&list=PLx", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" }, "note": "tracking, time and list params dropped by the platform rule" },
+    { "input": "https://m.youtube.com/watch?feature=share&v=vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
+    { "input": "https://youtu.be/vvTestVid01?si=abc", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
+    { "input": "https://www.youtube.com/shorts/vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
+    { "input": "https://www.youtube-nocookie.com/embed/vvTestVid01?start=10", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
+    { "input": "https://WWW.YouTube.COM./live/vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" }, "note": "host case and trailing dot" },
+    { "input": "https://www.youtube.com/watch?v=short", "expect": { "platform": "youtube", "shape": "unknown", "sourceId": null, "canonical": "https://www.youtube.com/watch?v=short" }, "note": "invalid id: kept as given" },
+    { "input": "https://www.youtube.com/playlist?list=PLvvTest", "expect": { "platform": "youtube", "shape": "collection", "sourceId": null, "canonical": "https://www.youtube.com/playlist?list=PLvvTest" } },
+    { "input": "https://www.youtube.com/@vvchannel", "expect": { "platform": "youtube", "shape": "collection", "sourceId": null, "canonical": "https://www.youtube.com/@vvchannel" } },
+    { "input": "https://www.youtube.com/watch?v=vvTestVid01&signature=CANARYSIG", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" }, "redacted": "https://www.youtube.com/watch?v=vvTestVid01&signature=REDACTED", "note": "AC-36: signature removable by the platform rule" },
+
+    { "input": "https://vk.com/video-12345_67890", "expect": { "platform": "vk", "shape": "video", "sourceId": "-12345_67890", "canonical": "https://vk.com/video-12345_67890" } },
+    { "input": "https://vkvideo.ru/video12345_67890?list=abc&access_key=CANARYKEY", "expect": { "platform": "vk", "shape": "video", "sourceId": "12345_67890", "canonical": "https://vk.com/video12345_67890" }, "redacted": "https://vkvideo.ru/video12345_67890?list=abc&access_key=REDACTED" },
+    { "input": "https://m.vk.com/club1?z=video-1_2%2Fpl_wall", "expect": { "platform": "vk", "shape": "video", "sourceId": "-1_2", "canonical": "https://vk.com/video-1_2" } },
+    { "input": "https://vk.com/videos-12345", "expect": { "platform": "vk", "shape": "collection", "sourceId": null, "canonical": "https://vk.com/videos-12345" } },
+
+    { "input": "https://www.tiktok.com/@vv.user/video/7000000000000000001?is_from_webapp=1&sender_device=pc", "expect": { "platform": "tiktok", "shape": "video", "sourceId": "7000000000000000001", "canonical": "https://www.tiktok.com/@vv.user/video/7000000000000000001" } },
+    { "input": "https://vm.tiktok.com/ZMvvTest/", "expect": { "platform": "tiktok", "shape": "short_link", "sourceId": null, "canonical": "https://vm.tiktok.com/ZMvvTest/" }, "note": "short link not resolved offline (§6)" },
+    { "input": "https://www.tiktok.com/@vv.user", "expect": { "platform": "tiktok", "shape": "collection", "sourceId": null, "canonical": "https://www.tiktok.com/@vv.user" } },
+
+    { "input": "https://www.instagram.com/reel/CvvTest123/?igsh=abc", "expect": { "platform": "instagram", "shape": "video", "sourceId": "CvvTest123", "canonical": "https://www.instagram.com/reel/CvvTest123/" } },
+    { "input": "https://instagram.com/reels/CvvTest123", "expect": { "platform": "instagram", "shape": "video", "sourceId": "CvvTest123", "canonical": "https://www.instagram.com/reel/CvvTest123/" } },
+    { "input": "https://www.instagram.com/p/CvvTest456/?utm_source=ig_web_copy_link", "expect": { "platform": "instagram", "shape": "video", "sourceId": "CvvTest456", "canonical": "https://www.instagram.com/p/CvvTest456/" } },
+    { "input": "https://www.instagram.com/vvprofile/", "expect": { "platform": "instagram", "shape": "collection", "sourceId": null, "canonical": "https://www.instagram.com/vvprofile/" } },
+
+    { "input": "https://twitter.com/vvuser/status/1700000000000000001?s=20&t=abc", "expect": { "platform": "x", "shape": "video", "sourceId": "1700000000000000001", "canonical": "https://x.com/i/status/1700000000000000001" } },
+    { "input": "https://mobile.x.com/vvuser/status/1700000000000000001/video/1", "expect": { "platform": "x", "shape": "video", "sourceId": "1700000000000000001", "canonical": "https://x.com/i/status/1700000000000000001" } },
+
+    { "input": "https://www.facebook.com/watch/?v=100000000000001&ref=sharing", "expect": { "platform": "facebook", "shape": "video", "sourceId": "100000000000001", "canonical": "https://www.facebook.com/watch/?v=100000000000001" } },
+    { "input": "https://m.facebook.com/vvpage/videos/100000000000002/", "expect": { "platform": "facebook", "shape": "video", "sourceId": "100000000000002", "canonical": "https://www.facebook.com/watch/?v=100000000000002" } },
+    { "input": "https://www.facebook.com/reel/100000000000003", "expect": { "platform": "facebook", "shape": "video", "sourceId": "100000000000003", "canonical": "https://www.facebook.com/watch/?v=100000000000003" } },
+    { "input": "https://fb.watch/vvTest/", "expect": { "platform": "facebook", "shape": "short_link", "sourceId": null, "canonical": "https://fb.watch/vvTest/" } },
+
+    { "input": "https://Example.COM:443/videos/clip-one?b=2&a=1#t=10", "expect": { "platform": "generic", "shape": "unknown", "sourceId": null, "canonical": "https://example.com/videos/clip-one?b=2&a=1" }, "redacted": "https://example.com/videos/clip-one?b=2&a=1#t=10", "note": "generic: query kept byte for byte, order kept, fragment dropped" },
+    { "input": "https://example.com/watch?v=vvTestVid01&utm_source=x", "expect": { "platform": "generic", "shape": "unknown", "sourceId": null, "canonical": "https://example.com/watch?v=vvTestVid01&utm_source=x" }, "note": "generic params never dropped blindly (§7.1)" },
+    { "input": "https://cdn.example.com/v.mp4?Expires=1&Signature=CANARYSIG&Key-Pair-Id=K", "error": "URL_HAS_CREDENTIALS", "note": "AC-52: signed URL without a canonical form" },
+    { "input": "https://bucket.example.com/v.mp4?X-Amz-Credential=CANARY&X-Amz-Signature=CANARY", "error": "URL_HAS_CREDENTIALS" },
+    { "input": "https://example.com/v?token=CANARYTOKEN", "error": "URL_HAS_CREDENTIALS" }
+  ]
+}

@@ -4206,8 +4206,12 @@ name = "vv-persistence"
 version = "0.0.1"
 dependencies = [
  "rusqlite",
+ "serde",
+ "serde_json",
  "sha2 0.11.1",
  "tempfile",
+ "uuid",
+ "vv-domain",
 ]
 
 [[package]]

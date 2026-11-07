@@ -4,16 +4,17 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0'ın tamamı, 13/74 (F0.11 ve F0.12 PR #11'de, CI yeşil: [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094)). DEC-01 sürüm kaydı ADR-0010.
-- **Açık PR #11:** F0.11 (zorunlu dokümanlar ve kapsama matrisi) ve F0.12 (benchmark). Dal: `claude/project-thread-t0tup8`.
-  - Yeni: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`. `threat-model.md` artık SPEC §20.1'in her satırının durumunu gösteriyor.
-  - Kapsama matrisi `docs/coverage.json`'da: 82 P0/INV/NFR satırının her biri bir AC'ye, kimlikli manuel teste (MT) ya da benchmark'a (BM) bağlı. `npm run coverage:write` tabloyu `docs/testing.md`'ye yazar; `verify` eksik bağı ve eskimiş tabloyu reddeder.
-  - F0.12: `crates/vv-benchdata` aynı seed'den her işletim sisteminde aynı 10.000 öğe ve 100.000 segmenti üretir (golden hash testi). `npm run bench` BM-01…03'ü ölçer ve makineyi referans sınıfına göre etiketler (ADR-0009). CI bilgi amaçlı çalıştırır; bütçe kapısı F4.5'te.
+- **Tamamlananlar:** F0'ın tamamı, 13/74. DEC-01 sürüm kaydı ADR-0010.
+- **Açık PR #13** (dal `claude/project-thread-t0tup8`): F1.1–F1.3 (ADR-0011). Benchmark kaydı PR #12 ile merge edildi.
+  - Şema: migration 0002 ile `storage_root`, `library_item`, `media_asset`, `url_alias`, `duplicate_candidate` ve FTS5 `search_document`. Repository'ler `crates/vv-persistence/src/library/repo.rs`.
+  - Kayıt: `library::bookmark::save_bookmark` ağsız çalışır; aynı içerik ikinci kez kaydedilince mevcut öğe döner, eşzamanlı kayıt tek öğede biter, imza/sır değerleri diske yazılmaz.
+  - Normalizasyon: `vv-domain::normalize` (sürüm 1), fixture `tests/fixtures/normalize.json`. Kural değişince sürüm artar; `library::renormalize` eski kayıtları yeniden hesaplar (AC-44).
+  - Uygulama henüz veritabanını açmıyor; `save_bookmark` komutu ve Add URL ekranı F1.8'de bağlanacak.
 
 ## Sonraki ilk adımlar
 
-1. Bu küçük PR'ı merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş F1.1 (alan şeması ve repository'ler), ardından F1.2 (bookmark kaydı).
+1. PR #13'ü merge et, ardından `git checkout main && git pull`.
+2. Sıradaki iş F1.4 (yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail).
 
 ## Bilinmesi gerekenler
 

@@ -21,12 +21,20 @@ pub struct Migration {
 }
 
 /// The app's migrations, in order. Append only; never edit an applied one.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "init",
-    up: include_str!("../migrations/0001_init.up.sql"),
-    down: Some(include_str!("../migrations/0001_init.down.sql")),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "init",
+        up: include_str!("../migrations/0001_init.up.sql"),
+        down: Some(include_str!("../migrations/0001_init.down.sql")),
+    },
+    Migration {
+        version: 2,
+        name: "library",
+        up: include_str!("../migrations/0002_library.up.sql"),
+        down: Some(include_str!("../migrations/0002_library.down.sql")),
+    },
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppliedMigration {
