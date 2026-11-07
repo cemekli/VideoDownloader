@@ -4,11 +4,11 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.8 ve F0.13, toplam 9/74. FFmpeg (F0.8c, ADR-0006) PR #8 ile main'de.
+- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 10/74 (F0.9 PR'da, CI yeşil). FFmpeg (F0.8c, ADR-0006) PR #8 ile main'de.
 - **Açık PR:** F0.9, yani dış araçların ağ denetimi (ADR-0007). Dal: `claude/project-thread-t0tup8`.
   - Yeni `vv-netguard` crate'i: yt-dlp'nin her bağlantısı uygulamanın yerel proxy'sinden geçiyor. Kurallar: port 80/443, DNS sonrası tüm adresler public, kontrol edilen adrese bağlanma (rebinding yok), çalışma başına jeton.
   - yt-dlp bayrakları: `--proxy <url> --downloader native --abort-on-unavailable-fragments` (`args::NETWORK_GUARD`).
-  - `scripts/netguard-probe.mjs` gerçek yt-dlp ile 12 vaka çalıştırıyor (yönlendirme, HLS segmenti, gömülü video, CONNECT, localhost). Kanarya sunucu hiçbirinde bağlantı almıyor. CI'da yeni bir adım.
+  - `scripts/netguard-probe.mjs` gerçek yt-dlp ile 12 vaka çalıştırıyor (yönlendirme, HLS segmenti, gömülü video, CONNECT, localhost). Kanarya sunucu hiçbirinde bağlantı almıyor; Windows ve Linux CI'da geçti: [CI #42369808856](https://github.com/cemekli/VideoDownloader/actions/runs/42369808856).
   - `docs/threat-model.md` ağ bölümüyle başladı.
 
 ## Sonraki ilk adımlar
