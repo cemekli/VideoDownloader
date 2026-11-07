@@ -5,6 +5,7 @@
 //! for app commands.
 
 pub mod commands;
+pub mod media_protocol;
 
 use tauri::{Builder, Runtime};
 
@@ -23,7 +24,13 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     #[cfg(feature = "e2e-cdp")]
     e2e::enable_cdp(context.config_mut());
-    register(Builder::default())
+    #[allow(unused_mut)]
+    let mut builder = register(Builder::default());
+    #[cfg(feature = "e2e-cdp")]
+    {
+        builder = e2e::register_media_protocol(builder);
+    }
+    builder
         .run(context)
         .expect("error while running VideoVault");
 }
@@ -47,5 +54,20 @@ mod e2e {
             window.additional_browser_args =
                 Some(format!("{WRY_DEFAULT_ARGS} --remote-debugging-port={port}"));
         }
+    }
+
+    /// Serves `VV_E2E_MEDIA_DIR` over the media protocol for the playback
+    /// matrix (ADR-0004). Without the variable nothing is registered.
+    pub fn register_media_protocol<R: tauri::Runtime>(
+        builder: tauri::Builder<R>,
+    ) -> tauri::Builder<R> {
+        let Some(root) = std::env::var_os("VV_E2E_MEDIA_DIR")
+            .and_then(|d| std::path::PathBuf::from(d).canonicalize().ok())
+        else {
+            return builder;
+        };
+        builder.register_uri_scheme_protocol(crate::media_protocol::SCHEME, move |_ctx, request| {
+            crate::media_protocol::handle(&root, &request)
+        })
     }
 }

@@ -75,7 +75,10 @@ function checkFixtures() {
     /^#\s*netscape http cookie file/im,
   ];
   const hits = [];
+  // Generated media (tests/fixtures/media, scripts/make-playback-media.mjs) is binary.
+  const binary = /\.(mp4|webm|mkv|mov|m4a|opus|png|jpg)$/i;
   for (const f of walk(join(root, "tests", "fixtures"))) {
+    if (binary.test(f)) continue;
     const text = readFileSync(f, "utf8");
     for (const p of patterns) if (p.test(text)) hits.push(`${relative(root, f)} matches ${p}`);
   }

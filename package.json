@@ -17,6 +17,7 @@
     "desktop:exe": "npm --prefix apps/desktop run desktop:exe",
     "e2e:desktop": "npm --prefix apps/desktop run e2e:desktop",
     "desktop:e2e-exe": "node scripts/build-e2e-exe.mjs",
-    "fixtures:ytdlp": "node scripts/capture-ytdlp-fixtures.mjs"
+    "fixtures:ytdlp": "node scripts/capture-ytdlp-fixtures.mjs",
+    "fixtures:media": "node scripts/make-playback-media.mjs"
   }
 }

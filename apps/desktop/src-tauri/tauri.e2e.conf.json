@@ -1,0 +1,9 @@
+{
+  "app": {
+    "security": {
+      "csp": {
+        "media-src": "'self' http://vvmedia.localhost vvmedia:"
+      }
+    }
+  }
+}
