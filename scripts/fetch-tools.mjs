@@ -9,7 +9,7 @@
 // Verification, in order; any failure stops with a non-zero exit:
 //   1. size and SHA-256 of each download (manifest);
 //   2. yt-dlp only: SHA2-256SUMS is signed by the pinned key and lists the
-//      same hash (needs gpg; Git for Windows ships one);
+//      same hash (needs gpgv; Git for Windows ships one);
 //   3. SHA-256 of the executable after unpacking;
 //   4. `--version` of each tool equals the pinned version;
 //   5. yt-dlp with our JS runtime flags reports the managed Deno as supported,
@@ -49,33 +49,53 @@ async function download(url, to) {
   writeFileSync(to, Buffer.from(await res.arrayBuffer()));
 }
 
-function gpgBinary() {
-  for (const c of ["gpg", "C:\\Program Files\\Git\\usr\\bin\\gpg.exe"]) {
+// gpgv only checks a signature against a keyring file: no agent, no home
+// directory, no trust database. That keeps it working with the MSYS gpg that
+// Git for Windows ships, where a full `gpg --import` can fail.
+function gpgvBinary() {
+  for (const c of ["gpgv", "C:\\Program Files\\Git\\usr\\bin\\gpgv.exe"]) {
     if (spawnSync(c, ["--version"], { encoding: "utf8" }).status === 0) return c;
   }
   return null;
 }
 
+/** ASCII-armoured key -> binary keyring (what `gpg --dearmor` does). */
+function dearmor(armored) {
+  const lines = armored.replace(/\r/g, "").split("\n");
+  const begin = lines.findIndex((l) => l.startsWith("-----BEGIN PGP PUBLIC KEY BLOCK-----"));
+  if (begin < 0) fail("tools/yt-dlp-public.key is not an armoured public key");
+  let i = begin + 1;
+  while (i < lines.length && lines[i].trim() !== "") i++; // armour headers
+  const body = [];
+  for (i++; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (l.startsWith("=") || l.startsWith("-----END")) break; // CRC24 line or end
+    body.push(l);
+  }
+  return Buffer.from(body.join(""), "base64");
+}
+
+// MSYS programs accept C:/x/y; forward slashes avoid any backslash mangling.
+const posixish = (p) => (isWin ? p.replace(/\\/g, "/") : p);
+
 async function verifyYtDlpSignature(t, a) {
   const p = t.provenance;
   const work = mkdtempSync(join(tmpdir(), "vv-gpg-"));
   try {
-    const gpg = gpgBinary() ?? fail("gpg not found; it is needed to check yt-dlp's signed checksums");
+    const gpgv = gpgvBinary() ?? fail("gpgv not found; it is needed to check yt-dlp's signed checksums (Git for Windows ships one)");
     const sums = join(work, "SHA2-256SUMS");
     const sig = join(work, "SHA2-256SUMS.sig");
-    const key = join(work, "public.key");
+    const keyring = join(work, "yt-dlp.gpg");
     await download(p.sumsUrl, sums);
     await download(p.signatureUrl, sig);
-    // The key file is committed (tools/yt-dlp-public.key): downloading it from
-    // the same place as the binary would make the check circular.
-    writeFileSync(key, readFileSync(join(root, "tools", "yt-dlp-public.key")));
-    const home = join(work, "gnupg");
-    mkdirSync(home, { mode: 0o700 });
-    const g = (...args) => spawnSync(gpg, ["--homedir", home, "--batch", "--status-fd", "1", ...args], { encoding: "utf8" });
-    if (g("--import", key).status !== 0) fail("cannot import tools/yt-dlp-public.key");
-    const v = g("--verify", sig, sums);
+    // The key is committed (tools/yt-dlp-public.key): downloading it from the
+    // same place as the binary would make the check circular.
+    writeFileSync(keyring, dearmor(readFileSync(join(root, "tools", "yt-dlp-public.key"), "utf8")));
+    const v = spawnSync(gpgv, ["--status-fd", "1", "--keyring", posixish(keyring), posixish(sig), posixish(sums)], { encoding: "utf8" });
     const valid = /\[GNUPG:\] VALIDSIG ([0-9A-F]{40})/.exec(v.stdout ?? "");
-    if (v.status !== 0 || !valid || valid[1] !== YTDLP_KEY) fail(`SHA2-256SUMS signature is not valid for key ${YTDLP_KEY}`);
+    if (v.status !== 0 || !valid || valid[1] !== YTDLP_KEY) {
+      fail(`SHA2-256SUMS signature is not valid for key ${YTDLP_KEY} (gpgv exit ${v.status})\n${v.stderr ?? ""}${v.error ?? ""}`);
+    }
     ok(`yt-dlp SHA2-256SUMS signed by ${YTDLP_KEY}`);
     const name = a.url.split("/").pop();
     const line = readFileSync(sums, "utf8").split("\n").find((l) => l.trim().endsWith(`  ${name}`));
@@ -109,8 +129,10 @@ async function fetchTool(id) {
   ok(`${id} download matches the manifest (${size} bytes)`);
   if (t.provenance.kind === "gpg-signed-sums") await verifyYtDlpSignature(t, a);
   if (a.archive === "zip") {
-    // bsdtar on Windows 10+ reads zip; unzip elsewhere.
-    const r = isWin ? spawnSync("tar", ["-xf", file, "-C", dir, a.executable]) : spawnSync("unzip", ["-oq", file, a.executable, "-d", dir]);
+    // Windows 10+ ships bsdtar, which reads zip. Call it by full path: Git's GNU
+    // tar may come first on PATH and cannot read zip. unzip elsewhere.
+    const winTar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+    const r = isWin ? spawnSync(winTar, ["-xf", file, "-C", dir, a.executable]) : spawnSync("unzip", ["-oq", file, a.executable, "-d", dir]);
     if (r.status !== 0) fail(`${id}: cannot unpack ${file}`);
     rmSync(file);
   }
