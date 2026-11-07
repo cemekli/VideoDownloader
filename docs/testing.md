@@ -30,6 +30,7 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | `npm run desktop:e2e-exe` | E2E test exe'si (`target/release/videovault-e2e.exe`, cargo özelliği `e2e-cdp`) |
 | `npm run e2e:desktop` | Gerçek uygulama E2E: test exe'sini açar, WebView2'ye bağlanır (yalnızca Windows, önce `desktop:e2e-exe`) |
 | `npm run fixtures:ytdlp` | yt-dlp fixture'larını yeniden yakalar (yalnızca geliştirici; `VV_YTDLP` ile sabitlenmiş yt-dlp sürümü ve PATH'te ffmpeg gerekir, bkz. ADR-0003). `verify` bunu çalıştırmaz |
+| `npm run fixtures:media` | Oynatma matrisi medyasını (`tests/fixtures/media/`) ffmpeg ile yeniden üretir (yalnızca geliştirici, ADR-0004). `verify` bunu çalıştırmaz |
 
 `verify` sonucu `test-artifacts/verify/report.md` ve `report.json` dosyalarına yazılır. Her adım “automated pass”, “automated fail” veya “not run” olarak raporlanır (SPEC §25.4). JUnit çıktıları `test-artifacts/vitest/` ve `test-artifacts/e2e/`, ekran görüntüleri `test-artifacts/screenshots/` altındadır.
 
@@ -47,6 +48,8 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | Kullanıcı yolculuğu | `apps/desktop/e2e/*.spec.ts` | 3 görünümde çalışır |
 | yt-dlp çıktısı ayrıştırma ve hata eşleme | `crates/vv-ytdlp/tests/fixtures.rs` + `tests/fixtures/ytdlp/` | Yeni hata metni: yakalanabiliyorsa yakalama betiğine senaryo, değilse kaynağıyla birlikte `errors-source.json`'a vaka |
 | Gerçek uygulama davranışı (IPC, yetki, CSP, pencere) | `apps/desktop/e2e-desktop/*.spec.ts` | Windows'ta gerçek exe ile; ADR-0001 |
+| Yerel medya protokolü (range, yol sınırı) | `apps/desktop/src-tauri/tests/media_protocol.rs` | ADR-0004 |
+| WebView2 oynatma matrisi (DEC-04) | `apps/desktop/e2e-desktop/playback-matrix.spec.ts` → `test-artifacts/playback-matrix/` | Yalnızca MP4 H.264/AAC zorunlu; diğerleri ölçüm. Yeni format: `make-playback-media.mjs` `MATRIX` satırı |
 
 Kurallar:
 
@@ -63,6 +66,7 @@ Kurallar:
 | `tests/fixtures/ipc-contract.json` | IPC komutlarının ve `DomainError`'ın tel biçimi (sözleşme v1) | `vv-desktop` IPC testleri, Vitest |
 | `tests/fixtures/ytdlp/args.json` | yt-dlp'ye her zaman verilen sabit bayraklar ve progress şablonu; sabitlenmiş yt-dlp sürümü | `vv-ytdlp` (sapma testi), yakalama betiği |
 | `tests/fixtures/ytdlp/runs/*.json` | Yerel sunucuya karşı gerçek yt-dlp 2026.10.26 çalışmaları: metadata (HLS, doğrudan dosya, playlist), progress (bilinen/bilinmeyen toplam, fragment), iptal (SIGINT, kill), 7 hata | `vv-ytdlp` integration testleri |
+| `tests/fixtures/media/*` + `manifest.json` | 14 adet 3 sn'lik test videosu (MP4/WebM/MKV/MOV × H.264/HEVC/VP8/VP9/AV1, AAC/Opus/Vorbis), sha256 ve ffprobe özetiyle | `media_protocol.rs`, oynatma matrisi |
 | `tests/fixtures/ytdlp/errors-source.json` | Yerelde üretilemeyen 20 hata satırı (giriş, bölge, DRM, araç eksik, Windows ağ hataları, CANARY redaksiyon vakası); her biri yt-dlp kaynak dosyasıyla | `vv-ytdlp` integration testleri |
 | `tests/fixtures/library-small.json` | 6 sentetik öğe: karışık platform, uzun başlık, Türkçe, emoji, bilinmeyen süre, eksik dosya | Arayüz fixture istemcisi, Vitest, Playwright |
 

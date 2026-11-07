@@ -14,7 +14,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const repoRoot = resolve(import.meta.dirname, "../../..");
+export const repoRoot = resolve(import.meta.dirname, "../../..");
 
 /**
  * Test build from `npm run desktop:e2e-exe` (release + feature `e2e-cdp`).
@@ -55,7 +55,12 @@ async function waitFor<T>(what: string, timeoutMs: number, probe: () => Promise<
   throw new Error(`Timed out after ${timeoutMs} ms waiting for ${what}${last ? `: ${String(last)}` : ""}`);
 }
 
-export async function launchDesktopApp(): Promise<DesktopApp> {
+export interface LaunchOptions {
+  /** Extra environment for the app, e.g. VV_E2E_MEDIA_DIR for the playback matrix. */
+  env?: Record<string, string>;
+}
+
+export async function launchDesktopApp(options: LaunchOptions = {}): Promise<DesktopApp> {
   if (!existsSync(desktopExe)) throw new Error(`Desktop executable not found: ${desktopExe}. Run \`npm run desktop:e2e-exe\` first.`);
 
   const port = await freePort();
@@ -63,6 +68,7 @@ export async function launchDesktopApp(): Promise<DesktopApp> {
   const proc = spawn(desktopExe, [], {
     env: {
       ...process.env,
+      ...options.env,
       VV_E2E_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: profile,
     },

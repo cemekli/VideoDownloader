@@ -89,7 +89,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.5 | SQLite, migration altyapısı, WAL kararı, paketlenen SQLite'ta FTS5 testi | §11.7, §16.1, DEC-06 | migration ileri/geri testi; FTS5 testi paketlenen derlemede geçer | ✅ ADR-0002; `vv-persistence` 16/16 (Windows + Linux); gerçek exe'de `packaged SQLite 3.53.2, FTS5=true, schema v1`, `e2e-desktop` 5/5; [CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245) |
 | F0.6 | yt-dlp fixture adaptörü: JSON, progress ve hata çıktısı ayrıştırma | DL-05, §14.1 | sabit çıktılarla integration testleri | ✅ ADR-0003; `vv-ytdlp` 31/31 (Windows + Linux): 15 gerçek yt-dlp 2026.10.26 çalışması + 20 kaynak metni vakası; [CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226) |
 | F0.7 | Yakalama URL politikası: şema, kimlik bilgisi, özel/yerel IP reddi | CAP-02, §20.2, AC-29 (sözdizimsel kısım) | `url-policy.json` fixture'ı 33 vaka + 4 birim testi geçer | ✅ |
-| F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ⬜ |
+| F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi. Üç PR: **a** oynatma matrisi (DEC-04), **b** yt-dlp + JS runtime (DEC-02), **c** FFmpeg (DEC-03) | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | 🟨 a ✅: ADR-0004; WebView2 156'da 14 dosyanın 11'i oynuyor, HEVC yalnızca sesle (`partial`); MP4 H.264/AAC zorunlu testi geçti; [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985). b, c ⬜ |
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ⬜ |
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ⬜ |
 | F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md` var |
@@ -287,18 +287,21 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | Tarih | Konu | Etki | Gereken |
 |---|---|---|---|
 | 6 Kas 2026 | `verify` Windows'ta CI'da geçti, yerel makinede çalıştırılmadı | Geliştirici makinesinde kurulum doğrulanmadı | Yerelde `npm run setup`, `npm run verify` ve `npm run desktop` |
+| 7 Kas 2026 | Oynatma matrisi yalnızca CI'da (GPU'suz) ölçüldü | HEVC'nin GPU'lu makinede durumu bilinmiyor; karar etkilenmez | Windows 11'de `npm run desktop:e2e-exe` + `npm run e2e:desktop` |
 | 6 Kas 2026 | Uygulama simgesi geçici (otomatik üretilmiş) | Görsel kimlik yok | F4 öncesi gerçek simge |
 
 ## Sonraki adım
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0.8 — Araç ve lisans araştırması** (önerilen). yt-dlp + JS runtime (Deno), FFmpeg build'i ve WebView2 codec/container matrisi (DEC-02, DEC-03, DEC-04). Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance ve Job Object).
+**F0.8b** sırada. F0.8a (oynatma matrisi, ADR-0004) PR #6'da. Ardından F0.8b (yt-dlp + JS runtime dağıtımı ve lisansı, DEC-02) ve F0.8c (FFmpeg build'i ve lisansı, DEC-03). Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance ve Job Object).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F0.8a ölçüldü (Windows CI, WebView2 156): MKV/MOV/MP4/WebM, H.264/VP9/AV1 ile oynuyor; HEVC yalnızca ses. Kararlar ADR-0004'te: HEVC oynatılamaz sayılır, PLAY-07 kapsamı daralır. |
+| 7 Kas 2026 | F0.8 üç PR'a bölündü. F0.8a başladı: 14 test videosu, Range destekli medya protokolü prototipi (yalnızca test derlemesinde), WebView2 oynatma matrisi testi, ADR-0004. |
 | 6 Kas 2026 | F0.6 ✅: ADR-0003, `vv-ytdlp` crate'i, gerçek yt-dlp 2026.10.26 fixture'ları; Windows ve Linux CI'da geçti ([CI #42281072226](https://github.com/cemekli/VideoDownloader/actions/runs/42281072226)). Gün sonu devir notu: HANDOFF.md. |
 | 6 Kas 2026 | F0.5 ✅: ADR-0002 (rusqlite bundled, WAL, synchronous=FULL), checksum'lı migration altyapısı, migration öncesi yedek, FTS5 gerçek exe'de doğrulandı ([CI #42275530245](https://github.com/cemekli/VideoDownloader/actions/runs/42275530245)). |
 | 6 Kas 2026 | F0.4 ✅: ADR-0001 (Playwright + WebView2 CDP), ayrı test exe'si (`e2e-cdp`), 4 gerçek uygulama testi Windows CI'da geçti. |
