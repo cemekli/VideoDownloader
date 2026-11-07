@@ -2,10 +2,10 @@
 
 | Bilgi | Değer |
 |---|---|
-| Son güncelleme | 6 Kasım 2026 |
+| Son güncelleme | 7 Kasım 2026 |
 | Referans belge | [SPEC.md](./SPEC.md) v1.4 |
 | Aktif faz | **F0 — Temel ve test altyapısı** |
-| Genel ilerleme | 10 / 74 alt görev doğrulandı |
+| Genel ilerleme | 11 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
 | Son doğrulama | 6 Kasım 2026, Linux x64 (geliştirme ortamı): 8/8 adım geçti. GitHub Actions (windows-latest + ubuntu-latest): tüm kapılar geçti, [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546). |
 
@@ -92,7 +92,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.8 | Araç ve lisans araştırması: yt-dlp + JS runtime, FFmpeg build, WebView2 codec/container matrisi. Üç PR: **a** oynatma matrisi (DEC-04), **b** yt-dlp + JS runtime (DEC-02), **c** FFmpeg (DEC-03) | DEC-02, DEC-03, DEC-04 | `docs/decisions.md` ADR'leri ve gerçek dosyalarla matris | ✅ a ✅: ADR-0004; WebView2 156'da 14 dosyanın 11'i oynuyor, HEVC yalnızca sesle (`partial`); MP4 H.264/AAC zorunlu testi geçti; [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985). b ✅: ADR-0005; `vv-tools` 8/8; `tools/manifest.json`; gerçek yt-dlp.exe + deno.exe Windows'ta doğrulandı, PATH'teki Deno yok sayılıyor; [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585). c ✅: ADR-0006; BtbN FFmpeg 9.0.2 LGPL; `vv-ffmpeg` 6/6, `vv-tools` 9/9; izin listeleriyle HLS/concat/URL reddi (0 HTTP isteği); 20 dk'lık MKV remux Windows'ta 609 ms; gerçek exe'lerle Windows ve Linux'ta [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432) |
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ✅ ADR-0007; yerel denetim proxy'si `vv-netguard` 7/7; gerçek yt-dlp ile 12 vakada kanaryaya 0 bağlantı (kontrolde 1); Windows ve Linux [CI #42369808856](https://github.com/cemekli/VideoDownloader/actions/runs/42369808856) |
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ✅ ADR-0008; kütüphane kilidi, `vv-process` (temiz ortam, Job Object, ağaç öldürme; Windows çökme testinde sahipsiz süreç yok), single-instance eklentisi; AC-38 gerçek uygulama E2E 3/3 (ikinci açılış 0 koduyla 22 ms'de, kilit katmanı 3 koduyla); Windows ve Linux [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361) |
-| F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 `testing.md`, `decisions.md` var; `threat-model.md` ağ bölümüyle başladı |
+| F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 Altı doküman da var (`architecture.md`, `roadmap.md`, `platform-support.md` yeni; `threat-model.md` §20.1 durumuyla tamamlandı). Kapsama matrisi: `docs/coverage.json` → `docs/testing.md`, 82/82 P0/INV/NFR bağlı; `verify` adımı `coverage-matrix` eksik bağı ve eskimiş tabloyu reddediyor; CI PR'da |
 | F0.12 | Benchmark ortamı ve sürümlü veri üreticisi (10.000 öğe, 100.000 segment) | NFR-01…07, DEC-17 | aynı seed ile aynı çıktı testi | ⬜ |
 | F0.13 | Git deposu ve CI'ın Windows'ta ilk yeşil çalışması | §25.1 | GitHub Actions'ta iki işletim sistemi de geçer | ✅ [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546) |
 
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0.10** ✅ (single-instance, kütüphane kilidi, Job Object; ADR-0008, PR'da). Ardından F0.11 (zorunlu dokümanlar ve kapsama matrisi) ya da F0.12 (benchmark veri üreticisi).
+**F0.11** 🟨 (zorunlu dokümanlar ve kapsama matrisi, PR'da). Ardından F0.12 (benchmark ortamı ve veri üreticisi); o bitince F0 çıkış kapısı kontrol edilir ve F1'e geçilir.
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F0.10 ✅ (PR #10). F0.11 başladı: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`; `threat-model.md`'ye §20.1 durum tablosu; `docs/coverage.json` ve `scripts/coverage-matrix.mjs` ile 82 P0/INV/NFR satırlık kapsama matrisi (29 kimlikli manuel test, 5 benchmark), `verify` adımı. |
 | 7 Kas 2026 | F0.10 ✅: Windows ve Linux CI'da geçti ([CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361)). |
 | 7 Kas 2026 | F0.9 ✅ (PR #9). F0.10 başladı: kütüphane kilidi (`vv-persistence::lock`), `vv-process` crate'i (temiz ortam, Windows Job Object, iptal/zaman aşımında ağaç öldürme), `tauri-plugin-single-instance` 2.5.5, `get_diagnostics`'e `libraryLock` ve `secondLaunches`, AC-38 E2E. ADR-0008. |
 | 7 Kas 2026 | F0.9 başladı: `vv-netguard` (yerel denetim proxy'si: port 80/443, DNS sonrası public IP, rebinding yok, jeton), yt-dlp `NETWORK_GUARD` bayrakları, `scripts/netguard-probe.mjs` ve CI adımı, `docs/threat-model.md`. ADR-0007. |

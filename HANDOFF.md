@@ -4,18 +4,16 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 11/74 (F0.10 PR'da, CI yeşil). Ağ denetimi (F0.9, ADR-0007) PR #9 ile main'de.
-- **Açık PR:** F0.10, yani tek süreç ve alt süreç yönetimi (ADR-0008). Dal: `claude/project-thread-t0tup8`.
-  - İkinci açılış `tauri-plugin-single-instance` ile çalışan pencereye devredilir ve 0 koduyla çıkar.
-  - Veri dizinindeki `videovault.lock` ikinci katmandır: kilidi alamayan süreç 3 koduyla çıkar, DB'yi açmaz.
-  - Yeni `vv-process` crate'i: alt süreçler temiz ortamla, Windows'ta Job Object içinde başlar. İptal, zaman aşımı ve uygulama çökmesi tüm ağacı (yt-dlp → Deno/FFmpeg) öldürür.
-  - `get_diagnostics` artık `libraryLock` ve `secondLaunches` döndürüyor.
-  - Windows ve Linux CI'da geçti: [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361).
+- **Tamamlananlar:** F0.1–F0.10 ve F0.13, toplam 11/74. Tek süreç ve alt süreç yönetimi (F0.10, ADR-0008) PR #10 ile main'de.
+- **Açık PR:** F0.11, yani zorunlu dokümanlar ve kapsama matrisi. Dal: `claude/project-thread-t0tup8`.
+  - Yeni: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`. `threat-model.md` artık SPEC §20.1'in her satırının durumunu gösteriyor.
+  - Kapsama matrisi `docs/coverage.json`'da: 82 P0/INV/NFR satırının her biri bir AC'ye, kimlikli manuel teste (MT) ya da benchmark'a (BM) bağlı. `npm run coverage:write` tabloyu `docs/testing.md`'ye yazar; `verify` eksik bağı ve eskimiş tabloyu reddeder.
+- **Sıradaki:** F0.12 (benchmark ortamı ve sürümlü veri üreticisi).
 
 ## Sonraki ilk adımlar
 
-1. F0.10 PR'ını merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş: F0.11 (zorunlu dokümanlar ve kapsama matrisi) ya da F0.12 (benchmark veri üreticisi). F0 bitince F1'e geçilir.
+1. F0.11 PR'ını merge et, ardından `git checkout main && git pull`.
+2. F0.12 bitince F0 çıkış kapısı kontrol edilir ve F1'e (çevrimdışı kütüphane çekirdeği) geçilir.
 
 ## Bilinmesi gerekenler
 
