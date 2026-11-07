@@ -8,7 +8,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0002](#adr-0002-sqlite-erişimi-wal-ve-migration-stratejisi) | SQLite erişimi, WAL ve migration stratejisi (SPEC DEC-06) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0003](#adr-0003-yt-dlp-adaptörü-sabit-bayraklar-progress-protokolü-ve-hata-eşleme) | yt-dlp adaptörü: sabit bayraklar, progress protokolü, hata eşleme (SPEC DL-05, §14.1) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0004](#adr-0004-webview2-oynatma-matrisi-ve-yerel-medya-protokolü) | WebView2 oynatma matrisi ve yerel medya protokolü (SPEC DEC-04) | Kabul edildi (CI ölçümü; geliştirici makinesi ölçümü açık) | 7 Kasım 2026 |
-| [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Önerildi: Windows CI kanıtı bekleniyor | 7 Kasım 2026 |
+| [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -244,5 +244,8 @@ SPEC DEC-02, §10.2, §14.1 ve §23.1'i karşılar (STATE.md F0.8b). Kod: `tools
 - `vv-tools`: 8 test. Kapsam: gerçek manifest, 23 bozma vakası, boyut/hash/eksik dosya, FIPS SHA-256 test vektörü, gerçek sürüm çıktıları, 6 gerçek `JS runtimes` satırı, Deno izin kaydı.
 - `vv-ytdlp` arg sapma testi `jsRuntime` dizisini de kapsıyor.
 - `scripts/fetch-tools.mjs` Linux'ta uçtan uca geçti: indirme, GPG imzası, iki hash, sürüm, yönetilen Deno'nun kullanılması ve `PATH`'teki Deno'nun yok sayılması. Tek bayt değiştirilmiş bir `deno` dosyası reddedildi.
-- Windows CI kanıtı bu PR'ın CI çalışmasıyla eklenecek.
+- Windows'ta aynı zincir gerçek `yt-dlp.exe` ve `deno.exe` ile geçti: indirme ve hash, `gpgv` ile imza (Git for Windows), `tar` ile zip açma, sürümler, yönetilen Deno'nun seçilmesi, `PATH`'teki Deno'nun yok sayılması. Linux'ta da geçti: [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585).
+- Windows'ta öğrenilen iki şey betiğe işlendi:
+  - Git for Windows'un `gpg --import` komutu geçici dizinde başarısız oluyor; bu yüzden ajan gerektirmeyen `gpgv` kullanılıyor.
+  - `gpgv`, `C:/...` gibi yolları URL sanıyor; bu yüzden göreli yol veriliyor.
 

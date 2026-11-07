@@ -10,7 +10,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
   - Yeni `vv-tools` crate'i: manifesti doğruluyor, hash kontrolü yapıyor, araçların sürüm ve JS runtime çıktısını okuyor.
   - Yeni hata kodu `CHECKSUM_MISMATCH`.
   - yt-dlp artık yalnızca yönetilen Deno'yu kullanıyor; `PATH`'teki Deno yok sayılıyor ve bu gerçek çalıştırmayla kanıtlandı.
-  - `npm run tools:fetch` araçları `tools/bin/` altına indirip doğruluyor. CI'da da çalışıyor.
+  - `npm run tools:fetch` araçları `tools/bin/` altına indirip doğruluyor. CI'da da çalışıyor; Windows ve Linux CI yeşil: [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585).
 
 ## Sonraki ilk adımlar
 
