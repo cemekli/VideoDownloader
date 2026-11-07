@@ -5,7 +5,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Nerede kaldık
 
 - **Tamamlananlar:** F0'ın tamamı ve F1.1–F1.3 (PR #13), 16/74.
-- **Açık PR** (dal `claude/project-thread-t0tup8`): F1.4–F1.6 (ADR-0012).
+- **Açık PR #14** (dal `claude/project-thread-t0tup8`): F1.4–F1.6 (ADR-0012). 2026-11-07 akşamı burada ara verildi; CI sonucu ve STATE'e CI kanıtı (F1.4–F1.6 ✅, 19/74) ertesi gün eklenecek.
   - `crates/vv-import`: dosya/klasör import (yerinde referans, kısıtlı ffprobe, SHA-256, duplicate adayı), thumbnail, relink ve `roots::check_storage` (çıkarılan disk `disconnected`, kaybolan dosya `missing`).
   - Arama: `vv-persistence::library::search`; güvenli sorgu oluşturucu, filtre, sıralama, sayfa, snippet. Türkçe davranış `tests/fixtures/search-tr.json`'da.
   - Import testleri gerçek ffprobe/FFmpeg ister: yerelde `node scripts/fetch-tools.mjs` çalışmadıysa atlanır, CI'da zorunludur.
