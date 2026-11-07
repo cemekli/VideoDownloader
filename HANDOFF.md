@@ -4,8 +4,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0'ın tamamı ve F1.1–F1.3 (PR #13), 16/74.
-- **Açık PR #14** (dal `claude/project-thread-t0tup8`): F1.4–F1.6 (ADR-0012). 2026-11-07 akşamı burada ara verildi; CI sonucu ve STATE'e CI kanıtı (F1.4–F1.6 ✅, 19/74) ertesi gün eklenecek.
+- **Tamamlananlar:** F0'ın tamamı, F1.1–F1.3 (PR #13) ve F1.4–F1.6 (PR #14, ADR-0012), 19/74. Hepsi main'de, Windows + Linux CI yeşil. 7 Kasım akşamı burada durduk; açık PR yok.
   - `crates/vv-import`: dosya/klasör import (yerinde referans, kısıtlı ffprobe, SHA-256, duplicate adayı), thumbnail, relink ve `roots::check_storage` (çıkarılan disk `disconnected`, kaybolan dosya `missing`).
   - Arama: `vv-persistence::library::search`; güvenli sorgu oluşturucu, filtre, sıralama, sayfa, snippet. Türkçe davranış `tests/fixtures/search-tr.json`'da.
   - Import testleri gerçek ffprobe/FFmpeg ister: yerelde `node scripts/fetch-tools.mjs` çalışmadıysa atlanır, CI'da zorunludur.
@@ -13,8 +12,9 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Sonraki ilk adımlar
 
-1. PR'ı merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş F1.7 (Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları) ve F1.8 (Add URL, `Ctrl+K`).
+1. Bu devir notunun PR'ı merge edildiyse `git checkout main && git pull`.
+2. F1.7: Library ekranı (grid/liste, inspector, filtreler, boş ve hata durumları); arama ve import servislerini Tauri komutlarına bağlar.
+3. Ardından F1.8: Add URL (`Ctrl+K`, `save_bookmark`).
 
 ## Bilinmesi gerekenler
 
