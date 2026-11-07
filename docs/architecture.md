@@ -28,8 +28,8 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 |---|---|---|---|---|
 | `apps/desktop/src` | Library kabuğu, IPC istemcisi (gerçek ve fixture), bileşenler | UI | İskelet: kütüphane listesi fixture verisiyle | F0.1, F0.3 |
 | `apps/desktop/src-tauri` | Pencere, komutlar (`ping`, `get_status`, `get_diagnostics`), tek süreç, test derlemesinde medya protokolü | application (giriş) | Çalışıyor; iş komutları yok | ADR-0001, ADR-0004, ADR-0008 |
-| `vv-domain` | Hata kodları ve `DomainError`, yakalama URL politikası | domain, security | Kısmen | F0.7 |
-| `vv-persistence` | Bağlantı ayarları (WAL, `synchronous=FULL`), checksum'lı migration, migration öncesi yedek, `videovault.lock` | persistence | Altyapı hazır; alan tabloları F1.1'de | ADR-0002, ADR-0008 |
+| `vv-domain` | Hata kodları ve `DomainError`, yakalama URL politikası, platform tanıma ve URL normalizasyonu (sürüm 1) | domain, security | Kısmen | F0.7, ADR-0011 |
+| `vv-persistence` | Bağlantı ayarları (WAL, `synchronous=FULL`), checksum'lı migration, migration öncesi yedek, `videovault.lock`; `library`: kütüphane şeması (migration 0002), repository'ler, `save_bookmark`, yeniden normalizasyon | persistence | Şema ve bookmark kaydı hazır; uygulamaya F1.8'de bağlanır | ADR-0002, ADR-0008, ADR-0011 |
 | `vv-process` | Araç süreçlerini temiz ortamla, Job Object içinde başlatma; iptal ve zaman aşımı | jobs (süreç denetimi) | Hazır; henüz çağıran yok (F3) | ADR-0008 |
 | `vv-ytdlp` | yt-dlp için sabit argümanlar, çıktı ayrıştırma, hata eşleme | connectors | Fixture ile test edildi | ADR-0003 |
 | `vv-ffmpeg` | Kısıtlı ffprobe/FFmpeg çağrıları, referanslı girdilerin reddi | media | Fixture ve gerçek build ile test edildi | ADR-0006 |
@@ -40,7 +40,7 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |
 | Yerel AI sağlayıcıları | Döküm, embedding, OCR | ai | Yok | F6, F7 |
 
-Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
+Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir, `vv-persistence` yalnızca `vv-domain`'e bağlıdır; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
 
 ## Güven sınırları
 
@@ -57,7 +57,7 @@ Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı deği
 
 Hedef akış (SPEC §8, §13). Kalın adımlar bugün kodda vardır.
 
-1. **Yakalama:** UI → `save_bookmark` komutu (SPEC §18.1, F1.2) → **`vv-domain::url_policy`** (şema, kimlik bilgisi, yerel adres) → tek SQLite işleminde `LibraryItem` + `SearchDocument` → Inbox.
+1. **Yakalama:** UI → `save_bookmark` komutu (SPEC §18.1, F1.2) → **`vv-domain::url_policy`** (şema, kimlik bilgisi, yerel adres) → **`vv-domain::normalize`** (platform, kanonik URL, sır redaksiyonu) → `vv-persistence::library::bookmark` tek `BEGIN IMMEDIATE` işleminde eşleşme araması, yoksa `LibraryItem` + `SearchDocument` → Inbox. Servis hazır (ADR-0011); komut ve ekran F1.8'de.
 2. **Metadata (M2):** iş kuyruğu → **`vv-process`** ile yt-dlp → **`vv-netguard`** proxy'si → **`vv-ytdlp`** ayrıştırma → kullanıcı alanlarını ezmeyen güncelleme (INV-12).
 3. **İndirme (M2):** format seçimi → yt-dlp (native indirici) → staging → bütünlük doğrulaması → final konum → `MediaAsset` (INV-02).
 4. **Yerel import (M1):** dosya seçimi → **`vv-ffmpeg`** ile kısıtlı ffprobe → hash → duplicate adayı → küçük resim işi.

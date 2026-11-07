@@ -37,6 +37,9 @@ pub enum ErrorCode {
     // Local media checks (STATE.md F0.8c, SPEC §14.1, §19).
     InputRejected,
     MediaCorrupt,
+    // Library writes (STATE.md F1.1/F1.2, SPEC §19).
+    DuplicateItem,
+    RevisionConflict,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -64,6 +67,8 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::ChecksumMismatch,
     ErrorCode::InputRejected,
     ErrorCode::MediaCorrupt,
+    ErrorCode::DuplicateItem,
+    ErrorCode::RevisionConflict,
 ];
 
 impl ErrorCode {
@@ -102,6 +107,8 @@ impl ErrorCode {
             ErrorCode::ChecksumMismatch => "error.checksum_mismatch",
             ErrorCode::InputRejected => "error.input_rejected",
             ErrorCode::MediaCorrupt => "error.media_corrupt",
+            ErrorCode::DuplicateItem => "error.duplicate_item",
+            ErrorCode::RevisionConflict => "error.revision_conflict",
         }
     }
 }
@@ -117,6 +124,10 @@ pub enum SuggestedAction {
     RepairTool,
     ChooseLocation,
     FreeSpace,
+    /// Go to the item that already holds this content (`DUPLICATE_ITEM`).
+    OpenExisting,
+    /// Load the current data and apply the change again (`REVISION_CONFLICT`).
+    Reload,
 }
 
 impl ErrorCode {
@@ -136,6 +147,8 @@ impl ErrorCode {
             | ExtractorUnsupported | PlaylistUnsupported | Canceled => None,
             // SPEC §19: do not import, explain why.
             InputRejected | MediaCorrupt => None,
+            DuplicateItem => Some(SuggestedAction::OpenExisting),
+            RevisionConflict => Some(SuggestedAction::Reload),
         }
     }
 }

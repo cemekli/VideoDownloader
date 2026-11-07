@@ -538,3 +538,42 @@ SPEC DEC-01'i ("kesin Tauri/Rust/Node/React/SQLite sürümleri") karşılar. Sü
 - Rust ve Node'un tam sürüme bağlanmaması, iki CI çalışması arasında derleyicinin değişebileceği anlamına geliyor. Dağıtım derlemesi için `rust-toolchain.toml` ile tam sürüm F4.1'de sabitlenir.
 - Geliştirme kapsayıcısında Node 22 vardı; `.nvmrc` 26 diyor. Testler iki sürümde de geçti, ama referans Node 26'dır.
 - WebView2 sürümü kullanıcının makinesine bağlıdır; desteklenen en düşük sürüm F4.1'de belirlenir.
+
+## ADR-0011: Kütüphane şeması, URL normalizasyonu ve bookmark kaydı
+
+STATE.md F1.1–F1.3. SPEC §6, §7.1 (CAP-02…CAP-06, CAP-08), §11, §11.7.
+
+**Bağlam.** M1'in ilk yarısı ağ olmadan URL kaydetmeyi istiyor. Kaydın kalıcı kimliği (kanonik URL, platform kimliği) bugün belirlenir ve sonradan değişen kurallarla yeniden hesaplanabilir olmalıdır. Aynı içerik iki kez kaydedilmemeli, eşzamanlı kayıt yarışı tutarlı bitmeli ve geçici sırlar diske yazılmamalıdır.
+
+**Karar: şema (migration 0002).**
+
+- Tablolar: `storage_root`, `library_item`, `media_asset`, `url_alias`, `duplicate_candidate` ve FTS5 `search_document`. Hepsi `STRICT`; kapalı değer kümeleri `CHECK (... IN (...))` ile sabit. Rust tarafındaki enum listeleri ile SQL listelerinin aynı olduğunu bir test iki yönlü denetler.
+- `library_item.seq INTEGER PRIMARY KEY` yalnızca FTS satırının bağlandığı iç anahtardır (düz `rowid` VACUUM'da değişebilir); dışarıya `id` (UUID v4 metin) çıkar.
+- Benzersizlik (§11.7): `(source_platform, source_id) WHERE source_id IS NOT NULL` ve `canonical_url WHERE canonical_url IS NOT NULL` kısmi unique indeksleri. Yerel öğe `kind = local_video` ⇔ `source_platform = local`; uzak öğede `canonical_url` zorunlu.
+- §11.1 yayın tarihi: `published_precision` hangi alanın dolu olduğunu belirler; şema diğer birleşimleri reddeder.
+- `media_asset.storage_ref` köke göre göreli yoldur; mutlak yol, UNC ve sürücü harfi şemada reddedilir. Türetilmiş varlık `derivation` olmadan, özgün varlık `derivation`/`source_asset_id` ile yazılamaz. Kaynak varlık silinince türevleri silinir (cache kapsamı); varlığı olan kök silinemez.
+- `duplicate_candidate`: sırasız çift ve neden başına tek açık aday (ifade indeksi `min/max`). Karar verilince aynı çift yeniden önerilebilir.
+- `search_document` belirteci geçici olarak `unicode61 remove_diacritics 2`; Türkçe kararı F1.6'da. Kaldırılmış öğe satırını korur, arama sorgusu `removed_at IS NULL` ile süzer. `tags` sütunu etiket tabloları gelene kadar boştur, böylece FTS düzeni o zaman değişmez.
+- Platformdan gelmeyen başlık saklanmaz: metadata yokken UI ve arama belgesi bağlantıdan türetilen dürüst başlığı (`YouTube · <id>`, `example.com · son-parça`) kullanır, `title` null kalır (CAP-04).
+- Güncellemeler beklenen `revision` ile gelir; uyuşmazlık `REVISION_CONFLICT` döner. `DUPLICATE_ITEM` ve `REVISION_CONFLICT` hata kodları eklendi; önerilen eylemler `open_existing` ve `reload`.
+
+**Karar: normalizasyon (`vv-domain::normalize`, sürüm 1).**
+
+- Bilinen platformda kanonik URL içerik kimliğinden **yeniden kurulur** (ör. `https://www.youtube.com/watch?v=<id>`, `https://vk.com/video<owner>_<id>`, `https://x.com/i/status/<id>`). Böylece takip ve imza parametreleri kanonik değere sızamaz.
+- Genel URL'de yalnızca şema/host küçük harf, varsayılan port, host sonundaki nokta ve fragment normalize edilir; sorgu bayt bayt korunur (§7.1 "körlemesine silinmez").
+- Kısa bağlantılar (`vm.tiktok.com`, `fb.watch`, `/share`) çevrimdışı çözülemez; olduğu gibi saklanır, M2 metadata'sı çözer. `youtu.be` kimliği yolda taşıdığı için çözülür.
+- Playlist/kanal/profil URL'si tek bookmark olarak saklanır ve `PLAYLIST_UNSUPPORTED` uyarısı döner (§6).
+- Sır parametreleri (`signature`, `token`, `access_key`, `expires`, `x-amz-*`…) `original_url`'de `REDACTED` olur. Kanonik biçimi olmayan URL sır taşıyorsa kayıt reddedilir (`URL_HAS_CREDENTIALS`, AC-52).
+- Fixture `tests/fixtures/normalize.json` tek doğruluk kaynağıdır; fixture'daki `normalizationVersion` koddaki sabitle eşleşmezse test düşer. Kanonik değer tekrar normalize edildiğinde değişmez (sabit nokta testi).
+
+**Karar: kayıt ve yarış.** `save_bookmark` politika → normalizasyon → `BEGIN IMMEDIATE` içinde eşleşme araması (kanonik URL, alias, platform kimliği) → yoksa öğe + arama belgesi aynı işlemde. Eşleşme varsa hiçbir şey yazılmaz, mevcut öğe ve açık duplicate adayları döner; öğe kaldırılmışsa `removed_at` dolu gelir (UI "Geri yükle/Vazgeç" sunar, AC-45). Yarışı kaçan bir yazıcı unique indekse çarparsa kazanan öğe döner (AC-03).
+
+**Karar: yeniden normalizasyon (AC-44).** `library::renormalize::renormalize`, sürümü eski öğeleri `added_at` sırasıyla tek işlemde gezer. Değer boştaysa öğe alır; doluysa öğe eski değerinde kalır, `normalization_conflict = 1` olur ve sahibiyle `DuplicateCandidate(normalization_conflict)` açılır. Çakışmalı öğe çözülene kadar tekrar denenmez; geçiş yinelendiğinde iş kalmaz. Uygulama veritabanını açtıktan sonra bu geçişi çalıştırır (kabuk F1.8'de bağlanır).
+
+**SPEC'e not (kenar durum).** §11.7 örneğinde B'nin eski değeri yeni değere eşitse "B eski değerinde kalır" ile "A yeni değeri alır" birlikte unique indeksi bozar. Bu durumda değeri zaten taşıyan B onu korur; A çakışmalı işaretlenir ve aday açılır (test: `stale_holder_with_the_new_value_already_keeps_it`). Kural, B'nin eski değeri farklı olduğunda SPEC'teki gibidir.
+
+**Sonuçlar ve açık noktalar.**
+
+- CAP-01'in UI kısmı (Add URL, `Ctrl+V`) F1.8'de; bu PR servis ve veri katmanıdır.
+- X bağlantısında `video` biçimi "içerik kimliği olan gönderi" anlamındadır; gönderide video olup olmadığı M2 metadata'sıyla öğrenilir.
+- Etiket/koleksiyon tabloları (§11.4) ve `Tag` normalizasyonu F1.6/F1.7 ile gelir; `search_document.tags` o zaman dolar.

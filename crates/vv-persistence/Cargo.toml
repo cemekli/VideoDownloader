@@ -11,6 +11,11 @@ description = "VideoVault SQLite storage: connection setup, migrations, backup (
 # test is the version we ship (SPEC §16.1). `backup` = online backup API.
 rusqlite = { version = "=0.40.2", features = ["bundled", "backup"] }
 sha2 = "=0.11.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Random v4 ids for library rows (SPEC §11.1); same version Tauri already locks.
+uuid = { version = "=1.29.0", features = ["v4"] }
+vv-domain = { path = "../vv-domain" }
 
 [dev-dependencies]
 tempfile = "3"
