@@ -1,0 +1,90 @@
+{
+  "_comment": "Real output of the pinned tools (STATE.md F0.8b, ADR-0005), captured on Linux x86_64 on 7 Nov 2026 with yt-dlp_linux 2026.10.26 and Deno 2.9.8 from tools/manifest.json; Deno 1.46.3 stands in for a too-old runtime. Paths are replaced with <deno>. yt-dlp was run with --ignore-config --no-plugin-dirs --no-cache-dir -v --simulate against a closed local port; only the JS runtimes line is kept (the -v header also prints the proxy map, see ADR-0005).",
+  "denoVersion": "deno 2.9.8 (stable, release, x86_64-unknown-linux-gnu)\nv8 15.0.245.2-rusty\ntypescript 6.0.3",
+  "ytDlpVersion": "2026.10.26",
+  "oldDenoVersion": "deno 1.46.3 (stable, release, x86_64-unknown-linux-gnu)\nv8 12.9.202.5-rusty\ntypescript 5.5.2",
+  "jsRuntimes": [
+    {
+      "case": "managed deno at an explicit path",
+      "args": [
+        "--no-js-runtimes",
+        "--js-runtimes",
+        "deno:<deno>",
+        "--no-remote-components"
+      ],
+      "line": "[debug] JS runtimes: deno-2.9.8",
+      "expected": "supported"
+    },
+    {
+      "case": "runtimes cleared, none enabled",
+      "args": [
+        "--no-js-runtimes",
+        "--no-remote-components"
+      ],
+      "line": "[debug] JS runtimes: none (disabled)",
+      "expected": "disabled"
+    },
+    {
+      "case": "managed path missing",
+      "args": [
+        "--no-js-runtimes",
+        "--js-runtimes",
+        "deno:<missing>",
+        "--no-remote-components"
+      ],
+      "line": "[debug] JS runtimes: none",
+      "expected": "not_found"
+    },
+    {
+      "case": "deno too old",
+      "args": [
+        "--no-js-runtimes",
+        "--js-runtimes",
+        "deno:<old-deno>",
+        "--no-remote-components"
+      ],
+      "line": "[debug] JS runtimes: deno-1.46.3 (unsupported)",
+      "expected": "unsupported"
+    },
+    {
+      "case": "yt-dlp default with deno on PATH (what SPEC 14.1 forbids)",
+      "args": [],
+      "line": "[debug] JS runtimes: deno-2.9.8",
+      "expected": "supported"
+    },
+    {
+      "case": "our flags with deno on PATH but managed path missing: PATH is ignored",
+      "args": [
+        "--no-js-runtimes",
+        "--js-runtimes",
+        "deno:<missing>",
+        "--no-remote-components"
+      ],
+      "line": "[debug] JS runtimes: none",
+      "expected": "not_found"
+    }
+  ],
+  "denoSandbox": {
+    "_comment": "How yt-dlp 2026.10.26 starts Deno (yt_dlp/extractor/youtube/jsc/_builtin/deno.py): no --allow-* flag, so Deno's sandbox denies everything. Probe script run with exactly these flags on Deno 2.9.8.",
+    "args": [
+      "run",
+      "--ext=js",
+      "--no-code-cache",
+      "--no-prompt",
+      "--no-remote",
+      "--no-lock",
+      "--node-modules-dir=none",
+      "--no-config",
+      "--no-npm",
+      "--cached-only",
+      "-"
+    ],
+    "results": {
+      "net (https://example.com/)": "NotCapable",
+      "read (/etc/hostname)": "NotCapable",
+      "write (/tmp/x)": "NotCapable",
+      "env (HOME)": "NotCapable",
+      "run (id)": "NotCapable"
+    }
+  }
+}

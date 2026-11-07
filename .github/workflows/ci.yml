@@ -37,6 +37,10 @@ jobs:
         run: npm --prefix apps/desktop ci
       - name: Install Playwright Chromium
         run: npx --prefix apps/desktop playwright install --with-deps chromium
+      # Downloads the pinned yt-dlp and Deno, checks hashes and yt-dlp's GPG
+      # signature, and runs the version/JS-runtime health check (ADR-0005).
+      - name: Fetch and check managed tools
+        run: node scripts/fetch-tools.mjs
       # Built before verify so the real-app E2E step (e2e-desktop) can launch it.
       - name: Build E2E test app (Windows, feature e2e-cdp)
         if: runner.os == 'Windows'

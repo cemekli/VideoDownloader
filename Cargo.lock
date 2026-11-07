@@ -3870,6 +3870,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-tools"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "vv-domain",
+ "vv-ytdlp",
+]
+
+[[package]]
 name = "vv-ytdlp"
 version = "0.0.1"
 dependencies = [

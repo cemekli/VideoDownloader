@@ -4,20 +4,20 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.7 ve F0.13, toplam 8/74. Hepsi main'de. F0.8 üç parçaya bölündü ve yarım (🟨).
-- **Açık PR:** [#6 F0.8a: WebView2 oynatma matrisi](https://github.com/cemekli/VideoDownloader/pull/6), dal `claude/project-thread-t0tup8`. Windows ve Linux CI yeşil: [CI #42361348985](https://github.com/cemekli/VideoDownloader/actions/runs/42361348985).
-  - 14 test videosu `tests/fixtures/media/` altında. Range destekli `vvmedia` protokolü prototipi var; yalnızca test derlemesinde.
-  - Matris WebView2 156'da ölçüldü (ADR-0004). MP4, WebM, MKV ve MOV; H.264, VP8, VP9 ve AV1 ile oynuyor. HEVC her container'da yalnızca sesle oynuyor.
-  - Kararlar: HEVC oynatılamaz sayılır; PLAY-07 remux kapsamı daralır; varsayılan hedef H.264 için MP4, VP9/AV1 için WebM.
+- **Tamamlananlar:** F0.1–F0.7 ve F0.13, toplam 8/74. F0.8a (oynatma matrisi, ADR-0004) PR #6 ile main'de. F0.8 hâlâ yarım (🟨).
+- **Açık PR:** F0.8b, yani yt-dlp + Deno dağıtımı (ADR-0005). Dal: `claude/project-thread-t0tup8`.
+  - `tools/manifest.json` sürümleri sabitliyor: yt-dlp 2026.10.26 (GPG imzası doğrulandı) ve Deno 2.9.8.
+  - Yeni `vv-tools` crate'i: manifesti doğruluyor, hash kontrolü yapıyor, araçların sürüm ve JS runtime çıktısını okuyor.
+  - Yeni hata kodu `CHECKSUM_MISMATCH`.
+  - yt-dlp artık yalnızca yönetilen Deno'yu kullanıyor; `PATH`'teki Deno yok sayılıyor ve bu gerçek çalıştırmayla kanıtlandı.
+  - `npm run tools:fetch` araçları `tools/bin/` altına indirip doğruluyor. CI'da da çalışıyor; Windows ve Linux CI yeşil: [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585).
 
 ## Sonraki ilk adımlar
 
-1. PR #6'yı merge et, ardından `git checkout main && git pull`.
-2. İstersen kendi makinende matrisi ölç: `npm run desktop:e2e-exe`, sonra `npm run e2e:desktop`. Tablo `test-artifacts/playback-matrix/matrix.md` dosyasına yazılır; HEVC'nin GPU'lu makinedeki durumunu gösterir.
-3. Sıradaki alt görev:
-   - **F0.8b:** yt-dlp + JS runtime (Deno) dağıtımı, güncelleme güven modeli ve lisans (DEC-02).
-   - **F0.8c:** FFmpeg build'i, lisansı ve MKV'den MP4'e remux süresi (DEC-03).
-   - Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance ve Job Object).
+1. F0.8b PR'ını merge et, ardından `git checkout main && git pull`.
+2. Kendi makinende `npm run tools:fetch` çalıştır (Git for Windows içindeki gpg yeterli).
+3. **F0.8c:** FFmpeg build'i, lisansı ve MKV'den MP4'e remux süresi (DEC-03).
+4. Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance, Job Object; ADR-0005'teki ortam temizleme kuralı burada uygulanacak).
 
 ## Bilinmesi gerekenler
 

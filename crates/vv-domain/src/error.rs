@@ -32,6 +32,8 @@ pub enum ErrorCode {
     ToolMissing,
     Timeout,
     Canceled,
+    // Managed tools (STATE.md F0.8b, SPEC §19).
+    ChecksumMismatch,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -56,6 +58,7 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::ToolMissing,
     ErrorCode::Timeout,
     ErrorCode::Canceled,
+    ErrorCode::ChecksumMismatch,
 ];
 
 impl ErrorCode {
@@ -91,6 +94,7 @@ impl ErrorCode {
             ErrorCode::ToolMissing => "error.tool_missing",
             ErrorCode::Timeout => "error.timeout",
             ErrorCode::Canceled => "error.canceled",
+            ErrorCode::ChecksumMismatch => "error.checksum_mismatch",
         }
     }
 }
@@ -118,7 +122,7 @@ impl ErrorCode {
             InternalError | ExtractorFailed => Some(SuggestedAction::ShowDiagnostics),
             NetworkUnavailable | RateLimited | Timeout => Some(SuggestedAction::Retry),
             LoginRequired => Some(SuggestedAction::SignIn),
-            ToolMissing => Some(SuggestedAction::RepairTool),
+            ToolMissing | ChecksumMismatch => Some(SuggestedAction::RepairTool),
             PathNotWritable => Some(SuggestedAction::ChooseLocation),
             DiskFull => Some(SuggestedAction::FreeSpace),
             AccessDenied | ContentUnavailable | RegionRestricted | DrmUnsupported

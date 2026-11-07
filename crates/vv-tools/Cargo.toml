@@ -1,0 +1,16 @@
+[package]
+name = "vv-tools"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault managed tools: pinned manifest (yt-dlp, Deno), checksum verification and version health checks (no downloads, no subprocess)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+vv-domain = { path = "../vv-domain" }
+
+[dev-dependencies]
+vv-ytdlp = { path = "../vv-ytdlp" }
