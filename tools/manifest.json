@@ -59,6 +59,70 @@
           "executableSha256": "368bca08999e02c6911b8f248167b582276b1f547db5712b6e736d7eda1dbda7"
         }
       ]
+    },
+    {
+      "id": "ffmpeg",
+      "version": "9.0.2",
+      "build": "n9.0.2-39-g7adfbe40dc-20261031",
+      "license": "LGPL-3.0-or-later: BtbN lgpl variant, configured with --enable-version3 and without --enable-gpl or --enable-nonfree (fetch-tools checks the configuration line)",
+      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59 (FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/7adfbe40dc)",
+      "provenance": {
+        "kind": "published-sha256"
+      },
+      "artifacts": [
+        {
+          "platform": "windows-x86_64",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0.zip",
+          "sha256": "9d37c564e0d01c18cde184a079fa6ef04d7d2783ada41da81d04165cc8f1a650",
+          "size": 168715328,
+          "archive": "zip",
+          "archivePath": "ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0/bin/ffmpeg.exe",
+          "executable": "ffmpeg.exe",
+          "executableSha256": "d03c858a130cae1382902925d9f46eb15d7de42e025d34cc29b7ddca6cfb4c62"
+        },
+        {
+          "platform": "linux-x86_64",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0.tar.xz",
+          "sha256": "6046d6731b26f58887e953561551d254a6eec9fbca4100dfeab56e19af8328d5",
+          "size": 136027168,
+          "archive": "tar.xz",
+          "archivePath": "ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0/bin/ffmpeg",
+          "executable": "ffmpeg",
+          "executableSha256": "d372f20463a8ffb9eef1675242cdbf9aae19b647503b073fc9b5b1f42b91c94a"
+        }
+      ]
+    },
+    {
+      "id": "ffprobe",
+      "version": "9.0.2",
+      "build": "n9.0.2-39-g7adfbe40dc-20261031",
+      "license": "LGPL-3.0-or-later: BtbN lgpl variant, configured with --enable-version3 and without --enable-gpl or --enable-nonfree (fetch-tools checks the configuration line)",
+      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59 (FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/7adfbe40dc)",
+      "provenance": {
+        "kind": "published-sha256"
+      },
+      "artifacts": [
+        {
+          "platform": "windows-x86_64",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0.zip",
+          "sha256": "9d37c564e0d01c18cde184a079fa6ef04d7d2783ada41da81d04165cc8f1a650",
+          "size": 168715328,
+          "archive": "zip",
+          "archivePath": "ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0/bin/ffprobe.exe",
+          "executable": "ffprobe.exe",
+          "executableSha256": "61d1eef897bfa42306ac4ab36afc6adce23cccce577bda88b84c06d44e1b9183"
+        },
+        {
+          "platform": "linux-x86_64",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0.tar.xz",
+          "sha256": "6046d6731b26f58887e953561551d254a6eec9fbca4100dfeab56e19af8328d5",
+          "size": 136027168,
+          "archive": "tar.xz",
+          "archivePath": "ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0/bin/ffprobe",
+          "executable": "ffprobe",
+          "executableSha256": "9a7f735d3df4f56dd8406cd7a03a227686bec55b1edc496c25bd8b1867e44498"
+        }
+      ]
     }
   ]
 }

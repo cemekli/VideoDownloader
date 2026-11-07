@@ -1,0 +1,21 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "vp9",
+      "codec_type": "video"
+    },
+    {
+      "index": 1,
+      "codec_name": "opus",
+      "codec_type": "audio"
+    }
+  ],
+  "format": {
+    "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+    "duration": "3.000000",
+    "size": "101202"
+  }
+}

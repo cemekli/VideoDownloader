@@ -127,3 +127,87 @@ pub fn check_version(pinned: &str, found: Option<Version>) -> VersionCheck {
         Some(found) => VersionCheck::Mismatch { expected, found },
     }
 }
+
+/// What `ffmpeg -version` / `ffprobe -version` print in their first lines:
+/// `ffmpeg version n9.0.2-39-g7adfbe40dc-20261031 Copyright (c) ...` and
+/// `configuration: --prefix=... --enable-version3 ...`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FfmpegBanner {
+    /// `ffmpeg` or `ffprobe`.
+    pub program: String,
+    /// The build string, compared with the manifest's `build` as is.
+    pub build: String,
+    pub configuration: Vec<String>,
+}
+
+/// Licence of an FFmpeg build, read from its `configure` flags. FFmpeg is
+/// LGPL unless built with `--enable-gpl` (GPL) or `--enable-nonfree` (not
+/// redistributable at all).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FfmpegLicence {
+    /// LGPL; with `--enable-version3` it is LGPL-3.0-or-later.
+    Lgpl {
+        version3: bool,
+    },
+    Gpl,
+    Nonfree,
+}
+
+pub fn parse_ffmpeg_banner(stdout: &str) -> Option<FfmpegBanner> {
+    let mut lines = stdout.lines();
+    let first = lines.next()?.trim();
+    let (program, rest) = first.split_once(" version ")?;
+    if !matches!(program, "ffmpeg" | "ffprobe") {
+        return None;
+    }
+    let build = rest.split_whitespace().next()?.to_owned();
+    let configuration = lines
+        .take(4)
+        .find_map(|l| l.trim().strip_prefix("configuration:"))?
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    Some(FfmpegBanner {
+        program: program.to_owned(),
+        build,
+        configuration,
+    })
+}
+
+impl FfmpegBanner {
+    pub fn licence(&self) -> FfmpegLicence {
+        let has = |flag: &str| self.configuration.iter().any(|f| f == flag);
+        if has("--enable-nonfree") {
+            FfmpegLicence::Nonfree
+        } else if has("--enable-gpl") {
+            FfmpegLicence::Gpl
+        } else {
+            FfmpegLicence::Lgpl {
+                version3: has("--enable-version3"),
+            }
+        }
+    }
+
+    /// Start-up check against the manifest: the right program, exactly the
+    /// pinned build, and an LGPL configuration. Anything else is reported as
+    /// `TOOL_MISSING` and the tool is not used.
+    pub fn check(&self, program: &str, pinned_build: &str) -> VersionCheck {
+        let pinned = pinned_version_of_build(pinned_build);
+        let found = pinned_version_of_build(&self.build);
+        if self.program != program || !matches!(self.licence(), FfmpegLicence::Lgpl { .. }) {
+            return VersionCheck::Unrecognised;
+        }
+        match (pinned, found) {
+            (Some(_), _) if self.build == pinned_build => VersionCheck::Ok,
+            (Some(expected), Some(found)) => VersionCheck::Mismatch { expected, found },
+            _ => VersionCheck::Unrecognised,
+        }
+    }
+}
+
+/// `n9.0.2-39-g7adfbe40dc-20261031` -> 9.0.2; distro builds such as
+/// `6.1.1-3ubuntu5` -> 6.1.1.
+fn pinned_version_of_build(build: &str) -> Option<Version> {
+    let b = build.strip_prefix('n').unwrap_or(build);
+    Version::parse(b.split('-').next()?)
+}

@@ -1,0 +1,37 @@
+{
+  "_comment": "Fixed FFmpeg/ffprobe flags (SPEC §14.1, ADR-0006). Source of truth for crates/vv-ffmpeg (args.rs) and scripts/ffmpeg-probe.mjs; a Rust test fails if they drift. {input} and {output} are absolute paths the backend has validated, passed as file:<path> in one argv entry.",
+  "ffmpegBuild": "n9.0.2-39-g7adfbe40dc-20261031",
+  "formatWhitelist": "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac",
+  "common": [
+    "-hide_banner",
+    "-loglevel",
+    "error"
+  ],
+  "input": [
+    "-protocol_whitelist",
+    "file",
+    "-format_whitelist",
+    "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,ogg,flac,wav,aac"
+  ],
+  "probe": [
+    "-show_entries",
+    "format=format_name,duration,size:stream=index,codec_type,codec_name",
+    "-of",
+    "json"
+  ],
+  "remuxOutput": [
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0?",
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "mp4",
+    "-n"
+  ]
+}

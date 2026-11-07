@@ -4,20 +4,19 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.7 ve F0.13, toplam 8/74. F0.8a (oynatma matrisi, ADR-0004) PR #6 ile main'de. F0.8 hâlâ yarım (🟨).
-- **Açık PR:** F0.8b, yani yt-dlp + Deno dağıtımı (ADR-0005). Dal: `claude/project-thread-t0tup8`.
-  - `tools/manifest.json` sürümleri sabitliyor: yt-dlp 2026.10.26 (GPG imzası doğrulandı) ve Deno 2.9.8.
-  - Yeni `vv-tools` crate'i: manifesti doğruluyor, hash kontrolü yapıyor, araçların sürüm ve JS runtime çıktısını okuyor.
-  - Yeni hata kodu `CHECKSUM_MISMATCH`.
-  - yt-dlp artık yalnızca yönetilen Deno'yu kullanıyor; `PATH`'teki Deno yok sayılıyor ve bu gerçek çalıştırmayla kanıtlandı.
-  - `npm run tools:fetch` araçları `tools/bin/` altına indirip doğruluyor. CI'da da çalışıyor; Windows ve Linux CI yeşil: [CI #42365085585](https://github.com/cemekli/VideoDownloader/actions/runs/42365085585).
+- **Tamamlananlar:** F0.1–F0.8 ve F0.13, toplam 9/74. F0.8a (oynatma matrisi, ADR-0004) ve F0.8b (yt-dlp + Deno, ADR-0005) main'de; F0.8c PR'da, CI yeşil.
+- **Açık PR:** F0.8c, yani FFmpeg (ADR-0006). Dal: `claude/project-thread-t0tup8`.
+  - `tools/manifest.json` artık FFmpeg ve ffprobe 9.0.2'yi de sabitliyor: BtbN LGPL build'i, tarihli etiket (`autobuild-2026-10-31-12-59`).
+  - Yeni `vv-ffmpeg` crate'i: her çağrının sabit bayrakları ve ffprobe sonucunun sınıflandırılması.
+  - Önemli bulgu: yalnızca protokol izin listesi yetmiyor; HLS listesi kök dışındaki dosyayı okuyabiliyor. `-format_whitelist` ile bu kapandı.
+  - Yeni hata kodları `INPUT_REJECTED` ve `MEDIA_CORRUPT`.
+  - `npm run tools:fetch` artık FFmpeg'i de indirip doğruluyor, AC-59 yoklamasını ve remux ölçümünü yapıyor. Windows ve Linux CI'da gerçek exe'lerle geçti: [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432). 20 dakikalık MKV, Windows'ta 609 ms'de MP4'e remux edildi.
 
 ## Sonraki ilk adımlar
 
-1. F0.8b PR'ını merge et, ardından `git checkout main && git pull`.
-2. Kendi makinende `npm run tools:fetch` çalıştır (Git for Windows içindeki gpg yeterli).
-3. **F0.8c:** FFmpeg build'i, lisansı ve MKV'den MP4'e remux süresi (DEC-03).
-4. Alternatifler: F0.9 (ağ denetimi), F0.10 (single-instance, Job Object; ADR-0005'teki ortam temizleme kuralı burada uygulanacak).
+1. F0.8c PR'ını merge et, ardından `git checkout main && git pull`.
+2. Kendi makinende `npm run tools:fetch` çalıştır. İlk çalıştırma yaklaşık 210 MB indirir.
+3. Sıradaki iş: F0.9 (ağ denetimi, DEC-05) ya da F0.10 (single-instance, Job Object; ADR-0005'teki ortam temizleme kuralı burada uygulanacak).
 
 ## Bilinmesi gerekenler
 
@@ -31,4 +30,5 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
   - `MEDIA_URL_EXPIRED` henüz üretilmiyor.
   - Windows'a özgü ağ hata metinleri işletim sistemi metinlerinden yazıldı; gerçek Windows yakalaması F0.10'da yapılacak.
   - Video ve sesin ayrı indirildiği durumda ilerlemeyi birleştirme işi F2'de.
+- **FFmpeg kurulum boyutu (ADR-0006):** iki statik exe 252 MiB tutuyor. F4'te `lgpl-shared` varyantına geçmek değerlendirilecek.
 - **Engeller:** STATE.md "Engeller ve açık noktalar" bölümünde. Uygulama simgesi hâlâ geçici.

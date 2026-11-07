@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Downloads the managed tools pinned in tools/manifest.json for this platform
-// into tools/bin/, verifies them and runs the health check (STATE.md F0.8b,
-// ADR-0005).
+// into tools/bin/, verifies them and runs the health check (STATE.md F0.8b/c,
+// ADR-0005, ADR-0006).
 //
 //   node scripts/fetch-tools.mjs            # download (if needed), verify, check
 //   node scripts/fetch-tools.mjs --offline  # verify what is already there
@@ -12,18 +12,24 @@
 //      same hash (needs gpgv; Git for Windows ships one);
 //   3. SHA-256 of the executable after unpacking;
 //   4. `--version` of each tool equals the pinned version;
+//      FFmpeg/ffprobe: `-version` prints exactly the pinned build, and the
+//      configuration has neither --enable-gpl nor --enable-nonfree;
 //   5. yt-dlp with our JS runtime flags reports the managed Deno as supported,
-//      and ignores a Deno on PATH.
+//      and ignores a Deno on PATH;
+//   6. FFmpeg/ffprobe with our fixed flags (scripts/ffmpeg-probe.mjs): probe
+//      output of the media fixtures, refusal of HLS/concat/URL inputs with no
+//      network request, MKV -> MP4 remux and its timing.
 //
 // This is a developer and CI tool. The app never downloads executables
 // (SPEC §23.1); in a release the installer carries these exact files.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkFfmpeg } from "./ffmpeg-probe.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(readFileSync(join(root, "tools", "manifest.json"), "utf8"));
@@ -105,35 +111,58 @@ async function verifyYtDlpSignature(t, a) {
   }
 }
 
+// Archives already downloaded and verified in this run, by URL: FFmpeg and
+// ffprobe come from the same 130-170 MB archive.
+const archives = new Map();
+const archiveDir = mkdtempSync(join(tmpdir(), "vv-tools-"));
+process.on("exit", () => rmSync(archiveDir, { recursive: true, force: true }));
+
+async function verifiedDownload(t, a, to) {
+  console.log(`… downloading ${a.url}`);
+  await download(a.url, to);
+  const size = statSync(to).size;
+  if (size !== a.size) fail(`${t.id}: size ${size}, manifest says ${a.size}`);
+  const got = sha256(to);
+  if (got !== a.sha256) fail(`${t.id}: SHA-256 ${got}, manifest says ${a.sha256}`);
+  ok(`${t.id} download matches the manifest (${size} bytes)`);
+  if (t.provenance.kind === "gpg-signed-sums") await verifyYtDlpSignature(t, a);
+}
+
 async function fetchTool(id) {
   const t = tool(id);
   const a = artifact(t);
   const dir = join(binDir, id);
   const exe = join(dir, a.executable);
   if (existsSync(exe) && sha256(exe) === a.executableSha256) {
-    ok(`${id} ${t.version} already present and verified`);
+    ok(`${id} ${t.build ?? t.version} already present and verified`);
     return exe;
   }
   if (offline) fail(`${id}: ${exe} missing or does not match the manifest`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  // A bare executable is saved under its final name; an archive next to it.
-  const file = a.archive ? join(dir, a.url.split("/").pop()) : exe;
-  console.log(`… downloading ${a.url}`);
-  await download(a.url, file);
-  const size = statSync(file).size;
-  if (size !== a.size) fail(`${id}: size ${size}, manifest says ${a.size}`);
-  const got = sha256(file);
-  if (got !== a.sha256) fail(`${id}: SHA-256 ${got}, manifest says ${a.sha256}`);
-  ok(`${id} download matches the manifest (${size} bytes)`);
-  if (t.provenance.kind === "gpg-signed-sums") await verifyYtDlpSignature(t, a);
-  if (a.archive === "zip") {
+  if (!a.archive) {
+    // A bare executable is saved under its final name.
+    await verifiedDownload(t, a, exe);
+  } else {
+    let file = archives.get(a.url);
+    if (!file) {
+      file = join(archiveDir, a.url.split("/").pop());
+      await verifiedDownload(t, a, file);
+      archives.set(a.url, file);
+    } else ok(`${id} uses the ${a.url.split("/").pop()} already verified for this run`);
+    const entry = a.archivePath ?? a.executable;
     // Windows 10+ ships bsdtar, which reads zip. Call it by full path: Git's GNU
-    // tar may come first on PATH and cannot read zip. unzip elsewhere.
+    // tar may come first on PATH and cannot read zip. unzip and tar elsewhere.
     const winTar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
-    const r = isWin ? spawnSync(winTar, ["-xf", file, "-C", dir, a.executable]) : spawnSync("unzip", ["-oq", file, a.executable, "-d", dir]);
-    if (r.status !== 0) fail(`${id}: cannot unpack ${file}`);
-    rmSync(file);
+    let r;
+    if (a.archive === "zip") r = isWin ? spawnSync(winTar, ["-xf", file, "-C", dir, entry]) : spawnSync("unzip", ["-oq", file, entry, "-d", dir]);
+    else if (a.archive === "tar.xz") r = spawnSync(isWin ? winTar : "tar", ["-xJf", file, "-C", dir, entry]);
+    else fail(`${id}: unsupported archive ${a.archive}`);
+    if (r.status !== 0) fail(`${id}: cannot unpack ${entry} from ${file}\n${r.stderr ?? ""}`);
+    if (entry !== a.executable) {
+      renameSync(join(dir, ...entry.split("/")), exe);
+      rmSync(join(dir, entry.split("/")[0]), { recursive: true, force: true });
+    }
   }
   if (!existsSync(exe)) fail(`${id}: ${a.executable} not found after download`);
   if (!isWin) chmodSync(exe, 0o755);
@@ -149,6 +178,8 @@ function run(exe, args, env = process.env) {
 
 const ytdlp = await fetchTool("yt-dlp");
 const deno = await fetchTool("deno");
+const ffmpeg = await fetchTool("ffmpeg");
+const ffprobe = await fetchTool("ffprobe");
 
 const denoV = run(deno, ["--version"]).split("\n")[0].trim();
 if (!denoV.startsWith(`deno ${tool("deno").version} `)) fail(`deno --version printed ${JSON.stringify(denoV)}`);
@@ -171,4 +202,22 @@ const withPath = { ...process.env, PATH: `${dirname(deno)}${sep}${process.env.PA
 const ignored = probe(["--no-js-runtimes", "--js-runtimes", `deno:${join(binDir, "missing", "deno")}`, "--no-remote-components"], withPath);
 if (ignored !== "[debug] JS runtimes: none") fail(`a Deno on PATH was used: ${JSON.stringify(ignored)}`);
 ok("a Deno on PATH is ignored");
+
+// FFmpeg/ffprobe: exact build and an LGPL configuration (ADR-0006). The same
+// rules as vv-tools FfmpegBanner::check.
+for (const [id, exe] of [["ffmpeg", ffmpeg], ["ffprobe", ffprobe]]) {
+  const out = run(exe, ["-version"]);
+  const lines = out.split(/\r?\n/);
+  const want = `${id} version ${tool(id).build} `;
+  if (!lines[0].startsWith(want)) fail(`${id} -version printed ${JSON.stringify(lines[0])}, expected ${JSON.stringify(want)}`);
+  const conf = (lines.slice(1, 5).find((l) => l.startsWith("configuration:")) ?? "").split(/\s+/);
+  if (conf.length < 2) fail(`${id} -version has no configuration line`);
+  for (const flag of ["--enable-gpl", "--enable-nonfree"]) if (conf.includes(flag)) fail(`${id} is configured with ${flag}`);
+  ok(`${lines[0]}`);
+  ok(`${id} configuration is LGPL (${conf.includes("--enable-version3") ? "version 3" : "version 2.1"}); ${lines[1].trim()}`);
+  // Printed in full once so the CI log keeps the real banner (ADR-0006 evidence).
+  if (id === "ffmpeg") console.log(lines.slice(0, 3).join("\n"));
+}
+const ffFailures = await checkFfmpeg({ ffmpeg, ffprobe });
+if (ffFailures.length) fail(`${ffFailures.length} FFmpeg check(s) failed`);
 console.log(`\nManaged tools ready in ${binDir}`);
