@@ -2,8 +2,8 @@
 
 | Belge bilgisi | Değer |
 |---|---|
-| Sürüm | 1.4 — uygulama öncesi spesifikasyon; Türkçe arama fixture kapsamı netleştirildi (bkz. §31) |
-| Tarih | 6 Kasım 2026 |
+| Sürüm | 1.5 — normalizasyon çakışmasında kenar durum netleştirildi (bkz. §31) |
+| Tarih | 7 Kasım 2026 |
 | Kaynak | [VIDEO_LIBRARY_MASTER_PROMPT.md](./VIDEO_LIBRARY_MASTER_PROMPT.md) |
 | İlk hedef | Windows 11 üzerinde çalışan, yerel öncelikli kişisel video kütüphanesi |
 | Sonraki hedefler | İzinli oturum kullanımı, yerel transkripsiyon, anlamsal/görsel arama, Android |
@@ -595,8 +595,8 @@ Lexical (FTS5) aramada öğe metadata'sı, notlar ve etiketlerin tek kaynağı `
 
 - Bilinen uzak kimlik için `(source_platform, source_id)` unique; null kaynak kimliği ayrı ele alınır.
 - Uzak öğelerde normalize edilmiş kalıcı URL üzerinde unique constraint bulunur. Eşzamanlı capture yarışı mevcut öğeye döner.
-- Normalizasyon kuralları değiştiğinde migration, `normalization_version` eski olan öğelerin `canonical_url` değerini yeniden hesaplar. Yeni değer başka bir öğeyle çakışırsa otomatik birleştirme yapılmaz. Kural şöyledir: çakışan öğelerden `added_at` değeri en eski olan yeni değeri alır. Diğer öğe eski `canonical_url` ve eski `normalization_version` değeriyle kalır, `normalization_conflict = true` işaretlenir ve `DuplicateCandidate(reason = normalization_conflict)` kaydı oluşur. Eski değer farklı olduğu için unique indeks ihlali oluşmaz; migration çakışan satırlar dışında tamamlanmış sayılır.
-  - Örnek: A (2025, `…watch?v=X&si=1`) ve B (2026, `…watch?v=X`) yeni kuralla aynı değere düşer. A yeni değeri alır; B eski değerinde kalır ve A ile duplicate adayı olur.
+- Normalizasyon kuralları değiştiğinde migration, `normalization_version` eski olan öğelerin `canonical_url` değerini yeniden hesaplar. Yeni değer başka bir öğeyle çakışırsa otomatik birleştirme yapılmaz. Kural şöyledir: çakışan öğelerden `added_at` değeri en eski olan yeni değeri alır. Diğer öğe eski `canonical_url` ve eski `normalization_version` değeriyle kalır, `normalization_conflict = true` işaretlenir ve `DuplicateCandidate(reason = normalization_conflict)` kaydı oluşur. Eski değer farklı olduğu için unique indeks ihlali oluşmaz; migration çakışan satırlar dışında tamamlanmış sayılır. **İstisna:** Değeri zaten taşıyan öğenin saklı değeri yeni değere eşitse (yeni kural onu değiştirmiyorsa) o öğe değeri korur, daha eski olsa bile diğer öğe `normalization_conflict` ile işaretlenir ve duplicate adayı olur; aksi hâlde iki öğe aynı değere düşerdi (ADR-0011).
+  - Örnek: A (2025, `…watch?v=X&si=1`) ve B (2026, `youtu.be/X`) yeni kuralla aynı değere (`…watch?v=X`) düşer. A yeni değeri alır; B eski değerinde kalır ve A ile duplicate adayı olur.
   - Çözülmemiş çakışmada yeni capture yeni değeri taşıyan öğeye (A) yönlendirilir ve duplicate adayı da gösterilir. Metadata yenileme ve export iki öğe için ayrı ayrı çalışır.
   - Kullanıcı birleştirmesi (ORG-11) önizlemelidir. Birleştirme sonrası kaynak öğe soft-delete edilir; böylece Undo ve “Recently removed” ile geri alınabilir.
 - Aynı içerik hash'i ayrı notları olan iki öğeyi zorla birleştirmez; duplicate adayı üretir.
@@ -1446,3 +1446,4 @@ SPEC değişikliklerinde kapsam, etkilenen gereksinim/kabul kriteri ve ADR bağ�
 | 1.2 | 6 Kasım 2026 | `SPEC_ANALIZ_RAPORU.md` bulguları işlendi. `StorageRoot` modeli ve `storage_root_id` (Y-01); `storage_move` iş sözleşmesi ve adım bazlı kurtarma (Y-02); normalizasyon çakışma kuralı, `DuplicateCandidate`, ORG-11 öğe birleştirme (Y-03); kaldırılmış öğenin URL'sinin yeniden kaydı ve kaldırmada işlerin iptali (Y-04); türev varlıklar için `source_asset_id`, `derivation` ve geçersizleştirme kuralları (Y-05); `published_precision` (O-01); CAP-04 offline netleştirmesi (O-02); Undo kapsamına etiket rename/merge (O-03); `OrphanMedia` (O-04); `start_segment_id`/`end_segment_id` (O-05); `AIProposal` ve `LibraryItemTag.origin` (O-06); ORG-10 önceliği P1'e hizalandı (O-07); kapsama matrisi kuralı ve AC-43…AC-53 (O-08); AC-30/AC-36 ayrıştırıldı (O-09, O-10); M3 kapanış sonuçları (O-11); sıralama sözleşmesi, export referans biçimi, 200% ölçek zorunluluğu ve komut yüzeyi (D-01…D-04). |
 | 1.3 | 6 Kasım 2026 | `SPEC_REVIEW_ASTRA.md` bulguları işlendi (rapor v1.1'i incelemişti; v1.2'de kapanmış olanlar dışındakiler). Kimlik doğrulanmış erişim kanıtı kuralı ve eşleme tablosunun düzeltilmesi (#1); `--cookies` için iş başına çalışma kopyası ve temizlik (#3); sonradan öğrenilen `source_id` çakışması, `UrlAlias` (#4); MKV hükmünün M0 testine bağlanması (#5); otomatik temizlik ile onay kuralının ayrımı ve restore sonrası saklama sayacı (#6); `cancel_reason` ve bağımlı iş yeniden deneme kuralı (#7); FFmpeg/ffprobe protokol izin listesi ve referanslı girdilerin reddi, `INPUT_REJECTED` (#8); Offline Mode ölçüm sınırı ve AC-17 hizalaması (#9); tarih-only yayın değeri için `published_date` (#10); Undo geçerlilik kuralı (#11); AC-54…AC-60. |
 | 1.4 | 6 Kasım 2026 | `SPEC_REVIEW.md` incelendi. Raporun Y-01…D-04 bulguları `SPEC_ANALIZ_RAPORU.md` ile aynıdır ve v1.2'de işlenmişti. Yeni olan D-05 işlendi: §25.2'ye Türkçe arama fixture'ı eklendi ve §16.1 buna bağlandı. |
+| 1.5 | 7 Kasım 2026 | §11.7 normalizasyon çakışması: örnekte B'nin eski değeri yeni değerden farklı yapıldı; değeri zaten taşıyan öğenin saklı değeri yeni değere eşitse onun koruduğu istisnası eklendi (F1.3 uygulamasında bulundu, ADR-0011). |

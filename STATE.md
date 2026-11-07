@@ -3,7 +3,7 @@
 | Bilgi | Değer |
 |---|---|
 | Son güncelleme | 7 Kasım 2026 |
-| Referans belge | [SPEC.md](./SPEC.md) v1.4 |
+| Referans belge | [SPEC.md](./SPEC.md) v1.5 |
 | Aktif faz | **F1 — Çevrimdışı kütüphane çekirdeği** (F0 ✅) |
 | Genel ilerleme | 13 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |

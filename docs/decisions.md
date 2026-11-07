@@ -570,7 +570,7 @@ STATE.md F1.1–F1.3. SPEC §6, §7.1 (CAP-02…CAP-06, CAP-08), §11, §11.7.
 
 **Karar: yeniden normalizasyon (AC-44).** `library::renormalize::renormalize`, sürümü eski öğeleri `added_at` sırasıyla tek işlemde gezer. Değer boştaysa öğe alır; doluysa öğe eski değerinde kalır, `normalization_conflict = 1` olur ve sahibiyle `DuplicateCandidate(normalization_conflict)` açılır. Çakışmalı öğe çözülene kadar tekrar denenmez; geçiş yinelendiğinde iş kalmaz. Uygulama veritabanını açtıktan sonra bu geçişi çalıştırır (kabuk F1.8'de bağlanır).
 
-**SPEC'e not (kenar durum).** §11.7 örneğinde B'nin eski değeri yeni değere eşitse "B eski değerinde kalır" ile "A yeni değeri alır" birlikte unique indeksi bozar. Bu durumda değeri zaten taşıyan B onu korur; A çakışmalı işaretlenir ve aday açılır (test: `stale_holder_with_the_new_value_already_keeps_it`). Kural, B'nin eski değeri farklı olduğunda SPEC'teki gibidir.
+**SPEC'e not (kenar durum).** §11.7 örneğinde B'nin eski değeri yeni değere eşitse "B eski değerinde kalır" ile "A yeni değeri alır" birlikte unique indeksi bozar. Bu durumda değeri zaten taşıyan B onu korur; A çakışmalı işaretlenir ve aday açılır (test: `stale_holder_with_the_new_value_already_keeps_it`). Kural, B'nin eski değeri farklı olduğunda SPEC'teki gibidir. Bu istisna ve düzeltilmiş örnek SPEC v1.5'te §11.7'ye eklendi.
 
 **Sonuçlar ve açık noktalar.**
 

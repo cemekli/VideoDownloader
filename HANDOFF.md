@@ -15,7 +15,6 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 1. PR #13'ü merge et, ardından `git checkout main && git pull`.
 2. Sıradaki iş F1.4 (yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail).
-3. SPEC §11.7'deki kenar durum (ADR-0011 "SPEC'e not") için SPEC'e bir cümle eklenip eklenmeyeceğine karar ver.
 
 ## Bilinmesi gerekenler
 
