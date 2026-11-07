@@ -1,0 +1,9 @@
+{
+  "note": "SHA-256 of items.jsonl and segments.jsonl for the default parameters. Same on every OS (crates/vv-benchdata/tests/determinism.rs). Change only together with GENERATOR_VERSION (ADR-0009).",
+  "generatorVersion": 1,
+  "seed": 20261107,
+  "items": 10000,
+  "segments": 100000,
+  "itemsSha256": "aeebdd01698a591a02f16c3b2d0893dda9578c035771b8e9ca147c2f90729e61",
+  "segmentsSha256": "0e42e55ea256118578e6f53b43f9e6c79fc03b6750a1665b876ddff6bbbb1ef7"
+}

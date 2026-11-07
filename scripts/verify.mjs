@@ -30,6 +30,7 @@ const skip = pick("--skip") ?? new Set();
 /** @type {{id:string, group:string, title:string, run:() => {ok:boolean, detail?:string}}[]} */
 const steps = [
   { id: "fixtures-no-secrets", group: "repo", title: "Fixtures contain no real secrets (SPEC §25.2)", run: checkFixtures },
+  { id: "coverage-matrix", group: "repo", title: "P0/INV/NFR coverage matrix is complete and current (SPEC §25.3)", run: () => sh("node", [join(root, "scripts", "coverage-matrix.mjs")], root) },
   { id: "rust-fmt", group: "rust", title: "cargo fmt --check", run: () => sh("cargo", ["fmt", "--all", "--check"], root) },
   { id: "rust-clippy", group: "rust", title: "cargo clippy -D warnings", run: () => sh("cargo", ["clippy", "--workspace", "--all-targets", "--quiet", "--", "-D", "warnings"], root) },
   { id: "rust-test", group: "rust", title: "cargo test (unit + fixture)", run: () => sh("cargo", ["test", "--workspace", "--quiet"], root) },

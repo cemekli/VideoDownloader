@@ -1,6 +1,6 @@
 # Karar kayıtları (ADR)
 
-SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kanıtlarıyla buraya yazılacak (STATE.md F0.8, F0.9, F0.11). Her kayıt: bağlam, seçenekler, karar, sonuçlar ve kanıt.
+SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kanıtlarıyla buraya yazılır. M0 kararları (DEC-01…06, DEC-17) ADR-0002, ADR-0004…0007, ADR-0009 ve ADR-0010'dadır; diğerleri ilgili fazda eklenir. Her kayıt: bağlam, seçenekler, karar, sonuçlar ve kanıt.
 
 | ADR | Konu | Durum | Tarih |
 |---|---|---|---|
@@ -12,6 +12,8 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0007](#adr-0007-dış-araçların-ağ-denetimi-yerel-denetim-proxysi) | Dış araçların ağ denetimi: yerel denetim proxy'si (SPEC DEC-05, §20.2, AC-29) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0008](#adr-0008-tek-süreç-kütüphane-kilidi-ve-alt-süreç-ağacı) | Tek süreç, kütüphane kilidi ve alt süreç ağacı (SPEC INV-13, §13.2, AC-38) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0009](#adr-0009-benchmark-ortamı-ve-sürümlü-veri-üreticisi) | Benchmark ortamı ve sürümlü veri üreticisi (SPEC §22, §25.2, DEC-17) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0010](#adr-0010-sabitlenen-sürümler-ve-güncelleme-kuralı) | Sabitlenen sürümler ve güncelleme kuralı (SPEC DEC-01) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -450,3 +452,80 @@ Ayrıca ADR-0005 ve ADR-0007, araçların temiz bir ortamla başlatılmasını �
 - Uygulama henüz alt süreç başlatmıyor. İlk kullanıcılar F2'deki indirme işleri olacak (yt-dlp, Deno, FFmpeg). yt-dlp'nin `--js-runtimes deno:<yol>` ile başlattığı Deno da aynı job'da kalır.
 - İkinci açılışta kilit nedeniyle çıkan süreç kullanıcıya bir şey göstermez. Bu durum yalnızca eklentinin göremediği yollarla oluşur. Gerekirse F4'te yerel bir uyarı penceresi eklenir.
 - ADR-0003'teki Windows'a özgü ağ hata metinlerinin gerçek yakalaması hâlâ açık. Bu iş, gerçek indirme işleri `vv-process` üzerinden çalışmaya başlayınca (F2) yapılacak.
+
+---
+
+## ADR-0009: Benchmark ortamı ve sürümlü veri üreticisi
+
+SPEC §22 (NFR-01…07), §25.2 ve DEC-17'yi karşılar (STATE.md F0.12). Kod: `crates/vv-benchdata`, `scripts/bench.mjs`. Yöntem ve referans makine: `docs/testing.md` "Benchmark" bölümü.
+
+**Bağlam.** SPEC'teki performans hedefleri ölçülmüş değerler değil, önerilen bütçelerdir. M0'da üç şey kesinleşmeli: ölçümün hangi makinede anlamlı olduğu, hangi veriyle yapıldığı ve bu verinin her seferinde aynı olduğu. Aynı seed farklı makinede ya da farklı bir derlemede başka veri üretirse iki ölçüm karşılaştırılamaz.
+
+**Seçenekler (veri).**
+
+| Seçenek | Değerlendirme |
+|---|---|
+| Depoya büyük, hazır bir veri dosyası koymak | 22 MB'lık JSONL depoyu şişirir; şema değişince elle yeniden üretmek gerekir. |
+| `rand` gibi bir crate ile üretmek | Kolay, ama crate'in algoritması sürümler arasında değişebilir; aynı seed sessizce başka veri verir. |
+| **Kendi PRNG'si olan sürümlü üretici + golden hash** | Birkaç satırlık SplitMix64, yalnızca tam sayılar, sıralı JSON. Çıktı değişirse test kırılır ve sürüm numarası artırılmak zorunda kalır. |
+
+**Karar.**
+
+1. **`vv-benchdata` crate'i** veri setini üretir. Varsayılan: seed 20261107, 10.000 öğe, 100.000 segment.
+   - SplitMix64 crate'in içinde yazılı ve referans değerlerle test ediliyor. Kayan nokta yok, `HashMap` sırası yok, satır sonu her zaman `\n`.
+   - Öğeler ve segmentler ayrı rastgele akışlardan gelir. Segment kuralları değişse de öğeler aynı kalır.
+   - Üretilen baytları değiştiren her değişiklik `GENERATOR_VERSION`'ı ve `tests/fixtures/benchdata/golden.json`'daki SHA-256 değerlerini birlikte günceller. Test, golden değerleri Windows ve Linux'ta aynı şekilde doğrular.
+   - İçerik SPEC §25.2'yi izler: üç öğe türü, TR/EN/karışık metin, çok uzun başlık, emoji, NFD yazım, Türkçe harfler, bilinmeyen süre, eksik küçük resim, `pending`/`failed` metadata, çoklu etiket ve koleksiyon. URL'ler gerçek alan adı değil, `.example` alan adlarıdır.
+2. **Şema:** veri "bench-v1" adlı kendi şemasındadır, çünkü uygulama şeması F1.1'de gelecek. O zaman bir yükleyici bu satırları gerçek tablolara eşler.
+3. **Benchmark'lar** (BM-01…03) bu veriyle, uygulamanınkiyle aynı biçimde açılan (`vv_persistence::Database`: WAL, `synchronous=FULL`) bir veritabanında, prototip `bench_*` tablolarında çalışır. BM-04 (başlangıç) ve BM-05 (bellek) uygulama kütüphaneyi açınca eklenecek.
+4. **Referans makine:** Windows 11 x64, SSD, ≥ 8 GB RAM, ≥ 4 mantıksal CPU, CI dışı, prize takılı, güç modu "Dengeli" ya da daha yüksek. `scripts/bench.mjs` makineyi bu ölçütlerle sınıflar ve rapora yazar. Bütçe karşılaştırması yalnızca bu sınıfta anlam taşır.
+5. **CI'da bilgi amaçlı:** CI her çalışmada benchmark'ı çalıştırır ve raporu `test-artifacts/bench/` altına koyar, ama bütçeyi kapı olarak kullanmaz. Paylaşılan CI makinelerinin süreleri dalgalanır; burada bir kapı ya sahte kırmızı ya da sahte güvence üretirdi. Bütçe kapısı F4.5'te, referans makinede ve gerçek şemada konur.
+
+**Kanıt.**
+
+- `vv-benchdata` testleri (7): SplitMix64 referans değerleri; varsayılan veri setinin golden hash'leri; aynı seed aynı bayt, başka seed başka bayt; segment sayısı öğeleri etkilemiyor; SPEC §25.2 içerik kuralları (sayılar, uzun başlık, NFD, emoji, Türkçe harfler, `.example`, sıralı ve çakışmasız segmentler); sorguların deterministik ve tırnaklı olması; küçük kütüphanede benchmark'ın satır döndürerek çalışması.
+- Geliştirme kapsayıcısında ilk ölçüm (Linux, Xeon 2.3 GHz, 4 mantıksal CPU; referans sınıfı **değil**): BM-01 p95 0,50 ms, BM-02 p95 3,3 ms, BM-03 p95 8,4 ms. Üretim ~1 s, yükleme 10.000 öğe 130 ms, 100.000 segment 327 ms, veritabanı 25,8 MiB. Bunlar yöntemin çalıştığını gösterir; bütçenin karşılandığını değil.
+- CI: Windows ve Linux'ta geçti, [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094). Golden hash Windows'ta da aynı çıktı. CI ölçümleri (2 mantıksal CPU, referans sınıfı değil): Windows Server 2025 BM-01 p95 2,5 ms, BM-02 p95 4,3 ms, BM-03 p95 12,1 ms; Linux BM-01 p95 3,6 ms, BM-02 p95 2,7 ms, BM-03 p95 7,7 ms.
+
+**Sonuçlar ve açık noktalar.**
+
+- Referans sınıfı bir Windows 11 makinesinde ölçüm yapılmadı. Cuma'nın dizüstü bilgisayarında `npm run bench` çalıştırılıp rapor buraya eklenebilir.
+- FTS5 tokenizer'ı burada `unicode61 remove_diacritics 2`. Türkçe arama davranışının kararı F1.6'da Türkçe arama fixture'ıyla verilir; tokenizer değişirse benchmark da güncellenir.
+- NFR-01'in "görünür sonuç" kısmı (UI dahil) ve NFR-02 (kullanım testi) bu ölçümde yok; F1.8'de ölçülür.
+
+---
+
+## ADR-0010: Sabitlenen sürümler ve güncelleme kuralı
+
+SPEC DEC-01'i ("kesin Tauri/Rust/Node/React/SQLite sürümleri") karşılar. Sürümler F0.1–F0.10 boyunca seçildi ve kullanıldı; bu kayıt onları ve güncelleme kuralını tek yerde toplar.
+
+**Bağlam.** SPEC §10.2 sürümlerin varsayımla değil, resmî kaynak, lockfile ve Windows build/test kanıtıyla sabitlenmesini istiyor. Bir bağımlılığın sessizce güncellenmesi test edilen ile dağıtılan arasında fark yaratır (ör. SQLite'ın FTS5 ile derlenip derlenmediği, Tauri'nin capability davranışı).
+
+**Karar: sürümler.**
+
+| Katman | Sürüm | Nerede sabit |
+|---|---|---|
+| Tauri (Rust) | `tauri` 2.12.4, `tauri-build` 2.7.3, `tauri-plugin-single-instance` 2.5.5 (wry 0.57.1) | `apps/desktop/src-tauri/Cargo.toml` (`=` ile) + `Cargo.lock` |
+| Tauri (JS) | `@tauri-apps/api` 2.12.4, `@tauri-apps/cli` 2.12.3 | `apps/desktop/package.json` (tam sürüm) + `package-lock.json` |
+| UI | React 19.3.1, TypeScript 7.0.2, Vite 8.3.6 | `package.json` + lockfile |
+| Test | Vitest 5.1.0, Playwright 1.63.0 | `package.json` + lockfile |
+| SQLite | 3.53.2, `rusqlite` 0.40.2 `bundled` (libsqlite3-sys 0.38.2), FTS5 dahil | `crates/vv-persistence/Cargo.toml` (`=`) + `Cargo.lock`; ADR-0002 |
+| Node | 26 (LTS) | `.nvmrc`; CI `setup-node` bunu okur (son CI: 26.13.0) |
+| Rust | stable, edition 2021 | CI `dtolnay/rust-toolchain@stable` (son CI: 1.99.1); geliştirme kapsayıcısı 1.97.0 |
+| Dış araçlar | yt-dlp 2026.10.26, Deno 2.9.8, FFmpeg/ffprobe 9.0.2 LGPL | `tools/manifest.json`; ADR-0005, ADR-0006 |
+| WebView2 | Sistem runtime'ı (CI'da 156) | Sabit değil; installer stratejisi F4.1 |
+
+**Karar: güncelleme kuralı.**
+
+1. Doğrudan bağımlılıklar tam sürümle yazılır (npm'de `^`/`~` yok; Rust'ta güvenliği ya da davranışı etkileyenler `=` ile). Geçişli bağımlılıkları lockfile'lar sabitler ve depoya girer.
+2. Bir sürüm yalnızca kendi PR'ında yükseltilir. PR'da sürüm notu linki, `npm run verify` ve Windows CI sonucu bulunur. Sürüm bu tabloda güncellenir.
+3. SQLite yükseltmesinde FTS5 testi (`vv-persistence`) ve paketlenen exe'deki `get_diagnostics` E2E kontrolü geçmelidir. Tauri yükseltmesinde IPC/ACL/CSP testleri (`tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts`) geçmelidir.
+4. Rust ve Node şimdilik "stable" ve "26" ile izlenir, tam sürüme bağlanmaz. Kod yeni dil özelliklerine dayanırsa (ör. `File::try_lock`, Rust 1.89+) bu not düşülür.
+
+**Kanıt.** Bu sürümlerle Windows ve Linux CI'da tüm kapılar geçti; son çalışma [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094). Paketlenen exe'de SQLite 3.53.2 ve FTS5, gerçek uygulama E2E testiyle doğrulandı (ADR-0002).
+
+**Sonuçlar ve açık noktalar.**
+
+- Rust ve Node'un tam sürüme bağlanmaması, iki CI çalışması arasında derleyicinin değişebileceği anlamına geliyor. Dağıtım derlemesi için `rust-toolchain.toml` ile tam sürüm F4.1'de sabitlenir.
+- Geliştirme kapsayıcısında Node 22 vardı; `.nvmrc` 26 diyor. Testler iki sürümde de geçti, ama referans Node 26'dır.
+- WebView2 sürümü kullanıcının makinesine bağlıdır; desteklenen en düşük sürüm F4.1'de belirlenir.

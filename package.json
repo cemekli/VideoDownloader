@@ -19,6 +19,8 @@
     "desktop:e2e-exe": "node scripts/build-e2e-exe.mjs",
     "fixtures:ytdlp": "node scripts/capture-ytdlp-fixtures.mjs",
     "fixtures:media": "node scripts/make-playback-media.mjs",
-    "tools:fetch": "node scripts/fetch-tools.mjs"
+    "tools:fetch": "node scripts/fetch-tools.mjs",
+    "coverage:write": "node scripts/coverage-matrix.mjs --write",
+    "bench": "node scripts/bench.mjs"
   }
 }

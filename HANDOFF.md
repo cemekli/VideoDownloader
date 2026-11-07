@@ -4,18 +4,17 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.9 ve F0.13, toplam 11/74 (F0.10 PR'da, CI yeşil). Ağ denetimi (F0.9, ADR-0007) PR #9 ile main'de.
-- **Açık PR:** F0.10, yani tek süreç ve alt süreç yönetimi (ADR-0008). Dal: `claude/project-thread-t0tup8`.
-  - İkinci açılış `tauri-plugin-single-instance` ile çalışan pencereye devredilir ve 0 koduyla çıkar.
-  - Veri dizinindeki `videovault.lock` ikinci katmandır: kilidi alamayan süreç 3 koduyla çıkar, DB'yi açmaz.
-  - Yeni `vv-process` crate'i: alt süreçler temiz ortamla, Windows'ta Job Object içinde başlar. İptal, zaman aşımı ve uygulama çökmesi tüm ağacı (yt-dlp → Deno/FFmpeg) öldürür.
-  - `get_diagnostics` artık `libraryLock` ve `secondLaunches` döndürüyor.
-  - Windows ve Linux CI'da geçti: [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361).
+- **Tamamlananlar:** F0'ın tamamı, 13/74 (F0.11 ve F0.12 PR #11'de, CI yeşil: [CI #42376811094](https://github.com/cemekli/VideoDownloader/actions/runs/42376811094)). DEC-01 sürüm kaydı ADR-0010.
+- **Açık PR #11:** F0.11 (zorunlu dokümanlar ve kapsama matrisi) ve F0.12 (benchmark). Dal: `claude/project-thread-t0tup8`.
+  - Yeni: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`. `threat-model.md` artık SPEC §20.1'in her satırının durumunu gösteriyor.
+  - Kapsama matrisi `docs/coverage.json`'da: 82 P0/INV/NFR satırının her biri bir AC'ye, kimlikli manuel teste (MT) ya da benchmark'a (BM) bağlı. `npm run coverage:write` tabloyu `docs/testing.md`'ye yazar; `verify` eksik bağı ve eskimiş tabloyu reddeder.
+  - F0.12: `crates/vv-benchdata` aynı seed'den her işletim sisteminde aynı 10.000 öğe ve 100.000 segmenti üretir (golden hash testi). `npm run bench` BM-01…03'ü ölçer ve makineyi referans sınıfına göre etiketler (ADR-0009). CI bilgi amaçlı çalıştırır; bütçe kapısı F4.5'te.
 
 ## Sonraki ilk adımlar
 
-1. F0.10 PR'ını merge et, ardından `git checkout main && git pull`.
-2. Sıradaki iş: F0.11 (zorunlu dokümanlar ve kapsama matrisi) ya da F0.12 (benchmark veri üreticisi). F0 bitince F1'e geçilir.
+1. PR #11'i merge et, ardından `git checkout main && git pull`.
+2. İstersen dizüstünde `npm run bench` çalıştır: referans sınıfı bir Windows 11 ölçümü olur (`test-artifacts/bench/report.md`).
+3. Sıradaki iş F1.1 (alan şeması ve repository'ler), ardından F1.2 (bookmark kaydı).
 
 ## Bilinmesi gerekenler
 

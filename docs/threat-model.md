@@ -1,6 +1,6 @@
 # Tehdit modeli
 
-SPEC §20.1 ve §27 bu dosyayı zorunlu tutar. Bu ilk sürüm, M0'da kararı verilen ağ ve dış araç sınırlarını kapsar; diğer satırlar (IPC, dosya yolu, oturum, export) ilgili alt görevlerde eklenecek (STATE.md F0.11).
+SPEC §20.1 ve §27 bu dosyayı zorunlu tutar. Aşağıda önce M0'da kararı verilen ağ, dış araç ve süreç sınırları, ardından SPEC §20.1'deki her satırın bugünkü durumu yer alır. Mimari ve güven sınırlarının genel resmi: [architecture.md](./architecture.md).
 
 ## Dış araçlar ve ağ sınırı
 
@@ -22,6 +22,23 @@ Engellenen bir bağlantı işin `URL_BLOCKED` ile bitmesine yol açar. Bookmark 
 | Kullanıcı ortamındaki değişkenler araca geçer (`HTTP_PROXY`, `DENO_*`, `PYTHONPATH`) | `vv_process::ManagedCommand`: boş ortam ve kısa izin listesi | ADR-0008; `vv-process` testleri |
 | Uygulama çöker, yt-dlp/Deno/FFmpeg sahipsiz kalıp yazmaya ya da ağa çıkmaya devam eder | Windows Job Object (`KILL_ON_JOB_CLOSE`), çocuk job'a girmeden çalışmaz | ADR-0008; Windows çökme testi |
 | İki uygulama süreci aynı kütüphaneyi açar | single-instance eklentisi + veri dizininde özel kilit; kilitsiz süreç DB'yi açmaz | ADR-0008; AC-38 E2E |
+
+## SPEC §20.1 kontrollerinin durumu
+
+Her satır SPEC §20.1'deki bir varlık/girişe karşılık gelir. "Uygulandı" yalnızca kodda olan ve testle gösterilen kontrol içindir.
+
+| Varlık / giriş | Uygulandı | Açık | Kanıt / plan |
+|---|---|---|---|
+| URL ve redirect | Yakalamada şema, kimlik bilgisi ve yerel adres reddi; araç trafiğinde bağlantı başına port, DNS sonrası IP ve rebinding denetimi | Uygulamanın kendi HTTP istemcisi yok (M2'de uzak küçük resim aynı sınırdan geçecek) | F0.7, ADR-0007; F3.3 |
+| Metadata / altyazı | — | Güvenli render, alan ve çıktı limitleri | F3.4, AC-28 |
+| Dosya adı / yolu | FFmpeg'e yalnızca `file:<mutlak yol>`; medya protokolü kök dışına çıkmıyor (test derlemesi) | Resolved path sınırı, junction, güvenli create/rename | ADR-0004, ADR-0006; F1.4, F3.6, AC-30 |
+| CLI girdisi | Argüman dizisi (kabuk yok), sabit bayraklar, temiz ortam | Kötü niyetli metadata ile metakarakter testleri | ADR-0003, ADR-0008; F4.4 |
+| Cookie / profile | — | İzin akışı, OS secret store, redaksiyon | F5.1, F3.10, AC-18, AC-55 |
+| Dış binary / model | Sürüm pin, SHA-256, yt-dlp GPG imzası, FFmpeg lisans kontrolü | İmzalı uygulama güncellemesi, model checksum | ADR-0005, ADR-0006; F4.2, F6.1, AC-25 |
+| Medya parser | Protokol ve biçim izin listesi, referanslı girdi reddi; iptal ve zaman aşımında süreç ağacı ölür | Kaynak (bellek/CPU) sınırı | ADR-0006, ADR-0008; F3.1 |
+| IPC | Least privilege capability, CSP, `freezePrototype`; capability dışı komutlar reddediliyor | Navigasyon/origin negatif testlerinin genişletilmesi | ADR-0001; `tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts`; F4.4 |
+| Export / import | — | Alan izin listesi, önizleme, şema doğrulama | F2.5, AC-15, AC-16, AC-30 |
+| Tek süreç | İkinci süreç DB'yi açmıyor | — | ADR-0008, AC-38 |
 
 ## Açık noktalar
 
