@@ -5,7 +5,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Nerede kaldık
 
 - **Tamamlananlar:** F0'ın tamamı, 13/74. DEC-01 sürüm kaydı ADR-0010.
-- **Açık PR #12** (dal `claude/project-thread-t0tup8`): ilk referans benchmark kaydı (ADR-0009) ve F1.1–F1.3 (ADR-0011).
+- **Açık PR #13** (dal `claude/project-thread-t0tup8`): F1.1–F1.3 (ADR-0011). Benchmark kaydı PR #12 ile merge edildi.
   - Şema: migration 0002 ile `storage_root`, `library_item`, `media_asset`, `url_alias`, `duplicate_candidate` ve FTS5 `search_document`. Repository'ler `crates/vv-persistence/src/library/repo.rs`.
   - Kayıt: `library::bookmark::save_bookmark` ağsız çalışır; aynı içerik ikinci kez kaydedilince mevcut öğe döner, eşzamanlı kayıt tek öğede biter, imza/sır değerleri diske yazılmaz.
   - Normalizasyon: `vv-domain::normalize` (sürüm 1), fixture `tests/fixtures/normalize.json`. Kural değişince sürüm artar; `library::renormalize` eski kayıtları yeniden hesaplar (AC-44).
@@ -13,7 +13,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Sonraki ilk adımlar
 
-1. PR #12'yi merge et, ardından `git checkout main && git pull`.
+1. PR #13'ü merge et, ardından `git checkout main && git pull`.
 2. Sıradaki iş F1.4 (yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail).
 3. SPEC §11.7'deki kenar durum (ADR-0011 "SPEC'e not") için SPEC'e bir cümle eklenip eklenmeyeceğine karar ver.
 

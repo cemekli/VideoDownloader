@@ -294,7 +294,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 PR #12'de (şema, bookmark kaydı, normalizasyon; ADR-0011). Sıradaki: F1.4 (yerel import).
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 PR #13'te (şema, bookmark kaydı, normalizasyon; ADR-0011). Sıradaki: F1.4 (yerel import).
 
 ## Değişiklik günlüğü
 
