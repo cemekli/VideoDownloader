@@ -577,3 +577,37 @@ STATE.md F1.1–F1.3. SPEC §6, §7.1 (CAP-02…CAP-06, CAP-08), §11, §11.7.
 - CAP-01'in UI kısmı (Add URL, `Ctrl+V`) F1.8'de; bu PR servis ve veri katmanıdır.
 - X bağlantısında `video` biçimi "içerik kimliği olan gönderi" anlamındadır; gönderide video olup olmadığı M2 metadata'sıyla öğrenilir.
 - Etiket/koleksiyon tabloları (§11.4) ve `Tag` normalizasyonu F1.6/F1.7 ile gelir; `search_document.tags` o zaman dolar.
+
+## ADR-0012: Yerel import, depolama kökü durumu ve arama
+
+STATE.md F1.4–F1.6. SPEC §7.2 (IMP-01…07), §7.4 (SEA-01…05), §7.7 (DATA-09, DATA-10), §14.1, §14.2, §16.1.
+
+**Bağlam.** M1 kütüphanesi ağ olmadan yerel dosya almalı, harici disk çıkarıldığında öğeleri bozmamalı ve Türkçe metinde makul arama yapmalı. Kararlar F1.7 (Library ekranı) ve F1.8 (Add URL) öncesinde veri katmanında verilir.
+
+**Karar: yerel import (`crates/vv-import`).**
+
+- Varsayılan dosyayı yerinde referanslar (`storage_kind = external_reference`); kopyalama, taşıma ya da kaynağın yanına yazma yok. "Kütüphaneye kopyala" seçeneği sonraya kalır.
+- Seçilen dosya her zaman ffprobe'a gider. Seçilen klasörde yalnızca medya uzantılı dosyalar denenir; alt klasörler `recursive` ile. Symlink, junction ve diğer reparse point'ler izlenmez; OneDrive gibi yalnızca bulutta duran dosyalar okunmaz, ayrı raporlanır (DATA-10).
+- Her dosyanın sırası: kısıtlı ffprobe (manifest/liste dosyası başka bir şey açılmadan reddedilir, `INPUT_REJECTED`) → tam yol duplicate kontrolü → isteğe bağlı SHA-256 → tek işlemde öğe + özgün varlık + arama belgesi. Her dosyanın kendi işlemi ve sonucu vardır; bozuk bir dosya diğerlerini geri almaz (IMP-04). İptal, bitmiş dosyaları korur.
+- Aynı hash'e sahip başka öğe varsa `DuplicateCandidate(content_hash)` açılır; birleştirme yapılmaz (IMP-05).
+- Kök seçimi: dosyayı içeren en özel `external_import` kökü yeniden kullanılır, yoksa seçilen klasör (tek dosyada dosyanın klasörü) yeni kök olur. Yollar canonical tutulur, Windows'un `\\?\` öneki mümkünse atılır. Köke göre yol bileşen bazında hesaplanır, string prefix kullanılmaz.
+- ffprobe artık çözünürlüğü, ses kanallarını ve dil etiketini de istiyor (`tests/fixtures/ffmpeg/args.json`); probe fixture'ları sabit 9.0.2 build'iyle yeniden üretildi.
+- Thumbnail import'tan sonra ayrı çalışır (IMP-06): ilk video akışından süre %10'u (en çok 5 s) noktasında 320 px JPEG, cache kökünde `thumbnails/<item>/<asset>.jpg`. Türetilmiş varlık olarak `derivation` (FFmpeg build'i, ayar sürümü) ve `source_asset_id` ile kaydedilir. Başarısızlık öğeyi ya da aramayı etkilemez.
+- ffprobe/FFmpeg her zaman `vv-process` ile (temiz ortam, Job Object, zaman aşımı: probe 30 s, thumbnail 60 s) ve sabit `vv-ffmpeg` argümanlarıyla çalışır.
+
+**Karar: depolama kökü durumu (F1.5).** `roots::check_storage` önce her kökün erişilebilirliğini ölçer: klasör yoksa `disconnected`, işletim sistemi reddediyorsa `inaccessible`. Erişilemeyen kökün varlıklarına dokunulmaz. Kök `available` ise her varlık kontrol edilir: dosya yoksa `missing`, boyut değiştiyse `modified`, geri geldiyse `verified`. `repo::set_asset_integrity` aynı kuralı SQL'de de uygular: kök `available` değilken `missing` yazılamaz (DATA-09). Kontrol uygulama açılışında ve periyodik çalıştırılır; disk geri takıldığında bir sonraki kontrol kökü ve varlıkları kendiliğinden doğrular. Relink (IMP-07) yalnızca varlığın konumunu değiştirir; hash kayıtlıysa yeni dosyanın hash'i aynı olmalıdır (kullanıcı açıkça kabul etmedikçe).
+
+**Karar: arama (F1.6, `vv-persistence::library::search`).**
+
+- Sorgu oluşturucu kullanıcı metnini FTS5 sözdizimine hiç geçirmez: her kelime tırnaklı dize olur, `AND`/`OR`/`NEAR`/`*`/`:` sıradan kelimedir, kullanıcının çift tırnakları ifade arar. Son kelime yazarken önek olarak eşleşir. Harf/rakam içermeyen girdi hata vermez; filtrelenmiş kütüphane ve `NoSearchableTerms` bildirimi döner (AC-31).
+- Türkçe: `unicode61 remove_diacritics 2` büyük/küçük harfi, `İ`'yi, NFD biçimini ve `ç ğ ö ş ü`'yü zaten katlıyor (ölçüldü). Ayrı tuttuğu tek harf noktasız `ı`; indeks ve sorgu `ı → i` eşler. Eşleme karakter başına bire bir olduğu için snippet özgün metinden yeniden kurulur ve gerçek alt dizedir. Bilinen sınırlar fixture'da yazılı: kök bulma yok ("kitaplar" "kitap"ı bulmaz, "istanbulda" "İstanbul'da"yı bulmaz), `kirk` `kırk`ı da bulur.
+- Sıralama: BM25 ağırlıkları başlık 10, not 5, etiket 5, açıklama 2, üretici 2; eşitlikte yeni eklenen önce, sonra `id`. Diğer sıralamalarda null değerler yönden bağımsız sona gider, tie-break `id`. Kaldırılmış ve (varsayılan olarak) arşivlenmiş öğeler sonuçta yok.
+- Snippet ve vurgulama HTML değil `{text, highlight}` parçalarıdır; UI metin olarak çizer (SEA-03). Eşleşme kaynağı (hangi alan) her sonuçta döner.
+- `repo::rebuild_search_index` arama indeksini otoritatif satırlardan yeniden kurar (§11.7).
+
+**Sonuçlar ve açık noktalar.**
+
+- Başlık sıralaması SQLite `lower()` ile yapılıyor (yalnızca ASCII); Türkçe locale sıralaması (ICU paketlenmiyor) F1.7'de UI tarafında ele alınacak.
+- Disk değiştirme (aynı sürücü harfine başka disk) `volume_id` ile ayırt edilmiyor; F2'de değerlendirilecek.
+- `modified` varlığın türevleri (thumbnail) henüz `stale` işaretlenmiyor; şemada alan yok, dökümler gelmeden önce eklenecek.
+- Uygulama henüz bu servisleri çağırmıyor; import ekranı ve açılışta `check_storage` F1.7'de bağlanır.

@@ -15,7 +15,7 @@
   ],
   "probe": [
     "-show_entries",
-    "format=format_name,duration,size:stream=index,codec_type,codec_name",
+    "format=format_name,duration,size:stream=index,codec_type,codec_name,width,height,channels:stream_tags=language",
     "-of",
     "json"
   ],
@@ -32,6 +32,25 @@
     "file",
     "-f",
     "mp4",
+    "-n"
+  ],
+  "thumbnailOutput": [
+    "-map",
+    "0:v:0",
+    "-frames:v",
+    "1",
+    "-vf",
+    "scale=320:-2",
+    "-c:v",
+    "mjpeg",
+    "-q:v",
+    "5",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "image2",
+    "-update",
+    "1",
     "-n"
   ]
 }

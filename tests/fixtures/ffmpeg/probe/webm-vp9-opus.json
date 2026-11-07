@@ -5,12 +5,17 @@
     {
       "index": 0,
       "codec_name": "vp9",
-      "codec_type": "video"
+      "codec_type": "video",
+      "width": 320,
+      "height": 180,
+      "tags": {}
     },
     {
       "index": 1,
       "codec_name": "opus",
-      "codec_type": "audio"
+      "codec_type": "audio",
+      "channels": 2,
+      "tags": {}
     }
   ],
   "format": {

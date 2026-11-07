@@ -410,6 +410,7 @@ pub fn search_text(it: &LibraryItem) -> SearchText {
 }
 
 /// Replaces the item's search document. Same transaction as the item write.
+/// Stored text goes through [`super::search::index_text`] (ADR-0012).
 pub fn write_search_document(c: &Connection, it: &LibraryItem) -> Result<()> {
     let seq: i64 = c.query_row(
         "SELECT seq FROM library_item WHERE id = ?1",
@@ -417,13 +418,39 @@ pub fn write_search_document(c: &Connection, it: &LibraryItem) -> Result<()> {
         |r| r.get(0),
     )?;
     let t = search_text(it);
+    let f = super::search::index_text;
     c.execute("DELETE FROM search_document WHERE rowid = ?1", [seq])?;
     c.execute(
         "INSERT INTO search_document (rowid, title, description, creator, notes, tags) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![seq, t.title, t.description, t.creator, t.notes, t.tags],
+        params![
+            seq,
+            f(&t.title),
+            f(&t.description),
+            f(&t.creator),
+            f(&t.notes),
+            f(&t.tags)
+        ],
     )?;
     Ok(())
+}
+
+/// Rebuilds every search document from the authoritative rows (§11.7: the
+/// index is derived data). Returns how many were written.
+pub fn rebuild_search_index(c: &Connection) -> Result<usize> {
+    c.execute("DELETE FROM search_document", [])?;
+    let ids: Vec<String> = {
+        let mut s = c.prepare("SELECT id FROM library_item ORDER BY seq")?;
+        let v = s
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        v
+    };
+    for id in &ids {
+        let it = get_item(c, id)?.ok_or(LibraryError::NotFound)?;
+        write_search_document(c, &it)?;
+    }
+    Ok(ids.len())
 }
 
 pub fn get_search_document(c: &Connection, item_id: &str) -> Result<Option<SearchText>> {
@@ -448,7 +475,10 @@ pub fn get_search_document(c: &Connection, item_id: &str) -> Result<Option<Searc
 /// builder and ranking weights are F1.6; this exists for tests and is fed a
 /// literal phrase only.
 pub fn search_phrase_ids(c: &Connection, phrase: &str) -> Result<Vec<String>> {
-    let q = format!("\"{}\"", phrase.replace('"', "\"\""));
+    let q = format!(
+        "\"{}\"",
+        super::search::index_text(phrase).replace('"', "\"\"")
+    );
     let mut s = c.prepare(
         "SELECT i.id FROM search_document d JOIN library_item i ON i.seq = d.rowid \
          WHERE search_document MATCH ?1 AND i.removed_at IS NULL ORDER BY bm25(search_document), i.seq",
@@ -801,4 +831,132 @@ pub fn decide_duplicate_candidate(
         return Err(LibraryError::NotFound);
     }
     Ok(())
+}
+
+// --- Local media queries (STATE.md F1.4/F1.5) ------------------------------
+
+fn root_from_row(r: &Row<'_>) -> rusqlite::Result<StorageRoot> {
+    Ok(StorageRoot {
+        id: r.get(0)?,
+        kind: r.get(1)?,
+        label: r.get(2)?,
+        path: r.get(3)?,
+        volume_id: r.get(4)?,
+        status: r.get(5)?,
+        created_at: r.get(6)?,
+        last_verified_at: r.get(7)?,
+    })
+}
+
+pub fn list_storage_roots(c: &Connection) -> Result<Vec<StorageRoot>> {
+    let mut s = c.prepare(
+        "SELECT id, kind, label, path, volume_id, status, created_at, last_verified_at \
+         FROM storage_root ORDER BY created_at, id",
+    )?;
+    let v = s
+        .query_map([], root_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(v)
+}
+
+pub fn asset_at(c: &Connection, root_id: &str, storage_ref: &str) -> Result<Option<MediaAsset>> {
+    Ok(c.query_row(
+        &format!("SELECT {ASSET_COLUMNS} FROM media_asset WHERE storage_root_id = ?1 AND storage_ref = ?2 ORDER BY created_at LIMIT 1"),
+        params![root_id, storage_ref],
+        asset_from_row,
+    )
+    .optional()?)
+}
+
+pub fn assets_in_root(c: &Connection, root_id: &str) -> Result<Vec<MediaAsset>> {
+    let mut s = c.prepare(&format!(
+        "SELECT {ASSET_COLUMNS} FROM media_asset WHERE storage_root_id = ?1 ORDER BY created_at, id"
+    ))?;
+    let v = s
+        .query_map([root_id], asset_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(v)
+}
+
+/// Original assets of other items with the same content hash (IMP-05).
+pub fn originals_with_hash(
+    c: &Connection,
+    hash: &str,
+    except_item: &str,
+) -> Result<Vec<MediaAsset>> {
+    let mut s = c.prepare(&format!(
+        "SELECT {ASSET_COLUMNS} FROM media_asset WHERE content_hash = ?1 AND role = 'original' \
+         AND library_item_id <> ?2 ORDER BY created_at, id"
+    ))?;
+    let v = s
+        .query_map(params![hash, except_item], asset_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(v)
+}
+
+/// Sets an asset's integrity state. DATA-09: `missing` is only written while
+/// the asset's root is `available`; on a disconnected or inaccessible root
+/// the call changes nothing and returns `false`.
+pub fn set_asset_integrity(c: &Connection, asset_id: &str, state: IntegrityState) -> Result<bool> {
+    let n = c.execute(
+        "UPDATE media_asset SET integrity_state = ?1 WHERE id = ?2 AND (?1 <> 'missing' OR \
+         (SELECT status FROM storage_root WHERE id = media_asset.storage_root_id) = 'available')",
+        params![state, asset_id],
+    )?;
+    if n == 0 && get_media_asset(c, asset_id)?.is_none() {
+        return Err(LibraryError::NotFound);
+    }
+    Ok(n == 1)
+}
+
+/// Points an asset at a new location (relink, IMP-07). The item, its notes
+/// and everything attached to it stay as they are.
+pub fn relocate_asset(
+    c: &Connection,
+    asset_id: &str,
+    root_id: &str,
+    storage_ref: &str,
+    size_bytes: Option<i64>,
+) -> Result<()> {
+    let n = c.execute(
+        "UPDATE media_asset SET storage_root_id = ?1, storage_ref = ?2, size_bytes = COALESCE(?3, size_bytes), \
+         integrity_state = 'verified' WHERE id = ?4",
+        params![root_id, storage_ref, size_bytes, asset_id],
+    )?;
+    if n == 0 {
+        return Err(LibraryError::NotFound);
+    }
+    Ok(())
+}
+
+/// Links (or clears) the item's thumbnail. A write like any other: bumps
+/// `revision` so a stale editor sees the change.
+pub fn set_thumbnail(
+    c: &Connection,
+    item_id: &str,
+    asset_id: Option<&str>,
+    now_ms: i64,
+) -> Result<()> {
+    let n = c.execute(
+        "UPDATE library_item SET thumbnail_asset_id = ?1, revision = revision + 1, updated_at = ?2 WHERE id = ?3",
+        params![asset_id, now_ms, item_id],
+    )?;
+    if n == 0 {
+        return Err(LibraryError::NotFound);
+    }
+    Ok(())
+}
+
+/// Local items whose original video has no thumbnail yet (IMP-06 backlog).
+pub fn items_missing_thumbnail(c: &Connection, limit: u32) -> Result<Vec<String>> {
+    let mut s = c.prepare(
+        "SELECT i.id FROM library_item i WHERE i.thumbnail_asset_id IS NULL AND i.removed_at IS NULL \
+         AND EXISTS (SELECT 1 FROM media_asset a WHERE a.library_item_id = i.id AND a.role = 'original' \
+         AND a.media_kind = 'video' AND a.integrity_state IN ('verified', 'unknown')) \
+         ORDER BY i.added_at, i.seq LIMIT ?1",
+    )?;
+    let v = s
+        .query_map([limit], |r| r.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    Ok(v)
 }

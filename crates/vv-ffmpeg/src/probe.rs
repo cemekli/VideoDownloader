@@ -57,6 +57,30 @@ pub struct ProbeStream {
     pub codec_type: Option<String>,
     #[serde(default)]
     pub codec_name: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub channels: Option<u32>,
+    #[serde(default)]
+    pub tags: Option<StreamTags>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StreamTags {
+    #[serde(default)]
+    pub language: Option<String>,
+}
+
+/// One audio stream (IMP-03). `language` is the container tag as written
+/// (often ISO 639-2 like `tur`); `und` and empty mean unknown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioTrack {
+    pub index: u32,
+    pub codec: Option<String>,
+    pub channels: Option<u32>,
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -86,6 +110,10 @@ pub struct Probed {
     pub audio: Option<String>,
     pub duration_s: Option<f64>,
     pub size_bytes: Option<u64>,
+    /// Size of the first video stream.
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub audio_tracks: Vec<AudioTrack>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,6 +176,25 @@ pub fn classify(success: bool, stdout: &str, stderr: &str) -> Result<Probed, Pro
             .map(|s| s.codec_name.clone().unwrap_or_default())
     };
     let (video, audio) = (first("video"), first("audio"));
+    let first_video = r
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("video"));
+    let audio_tracks = r
+        .streams
+        .iter()
+        .filter(|s| s.codec_type.as_deref() == Some("audio"))
+        .map(|s| AudioTrack {
+            index: s.index,
+            codec: s.codec_name.clone(),
+            channels: s.channels,
+            language: s
+                .tags
+                .as_ref()
+                .and_then(|t| t.language.clone())
+                .filter(|l| !l.is_empty() && l != "und"),
+        })
+        .collect();
     if video.is_none() && audio.is_none() {
         return Err(ProbeError::NoMediaStreams);
     }
@@ -157,6 +204,9 @@ pub fn classify(success: bool, stdout: &str, stderr: &str) -> Result<Probed, Pro
         audio,
         duration_s: r.format.duration.as_deref().and_then(|d| d.parse().ok()),
         size_bytes: r.format.size.as_deref().and_then(|s| s.parse().ok()),
+        width: first_video.and_then(|s| s.width),
+        height: first_video.and_then(|s| s.height),
+        audio_tracks,
     })
 }
 

@@ -174,10 +174,11 @@ fn item_round_trips_every_field() {
     repo::insert_item(c, &it).unwrap();
     assert_eq!(repo::get_item(c, &it.id).unwrap().unwrap(), it);
     assert_eq!(it.display_title(), "Benim başlığım");
+    // The index stores text with dotless ı folded to i (ADR-0012).
     let doc = repo::get_search_document(c, &it.id).unwrap().unwrap();
     assert_eq!(
         (doc.title.as_str(), doc.notes.as_str(), doc.creator.as_str()),
-        ("Benim başlığım", "not", "kanal")
+        ("Benim başliğim", "not", "kanal")
     );
     assert_eq!(
         repo::item_by_source(c, SourcePlatform::Youtube, "vvTestVid01")
