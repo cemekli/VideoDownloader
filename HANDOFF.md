@@ -4,13 +4,13 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0.1–F0.7 ve F0.13, toplam 8/74. F0.8a (oynatma matrisi, ADR-0004) ve F0.8b (yt-dlp + Deno, ADR-0005) main'de. F0.8 hâlâ yarım (🟨).
+- **Tamamlananlar:** F0.1–F0.8 ve F0.13, toplam 9/74. F0.8a (oynatma matrisi, ADR-0004) ve F0.8b (yt-dlp + Deno, ADR-0005) main'de; F0.8c PR'da, CI yeşil.
 - **Açık PR:** F0.8c, yani FFmpeg (ADR-0006). Dal: `claude/project-thread-t0tup8`.
   - `tools/manifest.json` artık FFmpeg ve ffprobe 9.0.2'yi de sabitliyor: BtbN LGPL build'i, tarihli etiket (`autobuild-2026-10-31-12-59`).
   - Yeni `vv-ffmpeg` crate'i: her çağrının sabit bayrakları ve ffprobe sonucunun sınıflandırılması.
   - Önemli bulgu: yalnızca protokol izin listesi yetmiyor; HLS listesi kök dışındaki dosyayı okuyabiliyor. `-format_whitelist` ile bu kapandı.
   - Yeni hata kodları `INPUT_REJECTED` ve `MEDIA_CORRUPT`.
-  - `npm run tools:fetch` artık FFmpeg'i de indirip doğruluyor, AC-59 yoklamasını ve remux ölçümünü yapıyor. Linux'ta geçti; Windows CI sonucu PR'da.
+  - `npm run tools:fetch` artık FFmpeg'i de indirip doğruluyor, AC-59 yoklamasını ve remux ölçümünü yapıyor. Windows ve Linux CI'da gerçek exe'lerle geçti: [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432). 20 dakikalık MKV, Windows'ta 609 ms'de MP4'e remux edildi.
 
 ## Sonraki ilk adımlar
 

@@ -9,7 +9,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0003](#adr-0003-yt-dlp-adaptörü-sabit-bayraklar-progress-protokolü-ve-hata-eşleme) | yt-dlp adaptörü: sabit bayraklar, progress protokolü, hata eşleme (SPEC DL-05, §14.1) | Kabul edildi | 6 Kasım 2026 |
 | [ADR-0004](#adr-0004-webview2-oynatma-matrisi-ve-yerel-medya-protokolü) | WebView2 oynatma matrisi ve yerel medya protokolü (SPEC DEC-04) | Kabul edildi (CI ölçümü; geliştirici makinesi ölçümü açık) | 7 Kasım 2026 |
 | [ADR-0005](#adr-0005-yt-dlp-ve-js-runtime-dağıtımı-ve-güven-modeli) | yt-dlp ve JS runtime (Deno) dağıtımı ve güven modeli (SPEC DEC-02) | Kabul edildi | 7 Kasım 2026 |
-| [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi (Windows CI kanıtı bekleniyor) | 7 Kasım 2026 |
+| [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -283,7 +283,7 @@ SPEC DEC-03, §14.1, IMP-02, DL-09 ve AC-59'u karşılar (STATE.md F0.8c). Kod: 
   - `-format_whitelist` eklenince HLS ve concat listeleri açılmadan reddediliyor: `[hls @ …] Format not on whitelist`. Kök dışı okuma yok (`strace`: 0), HTTP isteği yok (kanarya: 0).
   - Biçim uzantıdan değil içerikten belirleniyor: `.mkv` uzantılı bir concat listesi `concat` olarak tanınıyor ve reddediliyor.
   - Girdi olarak verilen bir URL `Protocol 'http' not on whitelist 'file'!` ile reddediliyor. Kontrol olarak kısıtsız ffprobe aynı URL'ye 1 istek atıyor; bu, kanaryanın gerçekten çalıştığını gösterir.
-- **Remux:** MKV H.264/AAC → MP4 `-c copy` çalışıyor, sonuç H.264/AAC MP4. 1.212 sn'lik (31,8 MB) bir MKV, Linux CI kapsayıcısında yaklaşık 1 sn'de remux edildi (yaklaşık 30 MB/sn, gerçek zamanın yaklaşık 1.000 katı). Windows ölçümü CI'dan gelecek.
+- **Remux:** MKV H.264/AAC → MP4 `-c copy` çalışıyor, sonuç H.264/AAC MP4. 1.212 sn'lik (31,8 MB) bir MKV, Linux CI kapsayıcısında yaklaşık 1 sn'de remux edildi (yaklaşık 30 MB/sn, gerçek zamanın yaklaşık 1.000 katı). Windows CI'da aynı dosya 609 ms sürdü (52 MB/sn, gerçek zamanın yaklaşık 2.000 katı). Bu düşük bit hızlı bir dosya; 1 saatlik 1080p bir video (yaklaşık 2–3 GB) için süreyi büyük ölçüde disk hızı belirler, birkaç on saniye ile bir iki dakika arası beklenir. PLAY-07 önizlemesi gerekirse arka plan işi olarak yapılır.
 - **`-n` tuzağı:** çıktı dosyası varsa FFmpeg üzerine yazmıyor ama **çıkış kodu 0** dönüyor (6.1.1 ve 9.0.2'de aynı). Yani başarı yalnızca çıkış koduna bakılarak anlaşılamaz.
 
 **Karar.**
@@ -326,4 +326,5 @@ SPEC DEC-03, §14.1, IMP-02, DL-09 ve AC-59'u karşılar (STATE.md F0.8c). Kod: 
 - `vv-ffmpeg`: 6 test. Kapsam: bayrakların `args.json` ile sapmaması, izin listesinde referans veren demuxer olmaması, yolların bölünmemesi ve mutlak olması, 14 matris dosyasının ffprobe çıktısının sınıflandırılması, 4 kısıtlı reddin `INPUT_REJECTED` olması ve kontrol vakası, diğer hataların `MEDIA_CORRUPT` olması.
 - `vv-tools`: 9 test. 39 bozma vakası (15'i FFmpeg) ve gerçek `-version` çıktıları: sabitlenen build kabul ediliyor, GPL'li dağıtım build'i reddediliyor.
 - `scripts/fetch-tools.mjs` Linux'ta gerçek dosyalarla uçtan uca geçti: indirme, hash'ler, `tar.xz` açma, build ve lisans kontrolü, 14 dosyanın ffprobe çıktısının fixture'larla aynı olması, AC-59 reddi (0 HTTP isteği) ve remux.
+- Windows'ta aynı zincir gerçek `ffmpeg.exe` ve `ffprobe.exe` ile geçti: zip tek kez indirilip iki exe çıkarıldı, build ve LGPL kontrolü, 14 dosyanın fixture'larla aynı olması, 4 kısıtlı reddin 0 HTTP isteğiyle gerçekleşmesi, remux ve `-n` davranışı. Linux'ta da geçti: [CI #42367817432](https://github.com/cemekli/VideoDownloader/actions/runs/42367817432).
 - Fixture'lar sabitlenen build ile yakalandı (`tests/fixtures/ffmpeg/`). İlk yakalama Ubuntu'nun ffmpeg 6.1.1'i ile yapılmıştı; tek fark 9.0'ın JSON'a eklediği boş `stream_groups` alanıydı.
