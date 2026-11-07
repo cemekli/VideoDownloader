@@ -26,6 +26,10 @@ export interface DesktopApp {
   page: Page;
   browser: Browser;
   proc: ChildProcess;
+  /** Throwaway data directory (VV_DATA_DIR) holding the library lock. */
+  dataDir: string;
+  /** Exit code once the process is gone, null while it runs. */
+  exitCode(): number | null;
   close(): Promise<void>;
 }
 
@@ -65,22 +69,35 @@ export async function launchDesktopApp(options: LaunchOptions = {}): Promise<Des
 
   const port = await freePort();
   const profile = mkdtempSync(join(tmpdir(), "vv-e2e-webview2-"));
+  // Never the runner's real %APPDATA%; a caller may share one on purpose.
+  const ownDataDir = !options.env?.VV_DATA_DIR;
+  const dataDir = options.env?.VV_DATA_DIR ?? mkdtempSync(join(tmpdir(), "vv-e2e-data-"));
   const proc = spawn(desktopExe, [], {
     env: {
       ...process.env,
       ...options.env,
+      VV_DATA_DIR: dataDir,
       VV_E2E_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: profile,
     },
     stdio: "ignore",
   });
   let exited: number | null = null;
-  proc.once("exit", (code) => (exited = code ?? -1));
+  const gone = new Promise<void>((r) =>
+    proc.once("exit", (code) => {
+      exited = code ?? -1;
+      r();
+    }),
+  );
 
   const close = async () => {
     if (exited === null) proc.kill();
-    await new Promise((r) => setTimeout(r, 500));
+    // Wait for the exit: the next test's app must not meet this one's
+    // single-instance mutex or library lock (ADR-0008).
+    await Promise.race([gone, new Promise((r) => setTimeout(r, 10_000))]);
+    await new Promise((r) => setTimeout(r, 300));
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (ownDataDir) rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
 
   try {
@@ -101,6 +118,8 @@ export async function launchDesktopApp(options: LaunchOptions = {}): Promise<Des
       page,
       browser,
       proc,
+      dataDir,
+      exitCode: () => exited,
       close: async () => {
         await browser.close().catch(() => {});
         await close();

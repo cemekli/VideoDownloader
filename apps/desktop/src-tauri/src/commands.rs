@@ -2,8 +2,9 @@
 //! DB row or subprocess output. Shapes are pinned by
 //! `tests/fixtures/ipc-contract.json`, which the UI tests use too.
 
+use crate::instance::InstanceState;
 use serde::Serialize;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Runtime, State};
 use vv_domain::error::{DomainError, ErrorCode};
 
 /// Bumped whenever a command, DTO or error field changes incompatibly.
@@ -71,18 +72,28 @@ pub struct Diagnostics {
     pub sqlite_fts5: bool,
     /// Newest schema migration this build knows.
     pub schema_version: u32,
+    /// This process holds the library lock (INV-13).
+    pub library_lock: bool,
+    /// Launches handed over to this process by a second instance (AC-38).
+    pub second_launches: u32,
 }
 
 /// Build/runtime facts for Settings → Diagnostics (SPEC §18.1). Contains no
 /// paths, user data or secrets (SPEC §18.3).
 #[tauri::command]
-pub fn get_diagnostics() -> Result<Diagnostics, DomainError> {
+pub fn get_diagnostics(instance: State<'_, InstanceState>) -> Result<Diagnostics, DomainError> {
+    diagnostics(&instance)
+}
+
+pub fn diagnostics(instance: &InstanceState) -> Result<Diagnostics, DomainError> {
     let info = vv_persistence::sqlite_info()
         .map_err(|_| DomainError::new(ErrorCode::InternalError, "diag-sqlite-info"))?;
     Ok(Diagnostics {
         sqlite_version: info.version,
         sqlite_fts5: info.fts5,
         schema_version: vv_persistence::migrations::MIGRATIONS.len() as u32,
+        library_lock: instance.holds_library_lock(),
+        second_launches: instance.second_launches(),
     })
 }
 
@@ -103,7 +114,9 @@ mod tests {
 
     #[test]
     fn diagnostics_report_shipped_sqlite_with_fts5() {
-        let d = get_diagnostics().unwrap();
+        let d = diagnostics(&InstanceState::default()).unwrap();
+        assert!(!d.library_lock);
+        assert_eq!(d.second_launches, 0);
         assert!(d.sqlite_fts5);
         assert!(d.schema_version >= 1);
     }

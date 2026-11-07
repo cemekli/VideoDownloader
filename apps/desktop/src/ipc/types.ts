@@ -44,6 +44,10 @@ export interface Diagnostics {
   sqliteVersion: string;
   sqliteFts5: boolean;
   schemaVersion: number;
+  /** This process holds the library lock (INV-13). */
+  libraryLock: boolean;
+  /** Launches handed over by a second instance (AC-38). */
+  secondLaunches: number;
 }
 
 /** Where the UI gets its data from. Shown to the user so fixture data is never mistaken for a real library. */

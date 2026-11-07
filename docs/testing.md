@@ -52,6 +52,8 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | Yönetilen araçlar: manifest, hash, sürüm, JS runtime, FFmpeg lisansı | `crates/vv-tools/tests/tools.rs` + `tools/manifest.json` + `tests/fixtures/tools/` | Araç sürümü değişince `health-output.json` yeniden yakalanır; ADR-0005, ADR-0006 |
 | FFmpeg/ffprobe bayrakları, biçim sınıflandırma, referanslı girdi reddi (AC-59) | `crates/vv-ffmpeg/tests/ffmpeg.rs` + `tests/fixtures/ffmpeg/` | Gerçek build ile `npm run tools:fetch` (CI'da her çalışmada); yeni build: `node scripts/ffmpeg-probe.mjs --ffmpeg … --ffprobe … --update`; ADR-0006 |
 | Ağ denetimi: politika, proxy, gerçek yt-dlp (AC-29) | `crates/vv-netguard/tests/netguard.rs` + `scripts/netguard-probe.mjs` → `test-artifacts/netguard/` | Yeni yönlendirme/manifest vakası probe'un `cases` listesine; kanarya her vakada 0 bağlantı almalı; ADR-0007 |
+| Alt süreç: temiz ortam, iptal/zaman aşımında ağaç öldürme, çökmede sahipsiz süreç yok | `crates/vv-process/tests/process.rs` (yardımcı: `src/bin/vv-process-helper.rs`) | Çökme testi yalnızca Windows'ta (Job Object); ADR-0008 |
+| Tek süreç ve kütüphane kilidi (INV-13, AC-38) | `crates/vv-persistence/tests/lock.rs` + `apps/desktop/e2e-desktop/single-instance.spec.ts` | E2E her uygulamaya geçici `VV_DATA_DIR` verir; ADR-0008 |
 | Yerel medya protokolü (range, yol sınırı) | `apps/desktop/src-tauri/tests/media_protocol.rs` | ADR-0004 |
 | WebView2 oynatma matrisi (DEC-04) | `apps/desktop/e2e-desktop/playback-matrix.spec.ts` → `test-artifacts/playback-matrix/` | Yalnızca MP4 H.264/AAC zorunlu; diğerleri ölçüm. Yeni format: `make-playback-media.mjs` `MATRIX` satırı |
 

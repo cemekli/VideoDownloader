@@ -5,6 +5,7 @@
 //! for app commands.
 
 pub mod commands;
+pub mod instance;
 pub mod media_protocol;
 
 use tauri::{Builder, Runtime};
@@ -12,11 +13,13 @@ use tauri::{Builder, Runtime};
 /// Registers every command on a builder. Shared by `run()` and the IPC tests so
 /// both exercise exactly the same handler.
 pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![
-        commands::ping,
-        commands::get_status,
-        commands::get_diagnostics
-    ])
+    builder
+        .manage(instance::InstanceState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::ping,
+            commands::get_status,
+            commands::get_diagnostics
+        ])
 }
 
 pub fn run() {
@@ -24,8 +27,16 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     #[cfg(feature = "e2e-cdp")]
     e2e::enable_cdp(context.config_mut());
+    // The plugin goes first: a second launch must exit before anything else
+    // starts (ADR-0008).
+    let mut builder = Builder::default();
+    if !single_instance_disabled() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(
+            instance::on_second_launch,
+        ));
+    }
     #[allow(unused_mut)]
-    let mut builder = register(Builder::default());
+    let mut builder = register(builder).setup(|app| instance::take_library_lock(app.handle()));
     #[cfg(feature = "e2e-cdp")]
     {
         builder = e2e::register_media_protocol(builder);
@@ -33,6 +44,12 @@ pub fn run() {
     builder
         .run(context)
         .expect("error while running VideoVault");
+}
+
+/// E2E only: `VV_E2E_NO_SINGLE_INSTANCE=1` leaves out the plugin so the
+/// library lock, the second layer, can be tested in the real app.
+fn single_instance_disabled() -> bool {
+    cfg!(feature = "e2e-cdp") && std::env::var_os("VV_E2E_NO_SINGLE_INSTANCE").is_some()
 }
 
 /// Test-only hook (feature `e2e-cdp`, ADR-0001). WebView2 ignores
