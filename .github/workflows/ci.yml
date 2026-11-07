@@ -45,6 +45,10 @@ jobs:
       # segments aimed at a canary server must never reach it (ADR-0007, AC-29).
       - name: Network guard probe (real yt-dlp)
         run: node scripts/netguard-probe.mjs
+      # Informational: CI machines are not the reference machine (ADR-0009), so
+      # budgets are reported, not enforced. Writes test-artifacts/bench/.
+      - name: Benchmark on generated data (BM-01…03)
+        run: node scripts/bench.mjs
       # Built before verify so the real-app E2E step (e2e-desktop) can launch it.
       - name: Build E2E test app (Windows, feature e2e-cdp)
         if: runner.os == 'Windows'

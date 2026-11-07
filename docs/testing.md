@@ -31,6 +31,8 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | `npm run e2e:desktop` | Gerçek uygulama E2E: test exe'sini açar, WebView2'ye bağlanır (yalnızca Windows, önce `desktop:e2e-exe`) |
 | `npm run fixtures:ytdlp` | yt-dlp fixture'larını yeniden yakalar (yalnızca geliştirici; `VV_YTDLP` ile sabitlenmiş yt-dlp sürümü ve PATH'te ffmpeg gerekir, bkz. ADR-0003). `verify` bunu çalıştırmaz |
 | `npm run tools:fetch` | Sabitlenmiş yt-dlp ve Deno'yu `tools/bin/` altına indirir; hash, GPG imzası, sürüm ve JS runtime kontrolü yapar (ADR-0005). CI her iki işletim sisteminde çalıştırır; `verify` çalıştırmaz (ağ gerekir) |
+| `npm run bench` | Benchmark: üretilen 10.000 öğe ve 100.000 segment üzerinde BM-01…03; `test-artifacts/bench/report.md` ve `report.json` (ADR-0009). CI her çalışmada bilgi amaçlı çalıştırır |
+| `npm run coverage:write` | Kapsama matrisini `docs/coverage.json`'dan bu belgeye yazar; `verify` güncel olmasını denetler |
 | `npm run fixtures:media` | Oynatma matrisi medyasını (`tests/fixtures/media/`) ffmpeg ile yeniden üretir (yalnızca geliştirici, ADR-0004). `verify` bunu çalıştırmaz |
 
 `verify` sonucu `test-artifacts/verify/report.md` ve `report.json` dosyalarına yazılır. Her adım “automated pass”, “automated fail” veya “not run” olarak raporlanır (SPEC §25.4). JUnit çıktıları `test-artifacts/vitest/` ve `test-artifacts/e2e/`, ekran görüntüleri `test-artifacts/screenshots/` altındadır.
@@ -55,6 +57,7 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 | Alt süreç: temiz ortam, iptal/zaman aşımında ağaç öldürme, çökmede sahipsiz süreç yok | `crates/vv-process/tests/process.rs` (yardımcı: `src/bin/vv-process-helper.rs`) | Çökme testi yalnızca Windows'ta (Job Object); ADR-0008 |
 | Tek süreç ve kütüphane kilidi (INV-13, AC-38) | `crates/vv-persistence/tests/lock.rs` + `apps/desktop/e2e-desktop/single-instance.spec.ts` | E2E her uygulamaya geçici `VV_DATA_DIR` verir; ADR-0008 |
 | Yeni P0 gereksinim, AC ya da manuel test | `docs/coverage.json`, ardından `npm run coverage:write` | Test adı ya da yorumu AC/MT kimliğini taşırsa "Test atfı" sütununda görünür |
+| Benchmark veri üreticisi, benchmark'lar | `crates/vv-benchdata/tests/determinism.rs` + `tests/fixtures/benchdata/golden.json` | Üretilen veriyi değiştiren her değişiklik `GENERATOR_VERSION`'ı ve golden hash'leri birlikte günceller; ADR-0009 |
 | Yerel medya protokolü (range, yol sınırı) | `apps/desktop/src-tauri/tests/media_protocol.rs` | ADR-0004 |
 | WebView2 oynatma matrisi (DEC-04) | `apps/desktop/e2e-desktop/playback-matrix.spec.ts` → `test-artifacts/playback-matrix/` | Yalnızca MP4 H.264/AAC zorunlu; diğerleri ölçüm. Yeni format: `make-playback-media.mjs` `MATRIX` satırı |
 
@@ -82,13 +85,33 @@ Kurallar:
 | `tests/fixtures/ytdlp/errors-source.json` | Yerelde üretilemeyen 20 hata satırı (giriş, bölge, DRM, araç eksik, Windows ağ hataları, CANARY redaksiyon vakası); her biri yt-dlp kaynak dosyasıyla | `vv-ytdlp` integration testleri |
 | `tests/fixtures/library-small.json` | 6 sentetik öğe: karışık platform, uzun başlık, Türkçe, emoji, bilinmeyen süre, eksik dosya | Arayüz fixture istemcisi, Vitest, Playwright |
 
+## Benchmark
+
+SPEC §22 performans hedeflerini **önerilen bütçeler** olarak verir ve M0'da referans cihaz ile yöntemin buraya yazılmasını ister. Karar ve gerekçe: ADR-0009.
+
+**Referans makine (DEC-17).** Windows 11 x64, SSD, en az 8 GB RAM, en az 4 mantıksal CPU, prize takılı, güç modu "Dengeli" ya da daha yüksek. Bütçe karşılaştırması yalnızca bu sınıftaki, CI dışındaki bir makinede anlamlıdır. `scripts/bench.mjs` makineyi bu ölçütlerle sınıflar ve raporun başına yazar (`reference-class` ya da `not reference`). Henüz referans makinede ölçüm yapılmadı.
+
+**Veri.** `crates/vv-benchdata` sürümlü bir üreticidir: kendi SplitMix64 PRNG'si, yalnızca tam sayılar, sıralı JSON ve `\n` satır sonları. Aynı `(GENERATOR_VERSION, seed, sayılar)` her işletim sisteminde aynı baytları verir; varsayılan veri setinin SHA-256 değerleri `tests/fixtures/benchdata/golden.json`'dadır ve Windows ile Linux'ta test edilir. Varsayılanlar: seed 20261107, 10.000 öğe (bookmark, indirilmiş ve yerel video; Türkçe, İngilizce ve karışık; çok uzun başlık, emoji, NFD yazım, bilinmeyen süre, eksik küçük resim, çoklu etiket ve koleksiyon), 100.000 transkript segmenti (yalnızca medyası olan öğelerde, sıralı ve çakışmasız). URL'ler `.example` alan adlarındadır.
+
+**Yöntem.**
+
+| Kimlik | Ne ölçülüyor | Nasıl | Bütçe |
+|---|---|---|---|
+| BM-01 | Bookmark kaydı | Dolu kütüphanede 300 kez tek işlemde satır + FTS belgesi, WAL ve `synchronous=FULL` (ADR-0002) | NFR-01: p95 ≤ 500 ms (görünür sonuç dahil; burada yalnızca backend commit'i) |
+| BM-02 | Lexical arama | 200 deterministik sorgu (tek sözcük, iki sözcük, önek, Türkçe harfli), önce bir kez ısıtma, sonra ölçüm; ilk 50 sonuç, bm25 sıralaması, snippet | NFR-03: backend p95 ≤ 200 ms |
+| BM-03 | Döküm araması | Aynı yöntem, 100.000 segment, segment tablosuyla birleştirme | NFR-04: p95 ≤ 500 ms |
+| BM-04 | Başlangıç | Uygulama kütüphaneyi açtığında (F1) soğuk ve sıcak ayrı | NFR-06: ≤ 3 s |
+| BM-05 | Bellek | Liste ekranı geldiğinde (F1.7) idle ve scroll | NFR-07: ≤ 500 MB |
+
+BM-01…03 şimdilik prototip `bench_*` tablolarında çalışır, çünkü uygulama şeması F1.1'de gelecek. Veritabanı uygulamanınkiyle aynı biçimde açılır (`vv_persistence::Database`). F4.5'te aynı ölçümler gerçek şemada tekrarlanır. Rapor; tarih, commit, CPU, mantıksal CPU sayısı, RAM, depolama türü, güç modu, işletim sistemi build'i, Rust, Node ve SQLite sürümlerini, veri setinin seed ve hash'ini içerir. Hedef karşılanmazsa sonuç gizlenmez (SPEC §22).
+
 ## Kapsama matrisi
 
 Her P0 gereksinim en az bir AC'ye veya kimlikli bir manuel teste bağlanır (SPEC §25.3). Bağlantılar `docs/coverage.json` dosyasındadır. Aşağıdaki bölümü `npm run coverage:write` üretir; `npm run verify` her çalışmada bağlantısız gereksinim, bilinmeyen kimlik ya da eskimiş tablo bulursa başarısız olur.
 
 <!-- coverage:begin (generated by scripts/coverage-matrix.mjs; edit docs/coverage.json) -->
 
-Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §22'deki tüm NFR'ler, toplam 82. Bağlantısı olan: **82/82**. Bağlı kimliklerden birine ya da gereksinimin kendisine atıf yapan bir test dosyası olan: **6/82**.
+Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §22'deki tüm NFR'ler, toplam 82. Bağlantısı olan: **82/82**. Bağlı kimliklerden birine ya da gereksinimin kendisine atıf yapan bir test dosyası olan: **9/82**.
 
 "Test atfı" sütunu yalnızca o kimliği anan test dosyalarını listeler. Bir AC'nin karşılandığını göstermez; karşılanma durumu STATE.md'deki alt görevin kanıtıyla belirlenir.
 
@@ -162,10 +185,10 @@ Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §2
 | DATA-07 | M2 | Depolama kotası, boş alan uyarısı, model ve türetilmiş dosya kullanımı görünür olmalı. | AC-33 | henüz yok |
 | DATA-08 | M2 | Medya kökü ayarlardan değiştirildiğinde managed dosyalar için “taşı” veya “yalnızca yeni… | AC-43 | henüz yok |
 | DATA-09 | M1 | Medya kökü veya dış referansların bulunduğu sürücü erişilemezse (ör. çıkarılmış harici di… | AC-47 | henüz yok |
-| NFR-01 | M0–M4 | Bookmark kaydı: Metadata beklemeden yerel commit ve görünür sonuç için p95 ≤ 500 ms; 10.0… | BM-01 | henüz yok |
+| NFR-01 | M0–M4 | Bookmark kaydı: Metadata beklemeden yerel commit ve görünür sonuç için p95 ≤ 500 ms; 10.0… | BM-01 | `crates/vv-benchdata/tests/determinism.rs` |
 | NFR-02 | M0–M4 | Kullanıcı akışı: Hazır URL yapıştırıldıktan sonra ≤ 2 birincil eylem; yönlendirilmiş kull… | MT-17 | henüz yok |
-| NFR-03 | M0–M4 | Lexical arama: Sıcak indekste 10.000 öğe için backend p95 ≤ 200 ms; 100 ms debounce dahil… | BM-02 | henüz yok |
-| NFR-04 | M0–M4 | Döküm araması: M4'te 100.000 segmentli fixture için p95 ≤ 500 ms başlangıç hedefi; ölçüm… | BM-03 | henüz yok |
+| NFR-03 | M0–M4 | Lexical arama: Sıcak indekste 10.000 öğe için backend p95 ≤ 200 ms; 100 ms debounce dahil… | BM-02 | `crates/vv-benchdata/tests/determinism.rs` |
+| NFR-04 | M0–M4 | Döküm araması: M4'te 100.000 segmentli fixture için p95 ≤ 500 ms başlangıç hedefi; ölçüm… | BM-03 | `crates/vv-benchdata/tests/determinism.rs` |
 | NFR-05 | M0–M4 | UI tepkisi: Ağ/medya/AI işi sırasında gezinme ve iptal denetimleri yanıt verir; büyük lis… | MT-15 | henüz yok |
 | NFR-06 | M0–M4 | Başlangıç: Referans cihazda 10.000 öğeli kütüphanenin temel etkileşime hazır olması için… | BM-04 | henüz yok |
 | NFR-07 | M0–M4 | Bellek: AI kapalı temel kütüphane için ölçülen idle/scroll bellek değeri raporlanır; başl… | BM-05 | henüz yok |
@@ -213,12 +236,12 @@ Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §2
 
 ### Benchmark'lar (BM)
 
-| Kimlik | Ölçüm | NFR |
-|---|---|---|
-| BM-01 | Bookmark kaydı p95, 10.000 öğe | NFR-01 |
-| BM-02 | Lexical arama p95, 10.000 öğe, sıcak indeks | NFR-03 |
-| BM-03 | Döküm araması p95, 100.000 segment | NFR-04 |
-| BM-04 | Başlangıç süresi, 10.000 öğe, soğuk ve sıcak | NFR-06 |
-| BM-05 | Idle ve scroll belleği, AI kapalı | NFR-07 |
+| Kimlik | Ölçüm | NFR | Çalıştıran |
+|---|---|---|---|
+| BM-01 | Bookmark kaydı p95, 10.000 öğe | NFR-01 | scripts/bench.mjs (crates/vv-benchdata) |
+| BM-02 | Lexical arama p95, 10.000 öğe, sıcak indeks | NFR-03 | scripts/bench.mjs (crates/vv-benchdata) |
+| BM-03 | Döküm araması p95, 100.000 segment | NFR-04 | scripts/bench.mjs (crates/vv-benchdata) |
+| BM-04 | Başlangıç süresi, 10.000 öğe, soğuk ve sıcak | NFR-06 | not run: F1 |
+| BM-05 | Idle ve scroll belleği, AI kapalı | NFR-07 | not run: F1.7 |
 
 <!-- coverage:end -->

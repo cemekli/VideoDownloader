@@ -12,6 +12,7 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0006](#adr-0006-ffmpeg-build-lisans-ve-yerel-dosya-sınırı) | FFmpeg build'i, lisansı ve yerel dosya sınırı (SPEC DEC-03, §14.1, AC-59) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0007](#adr-0007-dış-araçların-ağ-denetimi-yerel-denetim-proxysi) | Dış araçların ağ denetimi: yerel denetim proxy'si (SPEC DEC-05, §20.2, AC-29) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0008](#adr-0008-tek-süreç-kütüphane-kilidi-ve-alt-süreç-ağacı) | Tek süreç, kütüphane kilidi ve alt süreç ağacı (SPEC INV-13, §13.2, AC-38) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0009](#adr-0009-benchmark-ortamı-ve-sürümlü-veri-üreticisi) | Benchmark ortamı ve sürümlü veri üreticisi (SPEC §22, §25.2, DEC-17) | Kabul edildi | 7 Kasım 2026 |
 
 ---
 
@@ -450,3 +451,43 @@ Ayrıca ADR-0005 ve ADR-0007, araçların temiz bir ortamla başlatılmasını �
 - Uygulama henüz alt süreç başlatmıyor. İlk kullanıcılar F2'deki indirme işleri olacak (yt-dlp, Deno, FFmpeg). yt-dlp'nin `--js-runtimes deno:<yol>` ile başlattığı Deno da aynı job'da kalır.
 - İkinci açılışta kilit nedeniyle çıkan süreç kullanıcıya bir şey göstermez. Bu durum yalnızca eklentinin göremediği yollarla oluşur. Gerekirse F4'te yerel bir uyarı penceresi eklenir.
 - ADR-0003'teki Windows'a özgü ağ hata metinlerinin gerçek yakalaması hâlâ açık. Bu iş, gerçek indirme işleri `vv-process` üzerinden çalışmaya başlayınca (F2) yapılacak.
+
+---
+
+## ADR-0009: Benchmark ortamı ve sürümlü veri üreticisi
+
+SPEC §22 (NFR-01…07), §25.2 ve DEC-17'yi karşılar (STATE.md F0.12). Kod: `crates/vv-benchdata`, `scripts/bench.mjs`. Yöntem ve referans makine: `docs/testing.md` "Benchmark" bölümü.
+
+**Bağlam.** SPEC'teki performans hedefleri ölçülmüş değerler değil, önerilen bütçelerdir. M0'da üç şey kesinleşmeli: ölçümün hangi makinede anlamlı olduğu, hangi veriyle yapıldığı ve bu verinin her seferinde aynı olduğu. Aynı seed farklı makinede ya da farklı bir derlemede başka veri üretirse iki ölçüm karşılaştırılamaz.
+
+**Seçenekler (veri).**
+
+| Seçenek | Değerlendirme |
+|---|---|
+| Depoya büyük, hazır bir veri dosyası koymak | 22 MB'lık JSONL depoyu şişirir; şema değişince elle yeniden üretmek gerekir. |
+| `rand` gibi bir crate ile üretmek | Kolay, ama crate'in algoritması sürümler arasında değişebilir; aynı seed sessizce başka veri verir. |
+| **Kendi PRNG'si olan sürümlü üretici + golden hash** | Birkaç satırlık SplitMix64, yalnızca tam sayılar, sıralı JSON. Çıktı değişirse test kırılır ve sürüm numarası artırılmak zorunda kalır. |
+
+**Karar.**
+
+1. **`vv-benchdata` crate'i** veri setini üretir. Varsayılan: seed 20261107, 10.000 öğe, 100.000 segment.
+   - SplitMix64 crate'in içinde yazılı ve referans değerlerle test ediliyor. Kayan nokta yok, `HashMap` sırası yok, satır sonu her zaman `\n`.
+   - Öğeler ve segmentler ayrı rastgele akışlardan gelir. Segment kuralları değişse de öğeler aynı kalır.
+   - Üretilen baytları değiştiren her değişiklik `GENERATOR_VERSION`'ı ve `tests/fixtures/benchdata/golden.json`'daki SHA-256 değerlerini birlikte günceller. Test, golden değerleri Windows ve Linux'ta aynı şekilde doğrular.
+   - İçerik SPEC §25.2'yi izler: üç öğe türü, TR/EN/karışık metin, çok uzun başlık, emoji, NFD yazım, Türkçe harfler, bilinmeyen süre, eksik küçük resim, `pending`/`failed` metadata, çoklu etiket ve koleksiyon. URL'ler gerçek alan adı değil, `.example` alan adlarıdır.
+2. **Şema:** veri "bench-v1" adlı kendi şemasındadır, çünkü uygulama şeması F1.1'de gelecek. O zaman bir yükleyici bu satırları gerçek tablolara eşler.
+3. **Benchmark'lar** (BM-01…03) bu veriyle, uygulamanınkiyle aynı biçimde açılan (`vv_persistence::Database`: WAL, `synchronous=FULL`) bir veritabanında, prototip `bench_*` tablolarında çalışır. BM-04 (başlangıç) ve BM-05 (bellek) uygulama kütüphaneyi açınca eklenecek.
+4. **Referans makine:** Windows 11 x64, SSD, ≥ 8 GB RAM, ≥ 4 mantıksal CPU, CI dışı, prize takılı, güç modu "Dengeli" ya da daha yüksek. `scripts/bench.mjs` makineyi bu ölçütlerle sınıflar ve rapora yazar. Bütçe karşılaştırması yalnızca bu sınıfta anlam taşır.
+5. **CI'da bilgi amaçlı:** CI her çalışmada benchmark'ı çalıştırır ve raporu `test-artifacts/bench/` altına koyar, ama bütçeyi kapı olarak kullanmaz. Paylaşılan CI makinelerinin süreleri dalgalanır; burada bir kapı ya sahte kırmızı ya da sahte güvence üretirdi. Bütçe kapısı F4.5'te, referans makinede ve gerçek şemada konur.
+
+**Kanıt.**
+
+- `vv-benchdata` testleri (7): SplitMix64 referans değerleri; varsayılan veri setinin golden hash'leri; aynı seed aynı bayt, başka seed başka bayt; segment sayısı öğeleri etkilemiyor; SPEC §25.2 içerik kuralları (sayılar, uzun başlık, NFD, emoji, Türkçe harfler, `.example`, sıralı ve çakışmasız segmentler); sorguların deterministik ve tırnaklı olması; küçük kütüphanede benchmark'ın satır döndürerek çalışması.
+- Geliştirme kapsayıcısında ilk ölçüm (Linux, Xeon 2.3 GHz, 4 mantıksal CPU; referans sınıfı **değil**): BM-01 p95 0,50 ms, BM-02 p95 3,3 ms, BM-03 p95 8,4 ms. Üretim ~1 s, yükleme 10.000 öğe 130 ms, 100.000 segment 327 ms, veritabanı 25,8 MiB. Bunlar yöntemin çalıştığını gösterir; bütçenin karşılandığını değil.
+- CI: Windows ve Linux, PR'da.
+
+**Sonuçlar ve açık noktalar.**
+
+- Referans sınıfı bir Windows 11 makinesinde ölçüm yapılmadı. Cuma'nın dizüstü bilgisayarında `npm run bench` çalıştırılıp rapor buraya eklenebilir.
+- FTS5 tokenizer'ı burada `unicode61 remove_diacritics 2`. Türkçe arama davranışının kararı F1.6'da Türkçe arama fixture'ıyla verilir; tokenizer değişirse benchmark da güncellenir.
+- NFR-01'in "görünür sonuç" kısmı (UI dahil) ve NFR-02 (kullanım testi) bu ölçümde yok; F1.8'de ölçülür.

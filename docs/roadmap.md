@@ -8,7 +8,7 @@ Son güncelleme: 7 Kasım 2026, F0.11.
 
 | Kilometre taşı | Faz | Çıkış koşulu (SPEC §3) | Durum |
 |---|---|---|---|
-| M0 — Temel ve uygulanabilirlik | F0 | Uygulama açılır; tip/lint/test akışı çalışır; dış araç ve depolama kararlarının kanıtı kayıtlı | Devam ediyor: F0.1–F0.10 ve F0.13 ✅; F0.11, F0.12 açık |
+| M0 — Temel ve uygulanabilirlik | F0 | Uygulama açılır; tip/lint/test akışı çalışır; dış araç ve depolama kararlarının kanıtı kayıtlı | Devam ediyor: F0.1–F0.10 ve F0.13 ✅; F0.11 ve F0.12 PR'da |
 | M1 — Çalışan Windows kütüphanesi | F1, F2 | Ağsız kaydet, düzenle, ara, oynat akışı yeniden başlatmada veriyi korur | Başlanmadı |
 | M2 — İndirme ve Windows MVP | F3, F4 | En az bir izinli gerçek indirme uçtan uca; destek iddiaları platform matrisiyle sınırlı; §26.1 kapıları | Başlanmadı |
 | M3 — Yetkili oturum PoC | F5 | Gerçek ve fixture testleri ayrı; özel VK başarısı yalnızca gerçek yetkili testle (§26.3) | Başlanmadı |
@@ -34,7 +34,7 @@ F0 ──> F1 ──> F2 ──┐
 | F2.4 (oynatıcı) | F0.8a (oynatma matrisi, ADR-0004) | Hangi biçimin oynayacağı ölçüldü |
 | F3 | F0.6, F0.8b/c, F0.9, F0.10 | yt-dlp ayrıştırma, araç manifesti, ağ denetimi, süreç denetimi hazır olmalı |
 | F3.4 (uzak metadata) | F0.9 (DEC-05) | SPEC §3: ağ politikası kapısı geçilmeden uzak metadata açılmaz |
-| F4.5 (performans) | F0.12 | Benchmark ortamı ve veri üreticisi |
+| F4.5 (performans) | F0.12, F1.1 | Benchmark ortamı ve veri üreticisi (ADR-0009); ölçümler gerçek şemada tekrarlanır |
 | F5 | F4 | Oturum özelliği MVP kabuğunun üstüne kurulur; secret store F5.1 |
 | F6, F7 | F1.6 (FTS), F3.1 (kuyruk) | Döküm ve embedding işleri kuyrukta çalışır, aramaya bağlanır |
 
@@ -46,6 +46,7 @@ F0 ──> F1 ──> F2 ──┐
 | 7 Kas 2026 | F0.8 üç alt göreve bölündü (oynatma matrisi, yt-dlp + Deno, FFmpeg) | Her biri ayrı karar ve kanıt gerektiriyor | STATE.md |
 | 7 Kas 2026 | yt-dlp yalnızca native indiriciyle; RTMP/RTSP/MMS indirilmez | FFmpeg'e devredilen protokoller ağ denetimini aşardı | ADR-0007 |
 | 7 Kas 2026 | Unix'te uygulama çökünce alt süreçler ölmeyebilir; yalnızca Windows garanti eder | Dağıtım hedefi Windows; Unix yalnızca geliştirme | ADR-0008 |
+| 7 Kas 2026 | Benchmark bütçeleri CI'da kapı değil; kapı F4.5'te referans makinede | Paylaşılan CI makinelerinin süreleri güvenilir değil | ADR-0009 |
 | 7 Kas 2026 | `TASKS.md` yerine `STATE.md` | Tek durum kaynağı; içerik SPEC §27'nin istediği sütunları taşıyor | Bu belge |
 
 ## Sonraki dilimler

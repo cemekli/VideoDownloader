@@ -2,7 +2,7 @@
 
 Bu belge VideoVault'un bileşenlerini, güven sınırlarını, veri ve iş akışını ve paketlemesini anlatır (SPEC §10, §20.1, §27). Hedef mimari SPEC §10'dadır. Burada **bugün kodda olan** ile **henüz yazılmamış** olan ayrı gösterilir. Kararların gerekçesi [decisions.md](./decisions.md)'de, tehditler [threat-model.md](./threat-model.md)'de, iş sırası [roadmap.md](./roadmap.md) ve [STATE.md](../STATE.md)'dedir.
 
-Son güncelleme: 7 Kasım 2026, F0.11.
+Son güncelleme: 7 Kasım 2026, F0.12.
 
 ## Bileşenler
 
@@ -20,6 +20,8 @@ apps/desktop/src-tauri      Tauri 2 kabuğu: komutlar, tek süreç, medya protok
         |       +-- crates/vv-ffmpeg    ffprobe/FFmpeg argümanları, biçim sınıflandırma
         +-- crates/vv-netguard     araçların ağ trafiği için yerel denetim proxy'si
         +-- crates/vv-tools        yönetilen araç manifesti, hash/imza, sürüm ve lisans kontrolü
+
+crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 ```
 
 | Bileşen | Sorumluluk | SPEC modülü (§10.3) | Durum | Karar |
@@ -33,6 +35,7 @@ apps/desktop/src-tauri      Tauri 2 kabuğu: komutlar, tek süreç, medya protok
 | `vv-ffmpeg` | Kısıtlı ffprobe/FFmpeg çağrıları, referanslı girdilerin reddi | media | Fixture ve gerçek build ile test edildi | ADR-0006 |
 | `vv-netguard` | yt-dlp bağlantılarını port, DNS sonrası IP ve jetonla denetleme | security | Gerçek yt-dlp ile test edildi | ADR-0007 |
 | `vv-tools` | `tools/manifest.json`: sürüm pin, SHA-256, GPG imzası, FFmpeg lisans kontrolü | diagnostics, security | Hazır | ADR-0005, ADR-0006 |
+| `vv-benchdata` | Sürümlü benchmark verisi (10.000 öğe, 100.000 segment) ve BM-01…03 | — (test aracı) | Hazır; uygulamaya girmez | ADR-0009 |
 | İş zamanlayıcı (lease, retry, bağımlılık) | Kalıcı kuyruk | jobs | Yok | F3.1 |
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |
 | Yerel AI sağlayıcıları | Döküm, embedding, OCR | ai | Yok | F6, F7 |

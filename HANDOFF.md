@@ -5,15 +5,16 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Nerede kaldık
 
 - **Tamamlananlar:** F0.1–F0.10 ve F0.13, toplam 11/74. Tek süreç ve alt süreç yönetimi (F0.10, ADR-0008) PR #10 ile main'de.
-- **Açık PR:** F0.11, yani zorunlu dokümanlar ve kapsama matrisi. Dal: `claude/project-thread-t0tup8`.
+- **Açık PR #11:** F0.11 (zorunlu dokümanlar ve kapsama matrisi) ve F0.12 (benchmark). Dal: `claude/project-thread-t0tup8`.
   - Yeni: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`. `threat-model.md` artık SPEC §20.1'in her satırının durumunu gösteriyor.
   - Kapsama matrisi `docs/coverage.json`'da: 82 P0/INV/NFR satırının her biri bir AC'ye, kimlikli manuel teste (MT) ya da benchmark'a (BM) bağlı. `npm run coverage:write` tabloyu `docs/testing.md`'ye yazar; `verify` eksik bağı ve eskimiş tabloyu reddeder.
-- **Sıradaki:** F0.12 (benchmark ortamı ve sürümlü veri üreticisi).
+  - F0.12: `crates/vv-benchdata` aynı seed'den her işletim sisteminde aynı 10.000 öğe ve 100.000 segmenti üretir (golden hash testi). `npm run bench` BM-01…03'ü ölçer ve makineyi referans sınıfına göre etiketler (ADR-0009). CI bilgi amaçlı çalıştırır; bütçe kapısı F4.5'te.
 
 ## Sonraki ilk adımlar
 
-1. F0.11 PR'ını merge et, ardından `git checkout main && git pull`.
-2. F0.12 bitince F0 çıkış kapısı kontrol edilir ve F1'e (çevrimdışı kütüphane çekirdeği) geçilir.
+1. PR #11'i merge et, ardından `git checkout main && git pull`.
+2. İstersen dizüstünde `npm run bench` çalıştır: referans sınıfı bir Windows 11 ölçümü olur (`test-artifacts/bench/report.md`).
+3. F0 çıkış kapısı kontrol edilir, ardından F1.1 (alan şeması ve repository'ler).
 
 ## Bilinmesi gerekenler
 

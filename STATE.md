@@ -93,7 +93,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F0.9 | Dış araçların ağ denetimi uygulanabilirliği | §20.2, DEC-05 | ADR + redirect/DNS testleri | ✅ ADR-0007; yerel denetim proxy'si `vv-netguard` 7/7; gerçek yt-dlp ile 12 vakada kanaryaya 0 bağlantı (kontrolde 1); Windows ve Linux [CI #42369808856](https://github.com/cemekli/VideoDownloader/actions/runs/42369808856) |
 | F0.10 | Single-instance kilidi ve Windows Job Object ile alt süreç yönetimi | INV-13, §13.2 | AC-38 + Windows smoke testi | ✅ ADR-0008; kütüphane kilidi, `vv-process` (temiz ortam, Job Object, ağaç öldürme; Windows çökme testinde sahipsiz süreç yok), single-instance eklentisi; AC-38 gerçek uygulama E2E 3/3 (ikinci açılış 0 koduyla 22 ms'de, kilit katmanı 3 koduyla); Windows ve Linux [CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361) |
 | F0.11 | Zorunlu dokümanlar ve kapsama matrisi | §27 | `docs/architecture.md`, `decisions.md`, `threat-model.md`, `roadmap.md`, `platform-support.md`, `testing.md` mevcut | 🟨 Altı doküman da var (`architecture.md`, `roadmap.md`, `platform-support.md` yeni; `threat-model.md` §20.1 durumuyla tamamlandı). Kapsama matrisi: `docs/coverage.json` → `docs/testing.md`, 82/82 P0/INV/NFR bağlı; `verify` adımı `coverage-matrix` eksik bağı ve eskimiş tabloyu reddediyor; CI PR'da |
-| F0.12 | Benchmark ortamı ve sürümlü veri üreticisi (10.000 öğe, 100.000 segment) | NFR-01…07, DEC-17 | aynı seed ile aynı çıktı testi | ⬜ |
+| F0.12 | Benchmark ortamı ve sürümlü veri üreticisi (10.000 öğe, 100.000 segment) | NFR-01…07, DEC-17 | aynı seed ile aynı çıktı testi | 🟨 ADR-0009; `vv-benchdata` (kendi PRNG'si, golden SHA-256), `npm run bench` (BM-01…03, makine sınıflaması), referans makine ve yöntem `docs/testing.md`'de; 7 test; CI PR'da |
 | F0.13 | Git deposu ve CI'ın Windows'ta ilk yeşil çalışması | §25.1 | GitHub Actions'ta iki işletim sistemi de geçer | ✅ [CI #42253170546](https://github.com/cemekli/VideoDownloader/actions/runs/42253170546) |
 
 **Çıkış kapısı**
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0.11** 🟨 (zorunlu dokümanlar ve kapsama matrisi, PR'da). Ardından F0.12 (benchmark ortamı ve veri üreticisi); o bitince F0 çıkış kapısı kontrol edilir ve F1'e geçilir.
+**F0.11** ve **F0.12** 🟨 (dokümanlar, kapsama matrisi, benchmark; PR #11). Merge sonrası F0 çıkış kapısı kontrol edilir ve F1.1'e (alan şeması ve repository'ler) geçilir.
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 7 Kas 2026 | F0.12 başladı: `vv-benchdata` sürümlü veri üreticisi (10.000 öğe, 100.000 segment, golden hash), `npm run bench` ve CI'da bilgi amaçlı benchmark adımı, referans makine tanımı. ADR-0009. |
 | 7 Kas 2026 | F0.10 ✅ (PR #10). F0.11 başladı: `docs/architecture.md`, `docs/roadmap.md`, `docs/platform-support.md`; `threat-model.md`'ye §20.1 durum tablosu; `docs/coverage.json` ve `scripts/coverage-matrix.mjs` ile 82 P0/INV/NFR satırlık kapsama matrisi (29 kimlikli manuel test, 5 benchmark), `verify` adımı. |
 | 7 Kas 2026 | F0.10 ✅: Windows ve Linux CI'da geçti ([CI #42373404361](https://github.com/cemekli/VideoDownloader/actions/runs/42373404361)). |
 | 7 Kas 2026 | F0.9 ✅ (PR #9). F0.10 başladı: kütüphane kilidi (`vv-persistence::lock`), `vv-process` crate'i (temiz ortam, Windows Job Object, iptal/zaman aşımında ağaç öldürme), `tauri-plugin-single-instance` 2.5.5, `get_diagnostics`'e `libraryLock` ve `secondLaunches`, AC-38 E2E. ADR-0008. |

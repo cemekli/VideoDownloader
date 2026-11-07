@@ -113,9 +113,9 @@ const lines = [
   "",
   "### Benchmark'lar (BM)",
   "",
-  "| Kimlik | Ölçüm | NFR |",
-  "|---|---|---|",
-  ...Object.entries(cov.benchmarks).map(([id, b]) => `| ${id} | ${b.title} | ${b.spec} |`),
+  "| Kimlik | Ölçüm | NFR | Çalıştıran |",
+  "|---|---|---|---|",
+  ...Object.entries(cov.benchmarks).map(([id, b]) => `| ${id} | ${b.title} | ${b.spec} | ${b.runner ?? "—"} |`),
   "",
   "<!-- coverage:end -->",
 ];
