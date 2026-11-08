@@ -1,4 +1,7 @@
 //! STATE.md F3.1: the persistent job queue (SPEC §12.3, §13; ADR-0019).
+//! Covers the queue side of DL-03 (separate jobs, dependencies, states),
+//! DL-04 (SQLite queue recovered after a restart) and DL-06 (cancel, retry,
+//! pause only for resumable kinds).
 //! Workers and process handling come in later F3 steps; these tests drive
 //! the queue the way a worker would.
 

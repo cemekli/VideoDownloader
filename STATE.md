@@ -38,7 +38,7 @@ Bu dosya projenin tek durum kaynağıdır. Her faz bir **çıktı** üretir ve b
 | F0 | Temel ve test altyapısı | M0 | Windows'ta açılan boş uygulama, yeşil CI, ilk ADR'ler | ✅ |
 | F1 | Çevrimdışı kütüphane çekirdeği | M1 (1/2) | Ağsız kaydet, import et, ara | ⬜ |
 | F2 | Düzenleme, oynatma, taşınabilirlik | M1 (2/2) | İndirmesiz tam Windows kütüphanesi | ⬜ |
-| F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | ⬜ |
+| F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | 🟨 |
 | F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⬜ |
 | F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | ⬜ |
 | F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | ⬜ |
@@ -164,7 +164,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F3.1 | Kalıcı iş kuyruğu: lease, generation, retry, `cancel_reason`, bağımlılıklar | §12.3, §13 | AC-10, AC-11, AC-58 + çökme testleri | ⬜ |
+| F3.1 | Kalıcı iş kuyruğu: lease, generation, retry, `cancel_reason`, bağımlılıklar | §12.3, §13 | AC-10, AC-11, AC-58 + çökme testleri | 🟨 Migration 0005 + `vv-persistence::jobs`, 16 Rust testi (`tests/jobs.rs`: AC-10/AC-11 kuyruk tarafı, AC-58, DB yeniden açılarak çökme kurtarma); ADR-0019; Linux verify geçti, Windows verify bekleniyor |
 | F3.2 | Yönetilen araç manifesti (yt-dlp, JS runtime, FFmpeg) ve sağlık kontrolü | §14.1, §23.1 | AC-25; `TOOL_MISSING` ve `TOOL_BLOCKED` testleri | ⬜ |
 | F3.3 | Ağ politikasının uygulanması (F0.9 kararına göre) | §20.2 | AC-29 tam | ⬜ |
 | F3.4 | Uzak metadata ve thumbnail (backend üzerinden) | CAP-04, CAP-07, §3 | fixture testleri + gerçek herkese açık URL | ⬜ |
@@ -294,7 +294,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1 ve F2 tamamlandı** (30/74 alt görev ✅; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt CI yerine Windows + Linux `verify` raporları ve Windows elle kontrolü (`docs/testing.md` "CI ne zaman çalışır"). Sıradaki: F3 (indirme motoru), ilk adım F3.1 kalıcı iş kuyruğu.
+**F0, F1 ve F2 tamamlandı** (30/74 alt görev ✅; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt CI yerine Windows + Linux `verify` raporları ve Windows elle kontrolü (`docs/testing.md` "CI ne zaman çalışır"). F3 başladı: F3.1 kalıcı iş kuyruğu yazıldı (ADR-0019), Windows verify bekliyor. Sıradaki: F3.7 hata sınıflandırması.
 
 ## Değişiklik günlüğü
 

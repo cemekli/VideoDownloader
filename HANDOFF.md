@@ -11,7 +11,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Sonraki ilk adımlar
 
 1. `git checkout main && git pull`.
-2. F3 (indirme motoru, M2'nin ilk yarısı). Önerilen sıra: F3.1 kalıcı iş kuyruğu (lease, generation, retry, `cancel_reason`; AC-10, AC-11, AC-58 ve çökme testleri) → F3.7 hata sınıflandırması → F3.2 araç sağlık kontrolü → F3.3 ağ politikası → F3.4 uzak metadata → F3.5/F3.6 format ve indirme → F3.8 Downloads ekranı. F3.11 izinli gerçek URL'ler ister; Cuma'nın seçeceği URL'lerle yapılır.
+2. F3 (indirme motoru, M2'nin ilk yarısı). F3.1 kalıcı iş kuyruğu yazıldı (`crates/vv-persistence/src/jobs.rs`, ADR-0019; işçi çalışma zamanı henüz yok). Kalan sıra: F3.7 hata sınıflandırması → F3.2 araç sağlık kontrolü → F3.3 ağ politikası → F3.4 uzak metadata → F3.5/F3.6 format ve indirme → F3.8 Downloads ekranı. F3.11 izinli gerçek URL'ler ister; Cuma'nın seçeceği URL'lerle yapılır.
 
 ## Bilinmesi gerekenler
 
