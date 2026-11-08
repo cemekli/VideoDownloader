@@ -28,7 +28,9 @@ test("offline: save, import, tag, search, play, restart (F1/F2 exit gates, DATA-
       const { page } = app;
       await expect(page.getByTestId("library-empty")).toBeVisible();
       await page.keyboard.press("Control+,");
-      await page.getByTestId("settings-offline").check();
+      // The box follows the saved setting, so it changes once the backend answers.
+      await page.getByTestId("settings-offline").click();
+      await expect(page.getByTestId("settings-offline")).toBeChecked();
       await page.getByTestId("settings-close").click();
       await expect(page.getByTestId("offline-mode-banner")).toBeVisible();
 

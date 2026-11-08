@@ -130,8 +130,7 @@ export async function launchDesktopApp(options: LaunchOptions = {}): Promise<Des
             await invoke("acknowledge_legal");
             await invoke("finish_onboarding");
             return true;
-          })
-          .catch(() => undefined),
+          }),
       );
       if (fresh) {
         await page.reload();

@@ -28,7 +28,8 @@ test.describe("settings", () => {
     await page.keyboard.press("Control+,");
     const settings = page.getByTestId("settings");
     await expect(settings).toBeVisible();
-    await settings.getByTestId("theme-light").check();
+    await settings.getByTestId("theme-light").click();
+    await expect(settings.getByTestId("theme-light")).toBeChecked();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     expect(bg).toBe("rgb(246, 247, 249)");
@@ -43,7 +44,8 @@ test.describe("settings", () => {
   test("Offline Mode: banner, no source page, search keeps working, turn off from the banner (AC-17, DATA-04)", async ({ page }, info) => {
     await ready(page);
     await page.getByTestId("settings-button").click();
-    await page.getByTestId("settings-offline").check();
+    await page.getByTestId("settings-offline").click();
+    await expect(page.getByTestId("settings-offline")).toBeChecked();
     await expect(page.getByTestId("offline-mode-banner")).toContainText("Offline Mode is on");
     await page.getByTestId("settings-close").click();
     await shot(page, "offline-mode", info);
