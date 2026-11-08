@@ -1,7 +1,7 @@
 // User-facing names for backend values. Kept in one place so F2.8 can turn
 // them into translation keys (SPEC §9.6).
 
-import type { ItemKind, LibraryView, LocalState, Platform } from "./ipc/types";
+import type { ItemKind, LibraryView, LocalState, OpResult, Platform } from "./ipc/types";
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   youtube: "YouTube",
@@ -30,6 +30,8 @@ export const LOCAL_STATE: Record<LocalState, { label: string; icon: string; hint
 
 export const VIEW_LABEL: Record<LibraryView, string> = {
   all: "All Items",
+  inbox: "Inbox",
+  removed: "Recently removed",
   favorites: "Favorites",
   recent: "Recently Added",
   archive: "Archive",
@@ -79,4 +81,49 @@ export function urlErrorMessage(code: string): string {
 export function urlWarningMessage(code: string): string {
   if (code === "PLAYLIST_UNSUPPORTED") return "This is a playlist, channel or profile. It is saved as one bookmark; its videos are not added one by one.";
   return code;
+}
+
+/**
+ * Result of a bulk or single operation, with honest counts (ORG-05):
+ * `done` says what happened to the changed items.
+ */
+export function opMessage(done: string, r: OpResult, unchangedReason = "were already like that"): string {
+  const parts = [r.changed ? `${done.replace("{n}", plural(r.changed, "item", "items"))}` : "Nothing changed."];
+  if (r.unchanged) parts.push(`${plural(r.unchanged, "item", "items")} ${r.unchanged === 1 ? unchangedReason.replace(/^were/, "was") : unchangedReason}.`);
+  if (r.failed) parts.push(`${plural(r.failed, "item was", "items were")} not found or already removed.`);
+  return parts.join(" ");
+}
+
+const UNDO_DONE: Record<string, string> = {
+  tag_items: "Tagging undone.",
+  untag_items: "Tags put back.",
+  add_to_collection: "Removed from the collection again.",
+  remove_from_collection: "Put back into the collection.",
+  set_favorite: "Favorites undone.",
+  set_archived: "Archive change undone.",
+  remove: "Items restored.",
+  rename_tag: "Tag name put back.",
+  merge_tags: "Tag merge undone.",
+  merge_items: "Merge undone.",
+};
+
+export function undoMessage(r: { kind: string; applied: number; skipped: number }): string {
+  const head = UNDO_DONE[r.kind] ?? "Undone.";
+  return r.skipped ? `${head} ${plural(r.skipped, "item was", "items were")} left as they are because ${r.skipped === 1 ? "it was" : "they were"} changed since.` : head;
+}
+
+const ORG_ERROR: Record<string, string> = {
+  "tag-name-taken": "A tag with this name already exists. Use Merge into… to combine them.",
+  "collection-cycle": "A collection can't be moved inside itself.",
+  "collection tree too deep": "Collections can be nested at most 8 levels deep.",
+  "root-disconnected": "The drive with this file is not connected.",
+  "item is not in Recently removed": "Only items in Recently removed can be deleted for good.",
+};
+
+/** Message for a refused organize step; `diagnosticId` carries the reason. */
+export function orgErrorMessage(e: unknown): string {
+  const d = (e as { domain?: { diagnosticId?: string } | null })?.domain?.diagnosticId;
+  const code = (e as { code?: string })?.code;
+  if (code === "REVISION_CONFLICT") return "This item was changed somewhere else. Reload it and try again.";
+  return (d && ORG_ERROR[d]) || `That did not work (${code ?? "IPC_FAILED"}).`;
 }

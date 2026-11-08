@@ -7,6 +7,7 @@ import libraryFixture from "@fixtures/library-small.json";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { fixtureParseUrl } from "./fixtureUrl";
+import { createFixtureOrganize, createOrganizeState, matchesRules, tagKey, tagRefs, type OrganizeState } from "./fixtureOrganize";
 import type {
   AssetDto,
   ImportStatus,
@@ -32,7 +33,7 @@ export const RECENT_DAYS = 30;
 /** Named data sets, picked with `?fixture=<name>` in fixture mode. */
 export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow";
 
-export interface FixtureRecord extends Omit<LibraryItemDto, "snippet"> {
+export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt"> {
   creator: string | null;
   description: string | null;
   canonicalUrl: string | null;
@@ -41,6 +42,9 @@ export interface FixtureRecord extends Omit<LibraryItemDto, "snippet"> {
   archived: boolean;
   /** In Recently removed: hidden from lists, offered back by Add URL (AC-45). */
   removed: boolean;
+  removedAt: number | null;
+  collectionIds: string[];
+  revision: number;
 }
 
 interface RawFixtureItem {
@@ -90,6 +94,9 @@ export function fixtureRecords(): FixtureRecord[] {
     fileName: r.fileName,
     archived: false,
     removed: r.removed ?? false,
+    removedAt: r.removed ? r.addedAt + DAY : null,
+    collectionIds: [],
+    revision: 1,
   }));
 }
 
@@ -120,6 +127,9 @@ export function manyRecords(n: number): FixtureRecord[] {
       fileName: localState === "bookmark_only" ? null : `sample-${i + 1}.mp4`,
       archived: false,
       removed: false,
+      removedAt: null,
+      collectionIds: [],
+      revision: 1,
     };
   });
 }
@@ -188,12 +198,20 @@ function matchRecord(r: FixtureRecord, ts: string[]): Snippet | null | undefined
   return null;
 }
 
-export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW): ItemPage {
-  const ts = terms(q.text);
-  const notice = q.text.trim() !== "" && ts.length === 0 ? "no_searchable_terms" : null;
+export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW, org?: OrganizeState): ItemPage {
+  const smart = q.smartCollectionId ? org?.smart.find((x) => x.id === q.smartCollectionId)?.rules : undefined;
+  if (q.smartCollectionId && !smart) throw new IpcError("INTERNAL_ERROR", "list_items: error.internal");
+  const text = smart?.text.trim() ? `${smart.text} ${q.text}` : q.text;
+  const ts = terms(text);
+  const notice = text.trim() !== "" && ts.length === 0 ? "no_searchable_terms" : null;
+  const tagNames = (q.tagIds ?? []).map((id) => org?.tags.get(id)).filter((n): n is string => !!n);
   let rows = records
-    .filter((r) => !r.removed)
-    .filter((r) => (q.view === "archive" ? r.archived : !r.archived))
+    .filter((r) => (q.view === "removed" ? r.removed : !r.removed))
+    .filter((r) => q.view === "removed" || (smart ? true : q.view === "archive" ? r.archived : !r.archived))
+    .filter((r) => !smart || !org || matchesRules(org, r, smart, now))
+    .filter((r) => q.view !== "inbox" || r.collectionIds.length === 0)
+    .filter((r) => !q.tagIds?.length || r.tags.some((t) => tagNames.some((n) => tagKey(n) === tagKey(t))))
+    .filter((r) => !q.collectionId || r.collectionIds.includes(q.collectionId))
     .filter((r) => q.view !== "favorites" || r.isFavorite)
     .filter((r) => q.view !== "recent" || r.addedAt >= now - RECENT_DAYS * DAY)
     .filter((r) => q.platforms.length === 0 || q.platforms.includes(r.platform))
@@ -239,11 +257,13 @@ function toDto(r: FixtureRecord, snippet: Snippet | null): LibraryItemDto {
     thumbnailUrl: r.thumbnailUrl,
     addedAt: r.addedAt,
     isFavorite: r.isFavorite,
+    archived: r.archived,
+    removedAt: r.removed ? r.removedAt : null,
     snippet,
   };
 }
 
-function detail(r: FixtureRecord): ItemDetail {
+function detail(r: FixtureRecord, org: OrganizeState): ItemDetail {
   const assets: AssetDto[] = r.fileName
     ? [
         {
@@ -273,6 +293,9 @@ function detail(r: FixtureRecord): ItemDetail {
     updatedAt: r.addedAt,
     archived: r.archived,
     assets,
+    tagRefs: tagRefs(org, r),
+    collectionIds: [...r.collectionIds].sort(),
+    revision: r.revision,
   };
 }
 
@@ -299,16 +322,28 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
     return r ? { item: toDto(r, null), removed: r.removed, matchedBy: "canonical_url" } : null;
   };
   const fail = () => Promise.reject(new IpcError("INTERNAL_ERROR", "list_items: error.internal"));
+  const org = createOrganizeState(records, scenario === "default");
+  let clock = FIXTURE_NOW + 3_600_000;
+  const organize = createFixtureOrganize(records, org, (r) => toDto(r, null), () => (clock += 1000));
   return {
+    ...organize,
     async listItems(q) {
       if (scenario === "error") return fail();
       if (latency) await delay(latency);
-      return structuredClone(queryRecords(records, q));
+      return structuredClone(queryRecords(records, q, FIXTURE_NOW, org));
     },
     async getItem(id) {
       const r = records.find((x) => x.id === id && !x.removed);
       if (!r) throw new IpcError("INTERNAL_ERROR", "get_item: error.internal");
-      return structuredClone(detail(r));
+      return structuredClone(detail(r, org));
+    },
+    async setNotes(id, revision, notes) {
+      const r = records.find((x) => x.id === id && !x.removed);
+      if (!r) throw new IpcError("INTERNAL_ERROR", "set_notes: error.internal");
+      if (r.revision !== revision) throw new IpcError("REVISION_CONFLICT", "set_notes: error.revision_conflict");
+      r.notes = notes;
+      r.revision += 1;
+      return structuredClone(detail(r, org));
     },
     async importMedia() {
       await delay(300);
@@ -342,6 +377,9 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
         fileName: null,
         archived: false,
         removed: false,
+        removedAt: null,
+        collectionIds: [],
+        revision: 1,
       };
       records.push(r);
       return structuredClone({ outcome: "created", item: toDto(r, null), removed: false, matchedBy: null, warnings: p.warnings } satisfies SaveUrlResult);
@@ -350,6 +388,7 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
       const r = records.find((x) => x.id === id);
       if (!r) throw new IpcError("INTERNAL_ERROR", "restore_item: error.internal");
       r.removed = false;
+      r.removedAt = null;
       return structuredClone(toDto(r, null));
     },
     async onImportStatus(cb) {

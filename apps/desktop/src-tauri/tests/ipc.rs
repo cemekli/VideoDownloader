@@ -205,6 +205,34 @@ fn main_capability_grants_only_app_commands() {
         "allow-check-url",
         "allow-save-url",
         "allow-restore-item",
+        "allow-get-sidebar",
+        "allow-undo",
+        "allow-tag-items",
+        "allow-untag-items",
+        "allow-add-to-collection",
+        "allow-remove-from-collection",
+        "allow-set-favorite",
+        "allow-set-archived",
+        "allow-remove-items",
+        "allow-restore-items",
+        "allow-delete-items-permanently",
+        "allow-rename-tag",
+        "allow-merge-tags",
+        "allow-delete-tag",
+        "allow-create-collection",
+        "allow-rename-collection",
+        "allow-move-collection",
+        "allow-delete-collection",
+        "allow-save-smart-collection",
+        "allow-delete-smart-collection",
+        "allow-set-notes",
+        "allow-list-duplicates",
+        "allow-preview-merge",
+        "allow-merge-items",
+        "allow-dismiss-duplicate",
+        "allow-list-orphans",
+        "allow-reimport-orphan",
+        "allow-delete-orphan",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -430,4 +458,377 @@ fn add_url_refusals_are_domain_errors_without_the_input() {
         assert!(!err.to_string().contains("hunter2"), "{cmd}: {err}");
         assert!(invoke(&w, cmd, json!({ "url": 7 }), app_origin()).is_err());
     }
+}
+
+// ---- Organize (STATE.md F2.1–F2.3) ----
+
+fn ok(w: &WebviewWindow<MockRuntime>, cmd: &str, args: Value) -> Value {
+    invoke(w, cmd, args, app_origin()).unwrap_or_else(|e| panic!("{cmd}: {e}"))
+}
+
+#[test]
+fn organize_commands_match_contract_shape() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+    let other = ok(&w, "save_url", c["commands"]["save_url"]["args"].clone())["item"]["id"].clone();
+    let both = json!([id, other]);
+
+    let col = ok(
+        &w,
+        "create_collection",
+        json!({ "name": "Gezi", "parentId": null }),
+    );
+    assert_same_shape(&col, &spec("create_collection"), "create_collection");
+    let sub = ok(
+        &w,
+        "create_collection",
+        json!({ "name": "Deniz", "parentId": col["id"] }),
+    );
+
+    let tagged = ok(&w, "tag_items", json!({ "itemIds": both, "name": "deniz" }));
+    assert_same_shape(&tagged, &spec("tag_items"), "tag_items");
+    assert_same_shape(
+        &tagged["undo"],
+        &spec("tag_items")["undo"],
+        "tag_items.undo",
+    );
+    assert_eq!(tagged["changed"], 2);
+    let added = ok(
+        &w,
+        "add_to_collection",
+        json!({ "itemIds": [id], "collectionId": col["id"] }),
+    );
+    assert_same_shape(&added, &spec("add_to_collection"), "add_to_collection");
+
+    let sb = ok(&w, "get_sidebar", json!({}));
+    let tag = sb["tags"][0]["id"].clone();
+    let mut rules = c["commands"]["save_smart_collection"]["args"]["rules"].clone();
+    rules["tagIds"] = json!([tag]);
+    let smart = ok(
+        &w,
+        "save_smart_collection",
+        json!({ "id": null, "name": "Yaz", "rules": rules }),
+    );
+    assert_same_shape(
+        &smart,
+        &spec("save_smart_collection"),
+        "save_smart_collection",
+    );
+    let mut bad = rules.clone();
+    bad["sql"] = json!("DROP TABLE tag");
+    assert!(invoke(
+        &w,
+        "save_smart_collection",
+        json!({ "id": null, "name": "x", "rules": bad }),
+        app_origin()
+    )
+    .is_err());
+
+    let sb = ok(&w, "get_sidebar", json!({}));
+    let s = spec("get_sidebar");
+    assert_same_shape(&sb, &s, "get_sidebar");
+    assert_same_shape(
+        &sb["collections"][0],
+        &s["collections"][0],
+        "get_sidebar.collections[0]",
+    );
+    assert_same_shape(
+        &sb["collections"][1],
+        &s["collections"][1],
+        "get_sidebar.collections[1]",
+    );
+    assert_eq!(sb["collections"][1]["depth"], 1);
+    assert_same_shape(
+        &sb["smartCollections"][0],
+        &s["smartCollections"][0],
+        "get_sidebar.smartCollections[0]",
+    );
+    assert_same_shape(
+        &sb["smartCollections"][0]["rules"],
+        &s["smartCollections"][0]["rules"],
+        "rules",
+    );
+    assert_same_shape(&sb["tags"][0], &s["tags"][0], "get_sidebar.tags[0]");
+    assert_same_shape(&sb["counts"], &s["counts"], "get_sidebar.counts");
+    assert_eq!(sb["counts"]["inbox"], 1);
+
+    let list = |q: Value| ok(&w, "list_items", json!({ "query": q }))["total"].clone();
+    assert_eq!(list(json!({ "smartCollectionId": smart["id"] })), 2);
+    assert_eq!(list(json!({ "view": "inbox" })), 1);
+    assert_eq!(list(json!({ "tagIds": [tag] })), 2);
+    assert_eq!(list(json!({ "collectionId": col["id"] })), 1);
+    assert_eq!(list(json!({ "text": "deniz" })), 2, "tags are searchable");
+
+    let det = ok(&w, "get_item", json!({ "id": id }));
+    let mut expected = spec("get_item");
+    expected["assets"] = json!([]);
+    assert_same_shape(&det, &expected, "get_item");
+    assert_same_shape(
+        &det["tagRefs"][0],
+        &spec("get_item")["tagRefs"][0],
+        "get_item.tagRefs[0]",
+    );
+    let noted = ok(
+        &w,
+        "set_notes",
+        json!({ "id": id, "revision": det["revision"], "notes": "izlenecek" }),
+    );
+    let mut expected = spec("set_notes");
+    expected["assets"] = json!([]);
+    assert_same_shape(&noted, &expected, "set_notes");
+    assert_eq!(noted["notes"], "izlenecek");
+    let stale = invoke(
+        &w,
+        "set_notes",
+        json!({ "id": id, "revision": det["revision"], "notes": "x" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(stale["code"], "REVISION_CONFLICT");
+
+    for (cmd, args) in [
+        ("set_favorite", json!({ "itemIds": both, "value": true })),
+        ("set_archived", json!({ "itemIds": both, "value": true })),
+    ] {
+        assert_same_shape(&ok(&w, cmd, args), &spec(cmd), cmd);
+    }
+    let undone = ok(&w, "undo", json!({}));
+    assert_same_shape(&undone, &spec("undo"), "undo");
+    assert_eq!(undone["kind"], "set_archived");
+    assert_eq!(undone["applied"], 2);
+
+    let renamed = ok(
+        &w,
+        "rename_tag",
+        json!({ "id": tag, "name": "deniz kenarı" }),
+    );
+    assert_same_shape(&renamed, &spec("rename_tag"), "rename_tag");
+    ok(&w, "tag_items", json!({ "itemIds": [id], "name": "sahil" }));
+    let sahil = ok(&w, "get_sidebar", json!({}))["tags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "sahil")
+        .unwrap()["id"]
+        .clone();
+    let merged = ok(
+        &w,
+        "merge_tags",
+        json!({ "sourceId": sahil, "targetId": tag }),
+    );
+    assert_same_shape(&merged, &spec("merge_tags"), "merge_tags");
+    let untag = ok(&w, "untag_items", json!({ "itemIds": [id], "tagId": tag }));
+    assert_same_shape(&untag, &spec("untag_items"), "untag_items");
+    let out = ok(
+        &w,
+        "remove_from_collection",
+        json!({ "itemIds": [id], "collectionId": col["id"] }),
+    );
+    assert_same_shape(
+        &out,
+        &spec("remove_from_collection"),
+        "remove_from_collection",
+    );
+    let gone = ok(&w, "delete_tag", json!({ "id": tag }));
+    assert_same_shape(&gone, &spec("delete_tag"), "delete_tag");
+
+    assert_eq!(
+        ok(
+            &w,
+            "rename_collection",
+            json!({ "id": col["id"], "name": "Geziler" })
+        ),
+        Value::Null
+    );
+    assert_eq!(
+        ok(
+            &w,
+            "move_collection",
+            json!({ "id": sub["id"], "parentId": null })
+        ),
+        Value::Null
+    );
+    let cycle = invoke(
+        &w,
+        "move_collection",
+        json!({ "id": col["id"], "parentId": col["id"] }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(cycle["diagnosticId"], "collection-cycle");
+    assert!(invoke(
+        &w,
+        "delete_collection",
+        json!({ "id": col["id"], "policy": "rm -rf" }),
+        app_origin()
+    )
+    .is_err());
+    assert_eq!(
+        ok(
+            &w,
+            "delete_collection",
+            json!({ "id": col["id"], "policy": "delete_all" })
+        ),
+        1
+    );
+    assert_eq!(
+        ok(&w, "delete_smart_collection", json!({ "id": smart["id"] })),
+        Value::Null
+    );
+
+    // Duplicates: merge, then Undo brings both back.
+    let cand = {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        repo::open_duplicate_candidate(
+            db.writer(),
+            &id,
+            other.as_str().unwrap(),
+            vv_persistence::library::DuplicateReason::SimilarUrl,
+            1,
+        )
+        .unwrap()
+        .id
+    };
+    let dups = ok(&w, "list_duplicates", json!({}));
+    assert_same_shape(&dups[0], &spec("list_duplicates")[0], "list_duplicates[0]");
+    // The contract's item is the saved bookmark (no duration yet).
+    let saved = if dups[0]["a"]["id"] == other {
+        &dups[0]["a"]
+    } else {
+        &dups[0]["b"]
+    };
+    assert_same_shape(
+        saved,
+        &spec("list_duplicates")[0]["a"],
+        "list_duplicates[0].a",
+    );
+    let pv = ok(
+        &w,
+        "preview_merge",
+        json!({ "candidateId": cand, "targetId": other }),
+    );
+    let mut expected = spec("preview_merge");
+    expected["aliasUrl"] = pv["aliasUrl"].clone();
+    assert_same_shape(&pv, &expected, "preview_merge");
+    let m = ok(
+        &w,
+        "merge_items",
+        json!({ "candidateId": cand, "targetId": other }),
+    );
+    assert_same_shape(&m, &spec("merge_items"), "merge_items");
+    assert_eq!(list(json!({ "view": "removed" })), 1);
+    assert_eq!(ok(&w, "undo", json!({}))["kind"], "merge_items");
+    assert_eq!(list(json!({ "view": "removed" })), 0);
+    assert_eq!(
+        ok(&w, "dismiss_duplicate", json!({ "candidateId": cand })),
+        Value::Null
+    );
+    assert_eq!(ok(&w, "list_duplicates", json!({})), json!([]));
+
+    // Remove, restore, remove again and delete for good.
+    let removed = ok(&w, "remove_items", json!({ "itemIds": [id] }));
+    assert_same_shape(&removed, &spec("remove_items"), "remove_items");
+    let restored = ok(&w, "restore_items", json!({ "itemIds": [id] }));
+    assert_same_shape(&restored, &spec("restore_items"), "restore_items");
+    ok(&w, "remove_items", json!({ "itemIds": [id] }));
+    let del = ok(
+        &w,
+        "delete_items_permanently",
+        json!({ "itemIds": [id], "deleteMedia": false }),
+    );
+    assert_same_shape(
+        &del,
+        &spec("delete_items_permanently"),
+        "delete_items_permanently",
+    );
+    assert_same_shape(
+        &del["files"],
+        &spec("delete_items_permanently")["files"],
+        "delete.files",
+    );
+    assert_eq!(del["items"], 1);
+    let live = invoke(
+        &w,
+        "delete_items_permanently",
+        json!({ "itemIds": [other], "deleteMedia": true }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        live["code"], "INTERNAL_ERROR",
+        "live items are never deleted for good"
+    );
+
+    assert_eq!(ok(&w, "list_orphans", json!({})), json!([]));
+    for cmd in ["reimport_orphan", "delete_orphan"] {
+        assert!(
+            invoke(&w, cmd, json!({ "id": "nope" }), app_origin()).is_err(),
+            "{cmd}"
+        );
+    }
+}
+
+#[test]
+fn orphaned_media_round_trips_through_ipc() {
+    use vv_persistence::library::repo::{MediaAsset, StorageRoot};
+    use vv_persistence::library::*;
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        let root = StorageRoot {
+            id: new_id(),
+            kind: StorageRootKind::ManagedMedia,
+            label: "VideoVault".into(),
+            path: d.path().join("media").to_string_lossy().into_owned(),
+            volume_id: None,
+            status: StorageRootStatus::Available,
+            created_at: 1,
+            last_verified_at: None,
+        };
+        repo::insert_storage_root(db.writer(), &root).unwrap();
+        let mut a = MediaAsset::new(
+            &id,
+            AssetRole::Original,
+            MediaKind::Video,
+            StorageKind::Managed,
+            &root.id,
+            "a/video.mp4",
+            1,
+        );
+        a.size_bytes = Some(10);
+        repo::insert_media_asset(db.writer(), &a).unwrap();
+    }
+    ok(&w, "remove_items", json!({ "itemIds": [id] }));
+    let del = ok(
+        &w,
+        "delete_items_permanently",
+        json!({ "itemIds": [id], "deleteMedia": false }),
+    );
+    assert_eq!(del["orphaned"], 1);
+    let orphans = ok(&w, "list_orphans", json!({}));
+    let spec = &c["commands"]["list_orphans"]["response"][0];
+    assert_same_shape(&orphans[0], spec, "list_orphans[0]");
+    assert_eq!(orphans[0]["fileName"], "video.mp4");
+    assert!(
+        !orphans
+            .to_string()
+            .contains(&d.path().to_string_lossy().into_owned()),
+        "no paths"
+    );
+    let item = ok(&w, "reimport_orphan", json!({ "id": orphans[0]["id"] }));
+    assert_same_shape(
+        &item,
+        &c["commands"]["reimport_orphan"]["response"],
+        "reimport_orphan",
+    );
+    assert_eq!(item["kind"], "local_video");
+    assert_eq!(ok(&w, "list_orphans", json!({})), json!([]));
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-duplicates"
+description = "Enables the list_duplicates command without any pre-configured scope."
+commands.allow = ["list_duplicates"]
+
+[[permission]]
+identifier = "deny-list-duplicates"
+description = "Denies the list_duplicates command without any pre-configured scope."
+commands.deny = ["list_duplicates"]

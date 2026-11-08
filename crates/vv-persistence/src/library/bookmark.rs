@@ -89,10 +89,18 @@ pub fn find_existing(
     c: &Connection,
     n: &Normalized,
 ) -> super::Result<Option<(LibraryItem, MatchedBy)>> {
+    let alias = repo::item_by_alias(c, &n.canonical_url)?;
     if let Some(i) = repo::item_by_canonical_url(c, &n.canonical_url)? {
-        return Ok(Some((i, MatchedBy::CanonicalUrl)));
+        // A merged-away item keeps its URL while it sits in Recently
+        // removed; the URL now belongs to the merge target (ORG-11).
+        match alias {
+            Some(a) if i.removed_at.is_some() && a.removed_at.is_none() => {
+                return Ok(Some((a, MatchedBy::Alias)))
+            }
+            _ => return Ok(Some((i, MatchedBy::CanonicalUrl))),
+        }
     }
-    if let Some(i) = repo::item_by_alias(c, &n.canonical_url)? {
+    if let Some(i) = alias {
         return Ok(Some((i, MatchedBy::Alias)));
     }
     if let Some(id) = &n.source_id {

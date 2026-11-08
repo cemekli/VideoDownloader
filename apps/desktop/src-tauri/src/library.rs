@@ -43,6 +43,8 @@ pub struct LibraryState {
     /// Never set today; the import API takes a cancel flag and the UI gets a
     /// Cancel button once imports report progress.
     cancel: AtomicBool,
+    /// This app run. Undo reaches only operations of the current run (§7.3).
+    session: OnceLock<String>,
 }
 
 fn not_open() -> DomainError {
@@ -76,6 +78,10 @@ impl LibraryState {
 
     pub fn get(&self) -> Result<&Library, DomainError> {
         self.inner.get().ok_or_else(not_open)
+    }
+
+    pub fn session(&self) -> &str {
+        self.session.get_or_init(vv_persistence::library::new_id)
     }
 }
 
@@ -134,10 +140,66 @@ impl Library {
             return;
         };
         let _ = vv_import::roots::check_storage(db.writer(), &SystemClock);
+        // Retention clean-up of Recently removed (§7.3); managed originals
+        // are kept as orphaned media, derived files are deleted.
+        let purged = (|| {
+            let tx = db.writer().transaction()?;
+            let r = vv_persistence::library::removal::purge_expired(
+                &tx,
+                SystemClock.now_ms(),
+                vv_persistence::library::removal::RETENTION_DAYS,
+            )?;
+            tx.commit()?;
+            Ok::<_, vv_persistence::library::LibraryError>(r)
+        })();
+        if let Ok(r) = purged {
+            delete_files(db.writer(), &r.files_to_delete);
+        }
         if let Some(tools) = &self.tools {
             let _ = make_thumbnails(db.writer(), &SystemClock, tools, &self.cache_dir);
         }
     }
+}
+
+/// What happened to the files a permanent delete asked to remove.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDeletion {
+    pub deleted: u32,
+    /// Not deleted: root not reachable, file outside its root, or an OS error.
+    pub failed: u32,
+}
+
+/// Deletes files given as `(storage_root_id, storage_ref)`, after the
+/// database commit. A file is deleted only if it resolves inside its root;
+/// a link pointing elsewhere is refused (same rule as the thumbnail
+/// protocol). Missing files count as deleted.
+pub fn delete_files(c: &Connection, refs: &[(String, String)]) -> FileDeletion {
+    let mut out = FileDeletion::default();
+    for (root_id, storage_ref) in refs {
+        let ok = (|| {
+            let root = vv_persistence::library::repo::get_storage_root(c, root_id).ok()??;
+            let root = std::fs::canonicalize(&root.path).ok()?;
+            let path = vv_import::fsutil::resolve_ref(&root, storage_ref);
+            match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(()),
+                Err(_) => return None,
+                Ok(m) if !m.is_file() => return None,
+                Ok(_) => {}
+            }
+            let real = std::fs::canonicalize(&path).ok()?;
+            if !real.starts_with(&root) {
+                return None;
+            }
+            std::fs::remove_file(&real).ok()
+        })();
+        if ok.is_some() {
+            out.deleted += 1;
+        } else {
+            out.failed += 1;
+        }
+    }
+    out
 }
 
 fn make_thumbnails(

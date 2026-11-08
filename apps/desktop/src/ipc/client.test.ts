@@ -82,6 +82,52 @@ describe("Tauri client", () => {
   });
 });
 
+// Organize commands (F2.1–F2.3): each client method sends the contract's
+// argument names to the command of the same name.
+const ORGANIZE_CALLS: Array<[string, (c: ReturnType<typeof createTauriClient>, a: Record<string, unknown>) => Promise<unknown>]> = [
+  ["get_sidebar", (c) => c.getSidebar()],
+  ["undo", (c) => c.undo()],
+  ["tag_items", (c, a) => c.tagItems(a.itemIds as string[], a.name as string)],
+  ["untag_items", (c, a) => c.untagItems(a.itemIds as string[], a.tagId as string)],
+  ["add_to_collection", (c, a) => c.addToCollection(a.itemIds as string[], a.collectionId as string)],
+  ["remove_from_collection", (c, a) => c.removeFromCollection(a.itemIds as string[], a.collectionId as string)],
+  ["set_favorite", (c, a) => c.setFavorite(a.itemIds as string[], a.value as boolean)],
+  ["set_archived", (c, a) => c.setArchived(a.itemIds as string[], a.value as boolean)],
+  ["remove_items", (c, a) => c.removeItems(a.itemIds as string[])],
+  ["restore_items", (c, a) => c.restoreItems(a.itemIds as string[])],
+  ["delete_items_permanently", (c, a) => c.deleteItemsPermanently(a.itemIds as string[], a.deleteMedia as boolean)],
+  ["rename_tag", (c, a) => c.renameTag(a.id as string, a.name as string)],
+  ["merge_tags", (c, a) => c.mergeTags(a.sourceId as string, a.targetId as string)],
+  ["delete_tag", (c, a) => c.deleteTag(a.id as string)],
+  ["create_collection", (c, a) => c.createCollection(a.name as string, a.parentId as string | null)],
+  ["rename_collection", (c, a) => c.renameCollection(a.id as string, a.name as string)],
+  ["move_collection", (c, a) => c.moveCollection(a.id as string, a.parentId as string | null)],
+  ["delete_collection", (c, a) => c.deleteCollection(a.id as string, a.policy as "move_up")],
+  ["save_smart_collection", (c, a) => c.saveSmartCollection(a.id as string | null, a.name as string, a.rules as never)],
+  ["delete_smart_collection", (c, a) => c.deleteSmartCollection(a.id as string)],
+  ["set_notes", (c, a) => c.setNotes(a.id as string, a.revision as number, a.notes as string)],
+  ["list_duplicates", (c) => c.listDuplicates()],
+  ["preview_merge", (c, a) => c.previewMerge(a.candidateId as string, a.targetId as string)],
+  ["merge_items", (c, a) => c.mergeItems(a.candidateId as string, a.targetId as string)],
+  ["dismiss_duplicate", (c, a) => c.dismissDuplicate(a.candidateId as string)],
+  ["list_orphans", (c) => c.listOrphans()],
+  ["reimport_orphan", (c, a) => c.reimportOrphan(a.id as string)],
+  ["delete_orphan", (c, a) => c.deleteOrphan(a.id as string)],
+];
+
+describe("Tauri client: organize commands", () => {
+  it.each(ORGANIZE_CALLS)("%s sends the contract arguments", async (cmd, callIt) => {
+    const spec = (contract.commands as Record<string, { args: Record<string, unknown>; response: unknown }>)[cmd]!;
+    const calls: Array<[string, unknown]> = [];
+    mockIPC((name, args) => {
+      calls.push([name, args]);
+      return spec.response;
+    });
+    await expect(callIt(createTauriClient(), spec.args)).resolves.toEqual(spec.response);
+    expect(calls).toEqual([[cmd, spec.args]]);
+  });
+});
+
 describe("fixture client", () => {
   it("reports itself as fixture data with the contract status shape", async () => {
     const c = createFixtureClient();
@@ -99,6 +145,20 @@ describe("fixture client", () => {
     const d = await createFixtureClient().getItem("00000000-0000-4000-8000-000000000001");
     expect(Object.keys(d).sort()).toEqual(Object.keys(contract.commands.get_item.response).sort());
     expect(Object.keys(d.assets[0]!).sort()).toEqual(Object.keys(contract.commands.get_item.response.assets[0]!).sort());
+  });
+
+  it("answers the organize reads with the contract shapes", async () => {
+    const c = createFixtureClient();
+    const keys = (o: object) => Object.keys(o).sort();
+    const sb = await c.getSidebar();
+    expect(keys(sb)).toEqual(keys(contract.commands.get_sidebar.response));
+    expect(keys(sb.tags[0]!)).toEqual(keys(contract.commands.get_sidebar.response.tags[0]!));
+    const op = await c.tagItems(["00000000-0000-4000-8000-000000000001"], "deniz");
+    expect(keys(op)).toEqual(keys(contract.commands.tag_items.response));
+    const dups = await c.listDuplicates();
+    expect(keys(dups[0]!)).toEqual(keys(contract.commands.list_duplicates.response[0]!));
+    const p = await c.previewMerge(dups[0]!.id, dups[0]!.a.id);
+    expect(keys(p)).toEqual(keys(contract.commands.preview_merge.response));
   });
 
   it("picks a scenario from the URL, defaulting to the fixture set", () => {

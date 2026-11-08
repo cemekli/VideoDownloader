@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-merge-tags"
+description = "Enables the merge_tags command without any pre-configured scope."
+commands.allow = ["merge_tags"]
+
+[[permission]]
+identifier = "deny-merge-tags"
+description = "Denies the merge_tags command without any pre-configured scope."
+commands.deny = ["merge_tags"]

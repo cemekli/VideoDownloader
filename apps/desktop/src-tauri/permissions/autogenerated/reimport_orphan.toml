@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reimport-orphan"
+description = "Enables the reimport_orphan command without any pre-configured scope."
+commands.allow = ["reimport_orphan"]
+
+[[permission]]
+identifier = "deny-reimport-orphan"
+description = "Denies the reimport_orphan command without any pre-configured scope."
+commands.deny = ["reimport_orphan"]

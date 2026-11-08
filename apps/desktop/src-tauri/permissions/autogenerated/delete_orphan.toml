@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-orphan"
+description = "Enables the delete_orphan command without any pre-configured scope."
+commands.allow = ["delete_orphan"]
+
+[[permission]]
+identifier = "deny-delete-orphan"
+description = "Denies the delete_orphan command without any pre-configured scope."
+commands.deny = ["delete_orphan"]

@@ -50,7 +50,10 @@
           "sort": "relevance",
           "descending": true,
           "offset": 0,
-          "limit": 100
+          "limit": 100,
+          "tagIds": [],
+          "collectionId": null,
+          "smartCollectionId": null
         }
       },
       "response": {
@@ -68,6 +71,8 @@
             "thumbnailUrl": null,
             "addedAt": 1794000000000,
             "isFavorite": false,
+            "archived": false,
+            "removedAt": null,
             "snippet": {
               "field": "title",
               "parts": [
@@ -104,6 +109,8 @@
           "thumbnailUrl": null,
           "addedAt": 1794000000000,
           "isFavorite": false,
+          "archived": false,
+          "removedAt": null,
           "snippet": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -129,7 +136,17 @@
             "height": 1080,
             "durationMs": 372000
           }
-        ]
+        ],
+        "tagRefs": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000t1",
+            "name": "deniz"
+          }
+        ],
+        "collectionIds": [
+          "00000000-0000-4000-8000-0000000000c1"
+        ],
+        "revision": 1
       }
     },
     "import_media": {
@@ -169,6 +186,8 @@
             "thumbnailUrl": null,
             "addedAt": 1794000100000,
             "isFavorite": false,
+            "archived": false,
+            "removedAt": null,
             "snippet": null
           },
           "removed": false,
@@ -196,6 +215,8 @@
           "thumbnailUrl": null,
           "addedAt": 1794000100000,
           "isFavorite": false,
+          "archived": false,
+          "removedAt": null,
           "snippet": null
         },
         "removed": false,
@@ -218,7 +239,544 @@
         "thumbnailUrl": null,
         "addedAt": 1794000100000,
         "isFavorite": false,
+        "archived": false,
+        "removedAt": null,
         "snippet": null
+      }
+    },
+    "get_sidebar": {
+      "args": {},
+      "response": {
+        "collections": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000c1",
+            "name": "Gezi",
+            "parentId": null,
+            "depth": 0,
+            "items": 1
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000c2",
+            "name": "Deniz",
+            "parentId": "00000000-0000-4000-8000-0000000000c1",
+            "depth": 1,
+            "items": 0
+          }
+        ],
+        "smartCollections": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000s1",
+            "name": "Son yaz videoları",
+            "rules": {
+              "text": "",
+              "platforms": [
+                "youtube"
+              ],
+              "kinds": [],
+              "tagIds": [
+                "00000000-0000-4000-8000-0000000000t1"
+              ],
+              "collectionIds": [],
+              "favoriteOnly": false,
+              "includeArchived": false,
+              "addedWithinDays": 30,
+              "minDurationMs": null,
+              "maxDurationMs": null
+            },
+            "invalid": false
+          }
+        ],
+        "tags": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000t1",
+            "name": "deniz",
+            "items": 2
+          }
+        ],
+        "counts": {
+          "inbox": 1,
+          "removed": 0,
+          "duplicates": 0,
+          "orphans": 0
+        }
+      }
+    },
+    "undo": {
+      "args": {},
+      "response": {
+        "kind": "tag_items",
+        "applied": 2,
+        "skipped": 0
+      }
+    },
+    "tag_items": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-0000000000b1"
+        ],
+        "name": "deniz"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "untag_items": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "tagId": "00000000-0000-4000-8000-0000000000t1"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "add_to_collection": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "collectionId": "00000000-0000-4000-8000-0000000000c1"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "remove_from_collection": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "collectionId": "00000000-0000-4000-8000-0000000000c1"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "set_favorite": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "value": true
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "set_archived": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "value": true
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "remove_items": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "restore_items": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "response": {
+        "changed": 1,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": null
+      }
+    },
+    "delete_items_permanently": {
+      "args": {
+        "itemIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "deleteMedia": false
+      },
+      "response": {
+        "items": 1,
+        "orphaned": 0,
+        "files": {
+          "deleted": 0,
+          "failed": 0
+        }
+      }
+    },
+    "rename_tag": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000t1",
+        "name": "deniz kenarı"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "merge_tags": {
+      "args": {
+        "sourceId": "00000000-0000-4000-8000-0000000000t1",
+        "targetId": "00000000-0000-4000-8000-0000000000t2"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "tag_items",
+          "size": 2
+        }
+      }
+    },
+    "delete_tag": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000t1"
+      },
+      "response": {
+        "changed": 1,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": null
+      }
+    },
+    "create_collection": {
+      "args": {
+        "name": "Gezi",
+        "parentId": null
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-0000000000c1",
+        "name": "Gezi"
+      }
+    },
+    "rename_collection": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000c1",
+        "name": "Geziler"
+      },
+      "response": null
+    },
+    "move_collection": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000c2",
+        "parentId": null
+      },
+      "response": null
+    },
+    "delete_collection": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000c1",
+        "policy": "move_up"
+      },
+      "response": 1
+    },
+    "save_smart_collection": {
+      "args": {
+        "id": null,
+        "name": "Son yaz videoları",
+        "rules": {
+          "text": "",
+          "platforms": [
+            "youtube"
+          ],
+          "kinds": [],
+          "tagIds": [
+            "00000000-0000-4000-8000-0000000000t1"
+          ],
+          "collectionIds": [],
+          "favoriteOnly": false,
+          "includeArchived": false,
+          "addedWithinDays": 30,
+          "minDurationMs": null,
+          "maxDurationMs": null
+        }
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-0000000000s1",
+        "name": "Son yaz videoları"
+      }
+    },
+    "delete_smart_collection": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000s1"
+      },
+      "response": null
+    },
+    "set_notes": {
+      "args": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "revision": 1,
+        "notes": "izlenecek"
+      },
+      "response": {
+        "item": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "title": "Deniz kenarında sabah",
+          "platform": "youtube",
+          "kind": "bookmark",
+          "localState": "bookmark_only",
+          "durationMs": 372000,
+          "tags": [],
+          "thumbnailUrl": null,
+          "addedAt": 1794000000000,
+          "isFavorite": false,
+          "archived": false,
+          "removedAt": null,
+          "snippet": null
+        },
+        "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "creator": null,
+        "description": null,
+        "notes": "izlenecek",
+        "publishedAt": null,
+        "publishedDate": null,
+        "metadataStatus": "pending",
+        "updatedAt": 1794000000000,
+        "archived": false,
+        "assets": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "fileName": "sabah.mp4",
+            "rootLabel": "Videos",
+            "rootStatus": "available",
+            "integrityState": "verified",
+            "sizeBytes": 1048576,
+            "container": "mp4",
+            "videoCodec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "durationMs": 372000
+          }
+        ],
+        "tagRefs": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000t1",
+            "name": "deniz"
+          }
+        ],
+        "collectionIds": [
+          "00000000-0000-4000-8000-0000000000c1"
+        ],
+        "revision": 1
+      }
+    },
+    "list_duplicates": {
+      "args": {},
+      "response": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000d1",
+          "reason": "source_id_conflict",
+          "createdAt": 1794000200000,
+          "a": {
+            "id": "00000000-0000-4000-8000-0000000000b1",
+            "title": "YouTube · vvTestVid01",
+            "platform": "youtube",
+            "kind": "bookmark",
+            "localState": "bookmark_only",
+            "durationMs": null,
+            "tags": [],
+            "thumbnailUrl": null,
+            "addedAt": 1794000100000,
+            "isFavorite": false,
+            "archived": false,
+            "removedAt": null,
+            "snippet": null
+          },
+          "b": {
+            "id": "00000000-0000-4000-8000-0000000000b1",
+            "title": "YouTube · vvTestVid01",
+            "platform": "youtube",
+            "kind": "bookmark",
+            "localState": "bookmark_only",
+            "durationMs": null,
+            "tags": [],
+            "thumbnailUrl": null,
+            "addedAt": 1794000100000,
+            "isFavorite": false,
+            "archived": false,
+            "removedAt": null,
+            "snippet": null
+          }
+        }
+      ]
+    },
+    "preview_merge": {
+      "args": {
+        "candidateId": "00000000-0000-4000-8000-0000000000d1",
+        "targetId": "00000000-0000-4000-8000-0000000000b1"
+      },
+      "response": {
+        "target": {
+          "id": "00000000-0000-4000-8000-0000000000b1",
+          "title": "YouTube · vvTestVid01",
+          "platform": "youtube",
+          "kind": "bookmark",
+          "localState": "bookmark_only",
+          "durationMs": null,
+          "tags": [],
+          "thumbnailUrl": null,
+          "addedAt": 1794000100000,
+          "isFavorite": false,
+          "archived": false,
+          "removedAt": null,
+          "snippet": null
+        },
+        "source": {
+          "id": "00000000-0000-4000-8000-0000000000b1",
+          "title": "YouTube · vvTestVid01",
+          "platform": "youtube",
+          "kind": "bookmark",
+          "localState": "bookmark_only",
+          "durationMs": null,
+          "tags": [],
+          "thumbnailUrl": null,
+          "addedAt": 1794000100000,
+          "isFavorite": false,
+          "archived": false,
+          "removedAt": null,
+          "snippet": null
+        },
+        "notesAfter": "",
+        "tagsToAdd": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000t1",
+            "name": "deniz"
+          }
+        ],
+        "collectionsToAdd": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000c1",
+            "name": "Gezi"
+          }
+        ],
+        "mediaToMove": [
+          "video.mp4"
+        ],
+        "aliasUrl": "https://www.youtube.com/watch?v=vvTestVid02",
+        "becomesFavorite": false
+      }
+    },
+    "merge_items": {
+      "args": {
+        "candidateId": "00000000-0000-4000-8000-0000000000d1",
+        "targetId": "00000000-0000-4000-8000-0000000000b1"
+      },
+      "response": {
+        "changed": 2,
+        "unchanged": 0,
+        "failed": 0,
+        "undo": {
+          "kind": "merge_items",
+          "size": 1
+        }
+      }
+    },
+    "dismiss_duplicate": {
+      "args": {
+        "candidateId": "00000000-0000-4000-8000-0000000000d1"
+      },
+      "response": null
+    },
+    "list_orphans": {
+      "args": {},
+      "response": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000o1",
+          "fileName": "video.mp4",
+          "rootLabel": "VideoVault",
+          "rootStatus": "available",
+          "sizeBytes": 1048576,
+          "formerTitle": "Deniz kenarında sabah",
+          "orphanedAt": 1794000300000
+        }
+      ]
+    },
+    "reimport_orphan": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000o1"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-0000000000b1",
+        "title": "YouTube · vvTestVid01",
+        "platform": "youtube",
+        "kind": "bookmark",
+        "localState": "bookmark_only",
+        "durationMs": null,
+        "tags": [],
+        "thumbnailUrl": null,
+        "addedAt": 1794000100000,
+        "isFavorite": false,
+        "archived": false,
+        "removedAt": null,
+        "snippet": null
+      }
+    },
+    "delete_orphan": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000o1"
+      },
+      "response": {
+        "deleted": 1,
+        "failed": 0
       }
     }
   },

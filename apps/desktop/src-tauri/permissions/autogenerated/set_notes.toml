@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-notes"
+description = "Enables the set_notes command without any pre-configured scope."
+commands.allow = ["set_notes"]
+
+[[permission]]
+identifier = "deny-set-notes"
+description = "Denies the set_notes command without any pre-configured scope."
+commands.deny = ["set_notes"]
