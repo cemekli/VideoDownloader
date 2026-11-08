@@ -8,6 +8,9 @@
 pub mod library;
 pub mod lock;
 pub mod migrations;
+pub mod portable;
+pub mod restore;
+pub mod settings;
 
 use migrations::{recorded_version, Migration, MigrationError, Migrator, MIGRATIONS};
 use rusqlite::{Connection, OpenFlags};
