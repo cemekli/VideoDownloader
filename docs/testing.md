@@ -39,6 +39,18 @@ npm run setup        # web bağımlılıkları + Playwright Chromium
 
 Önceden kurulu bir Chromium kullanmak için `PW_CHROMIUM_EXECUTABLE` ortam değişkenine tarayıcının yolunu verin.
 
+## CI ne zaman çalışır
+
+CI (`.github/workflows/ci.yml`) her değişikliği Windows ve Linux'ta bir kez test eder (8 Kasım 2026'dan beri):
+
+- Yalnızca pull request'lerde çalışır. Main'e merge edilen kod PR'da zaten test edildiği için main'de yeniden çalışmaz.
+- Taslak (draft) PR'larda çalışmaz. PR "Ready for review" yapılınca çalışır. Bu yüzden ara işler taslak PR olarak açılır ve büyük adımlarda hazır yapılır.
+- Aynı PR'a yeni bir push gelirse eski çalışma iptal edilir.
+- Yalnızca Markdown dosyaları (STATE, HANDOFF, `docs/`) değiştiyse CI çalışmaz.
+- GitHub'da Actions → ci → "Run workflow" ile herhangi bir dalda elle çalıştırılabilir.
+
+**Kanıt:** CI çalışmadıysa, STATE.md'de bir alt görevi ✅ yapmak için iki yerel `npm run verify` raporu birlikte kanıt sayılır: Windows'ta Cuma'nın çalıştırdığı rapor (gerçek uygulama E2E dahil) ve Linux'ta Claude'un çalıştırdığı rapor. "Doğrulama" sütununa tarih ve iki raporun sonucu yazılır.
+
 ## Yeni test nereye eklenir
 
 | Ne test ediliyor | Nereye | Not |

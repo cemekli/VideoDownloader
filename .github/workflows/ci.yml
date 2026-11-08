@@ -1,12 +1,27 @@
 name: ci
 
+# One run per change (docs/testing.md "CI ne zaman çalışır"):
+# - Pull requests only. A merge to main is the same code the PR already
+#   tested, so main is not run again.
+# - Draft PRs are not run; marking the PR "Ready for review" runs it. Work in
+#   progress is checked locally with `npm run verify`.
+# - A new push cancels the older run of the same PR.
+# - Changes to Markdown only (STATE, HANDOFF, docs) do not run CI.
+# - "Run workflow" (workflow_dispatch) runs it by hand on any branch.
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     strategy:
       fail-fast: false
       matrix:
