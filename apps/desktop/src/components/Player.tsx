@@ -62,12 +62,23 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
     setStarted(true);
     const go = () => {
       v.currentTime = fromMs / 1000;
-      void v.play().catch(() => {});
+      // play() may be refused (autoplay policy); the controls still work.
+      void Promise.resolve(v.play()).catch(() => {});
       v.focus();
     };
     if (v.readyState >= 1) go();
     else v.addEventListener("loadedmetadata", go, { once: true });
   };
+
+  // Play starts the video at once, unless there is a position to offer.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || !source?.available || resume) return;
+    autoStarted.current = true;
+    start(0);
+    // start only reads refs and setters; it runs once per opened file.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source?.available, source?.assetId, resume]);
 
   const close = () => {
     save();
