@@ -49,10 +49,30 @@ const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest(
 const tool = (id) => manifest.tools.find((t) => t.id === id) ?? fail(`manifest has no ${id}`);
 const artifact = (t) => t.artifacts.find((a) => a.platform === platform) ?? fail(`${t.id} has no artifact for ${platform}`);
 
+// GitHub release downloads sometimes answer 5xx or drop the connection for a
+// minute. Those are retried with backoff; a 4xx (wrong URL) fails at once.
+// The hash check after the download is what decides whether a file is good.
+const RETRY_DELAYS_MS = [2000, 5000, 15000, 30000];
+
 async function download(url, to) {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) fail(`${url}: HTTP ${res.status}`);
-  writeFileSync(to, Buffer.from(await res.arrayBuffer()));
+  for (let attempt = 0; ; attempt++) {
+    let problem;
+    try {
+      const res = await fetch(url, { redirect: "follow" });
+      if (res.ok) {
+        writeFileSync(to, Buffer.from(await res.arrayBuffer()));
+        return;
+      }
+      if (res.status < 500 && res.status !== 429) fail(`${url}: HTTP ${res.status}`);
+      problem = `HTTP ${res.status}`;
+    } catch (e) {
+      problem = e?.cause?.code ?? e?.message ?? String(e);
+    }
+    const wait = RETRY_DELAYS_MS[attempt];
+    if (wait === undefined) fail(`${url}: ${problem} (gave up after ${attempt + 1} attempts)`);
+    console.log(`… ${problem}, retrying in ${wait / 1000} s`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
 }
 
 // gpgv only checks a signature against a keyring file: no agent, no home

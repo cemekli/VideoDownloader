@@ -185,7 +185,11 @@ pub fn thumbnail_url(asset_id: &str) -> String {
     }
 }
 
-fn item_dto(it: &LibraryItem, state: LocalState, snippet: Option<SnippetDto>) -> LibraryItemDto {
+pub(crate) fn item_dto(
+    it: &LibraryItem,
+    state: LocalState,
+    snippet: Option<SnippetDto>,
+) -> LibraryItemDto {
     LibraryItemDto {
         id: it.id.clone(),
         title: it.display_title(),
@@ -289,6 +293,15 @@ fn asset_dto(a: AssetView) -> AssetDto {
     }
 }
 
+/// The list row of one item, with its local state.
+pub(crate) fn dto_of(c: &Connection, it: &LibraryItem) -> Result<LibraryItemDto, DomainError> {
+    let state = view::local_states(c, &[it.id.as_str()])
+        .map_err(|_| internal("item-state"))?
+        .remove(&it.id)
+        .unwrap_or(LocalState::BookmarkOnly);
+    Ok(item_dto(it, state, None))
+}
+
 pub fn item_detail(c: &Connection, id: &str) -> Result<ItemDetail, DomainError> {
     let it = repo::get_item(c, id)
         .map_err(|_| internal("item-read"))?
@@ -315,7 +328,7 @@ pub fn item_detail(c: &Connection, id: &str) -> Result<ItemDetail, DomainError> 
     })
 }
 
-async fn blocking<R: Runtime, T: Send + 'static>(
+pub(crate) async fn blocking<R: Runtime, T: Send + 'static>(
     app: AppHandle<R>,
     f: impl FnOnce(&LibraryState) -> Result<T, DomainError> + Send + 'static,
 ) -> Result<T, DomainError> {

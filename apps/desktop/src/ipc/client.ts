@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppStatus, BackendClient, Diagnostics, DomainError, ImportStatus, ImportSummary, ItemDetail, ItemPage, Pong } from "./types";
+import type { AppStatus, BackendClient, Diagnostics, DomainError, ImportStatus, ImportSummary, ItemDetail, ItemPage, LibraryItemDto, Pong, SaveUrlResult, UrlCheck } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
@@ -49,6 +49,9 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     getItem: (id) => library.getItem(id),
     importMedia: (s) => library.importMedia(s),
     onImportStatus: (cb) => library.onImportStatus(cb),
+    checkUrl: (u) => library.checkUrl(u),
+    saveUrl: (u) => library.saveUrl(u),
+    restoreItem: (id) => library.restoreItem(id),
     emitImportStatus: (s) => library.emitImportStatus(s),
     async ping(nonce) {
       return { nonce, contractVersion: CONTRACT_VERSION };
@@ -69,6 +72,9 @@ export function createTauriClient(): BackendClient {
     listItems: (query) => call<ItemPage>("list_items", { query }),
     getItem: (id) => call<ItemDetail>("get_item", { id }),
     importMedia: (source) => call<ImportSummary>("import_media", { source }),
+    checkUrl: (url) => call<UrlCheck>("check_url", { url }),
+    saveUrl: (url) => call<SaveUrlResult>("save_url", { url }),
+    restoreItem: (id) => call<LibraryItemDto>("restore_item", { id }),
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));

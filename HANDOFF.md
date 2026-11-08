@@ -5,18 +5,22 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Nerede kaldık
 
 - **Tamamlananlar:** F0'ın tamamı, F1.1–F1.3 (PR #13) ve F1.4–F1.6 (PR #14, ADR-0012), 19/74. Hepsi main'de, Windows + Linux CI yeşil.
-- **F1.7 (Library ekranı) 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0013.
+- **F1.7 (Library ekranı) 🟨:** PR #16 ile merge edildi; Windows'ta elle kontrol (MT-04) 8 Kas 2026'da geçti. Yalnızca yeşil CI bekliyor (GitHub release indirmeleri 504 veriyordu). ADR-0013.
   - Uygulama açılışta kütüphaneyi `<data>/db/library.sqlite`'ta açıyor, arka planda `check_storage` ve eksik küçük resimleri çalıştırıyor.
   - Komutlar: `list_items` (görünüm, filtre, arama, sıralama, sayfa), `get_item` (inspector), `import_media` (dosya diyaloğu Rust'ta). Pencereye bırakılan dosyalar da Rust'ta import ediliyor; webview hiç dosya yolu göndermiyor.
   - Küçük resimler `vvthumb` protokolüyle geliyor; CSP yalnızca buna izin veriyor.
   - Ekran: gezinme, arama (`Ctrl+K`), filtre chip'leri, grid/liste (sanallaştırılmış), çoklu seçim, inspector, ilk kullanım/yükleniyor/hata/sonuç yok/çevrimdışı durumları. 3 boyutta ekran görüntüleri `test-artifacts/screenshots/library-*.png`.
-  - ✅ için kalan: Windows CI ve Windows'ta elle kontrol (aşağıda).
+- **F1.8 (Add URL) 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0014.
+  - Komutlar `check_url` (yazarken denetim, yazmaz), `save_url`, `restore_item` (Recently removed'dan geri alma).
+  - Üst çubukta Add URL; yapıştır + Enter kaydeder. `Ctrl+K` aramasına bağlantı yapıştırılırsa "Save this link" önerisi çıkar. Liste odaktayken `Ctrl+V` ile bağlantı yapıştırmak Add URL'yi açar.
+  - NFR-01: 10.000 öğede p95 1,4 ms (Linux debug). Gerçek uygulama E2E'si kaydet → kapat → aç → ara akışını Windows'ta dener.
 
 ## Sonraki ilk adımlar
 
-1. F1.7 PR'ı merge edildiyse `git checkout main && git pull`.
-2. Windows'ta elle kontrol (MT-04): `node scripts/fetch-tools.mjs` sonra `npm run desktop`; Import → Files… ile birkaç video seç, bir klasörü pencereye sürükle-bırak, küçük resimlerin geldiğini, inspector'ı ve harici disk çıkarılınca "Drive disconnected" durumunu gör. Sonucu STATE.md F1.7 satırına yaz.
-3. F1.8: Add URL (`Ctrl+K` paletinde URL önerisi, `save_bookmark`), Yolculuk 1 E2E.
+1. `git checkout main && git pull`.
+2. GitHub indirmeleri düzelince CI'ı yeniden çalıştır; Windows + Linux yeşilse STATE.md F1.7 satırını ✅ yap ve CI linkini ekle.
+3. F1.8 PR'ı Windows CI'da (gerçek uygulama E2E dahil) yeşilse F1.8'i ✅ yap. Elle: Add URL ile bir bağlantı kaydet, uygulamayı kapatıp aç, aramada bul; listede odak varken `Ctrl+V` ile bağlantı yapıştır (MT-01).
+4. F1 çıkış kapısı: ağ kapalıyken kaydet/import/ara/yeniden başlat akışı Windows'ta; Yolculuk 2 (eski bookmark'ı bul) için E2E. Sonra F2.1 (etiketler, koleksiyonlar; Inbox ve CAP-05 burada gelir).
 
 ## Bilinmesi gerekenler
 

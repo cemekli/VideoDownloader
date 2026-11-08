@@ -84,6 +84,18 @@ impl Library {
         vv_persistence::open_reader(&self.db_path).map_err(|_| internal("library-reader"))
     }
 
+    /// Runs `f` on the single writer connection (one write at a time).
+    pub fn write<T>(
+        &self,
+        f: impl FnOnce(&mut Connection) -> Result<T, DomainError>,
+    ) -> Result<T, DomainError> {
+        let mut db = self
+            .writer
+            .lock()
+            .map_err(|_| internal("library-poisoned"))?;
+        f(db.writer())
+    }
+
     pub fn has_tools(&self) -> bool {
         self.tools.is_some()
     }

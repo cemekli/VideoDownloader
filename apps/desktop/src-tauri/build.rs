@@ -8,6 +8,9 @@ const COMMANDS: &[&str] = &[
     "list_items",
     "get_item",
     "import_media",
+    "check_url",
+    "save_url",
+    "restore_item",
 ];
 
 fn main() {

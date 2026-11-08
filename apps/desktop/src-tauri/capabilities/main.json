@@ -10,6 +10,9 @@
     "allow-list-items",
     "allow-get-item",
     "allow-import-media",
+    "allow-check-url",
+    "allow-save-url",
+    "allow-restore-item",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

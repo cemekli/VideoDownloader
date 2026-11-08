@@ -147,6 +147,79 @@
         "canceled": false,
         "firstError": "INPUT_REJECTED"
       }
+    },
+    "check_url": {
+      "args": {
+        "url": "https://youtu.be/vvTestVid01"
+      },
+      "response": {
+        "platform": "youtube",
+        "shape": "video",
+        "canonicalUrl": "https://www.youtube.com/watch?v=vvTestVid01",
+        "title": "YouTube · vvTestVid01",
+        "existing": {
+          "item": {
+            "id": "00000000-0000-4000-8000-0000000000b1",
+            "title": "YouTube · vvTestVid01",
+            "platform": "youtube",
+            "kind": "bookmark",
+            "localState": "bookmark_only",
+            "durationMs": null,
+            "tags": [],
+            "thumbnailUrl": null,
+            "addedAt": 1794000100000,
+            "isFavorite": false,
+            "snippet": null
+          },
+          "removed": false,
+          "matchedBy": "canonical_url"
+        },
+        "warnings": [
+          "PLAYLIST_UNSUPPORTED"
+        ]
+      }
+    },
+    "save_url": {
+      "args": {
+        "url": "https://youtu.be/vvTestVid01"
+      },
+      "response": {
+        "outcome": "created",
+        "item": {
+          "id": "00000000-0000-4000-8000-0000000000b1",
+          "title": "YouTube · vvTestVid01",
+          "platform": "youtube",
+          "kind": "bookmark",
+          "localState": "bookmark_only",
+          "durationMs": null,
+          "tags": [],
+          "thumbnailUrl": null,
+          "addedAt": 1794000100000,
+          "isFavorite": false,
+          "snippet": null
+        },
+        "removed": false,
+        "matchedBy": null,
+        "warnings": []
+      }
+    },
+    "restore_item": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000000b1"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-0000000000b1",
+        "title": "YouTube · vvTestVid01",
+        "platform": "youtube",
+        "kind": "bookmark",
+        "localState": "bookmark_only",
+        "durationMs": null,
+        "tags": [],
+        "thumbnailUrl": null,
+        "addedAt": 1794000100000,
+        "isFavorite": false,
+        "snippet": null
+      }
     }
   },
   "domainError": {
