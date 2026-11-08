@@ -231,7 +231,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .orphan p { margin: 0; }
 
 @media (max-width: 899px) {
-  .topbar { gap: var(--s2); padding: 0 var(--s3); }
+  /* The top bar wraps instead of pushing controls off the side; font
+     widths differ between machines, so no fixed fit is assumed. */
+  .topbar { gap: var(--s2); height: auto; min-height: var(--topbar-h); flex-wrap: wrap; row-gap: var(--s2); padding: var(--s2) var(--s3); }
+  .search { flex-basis: 160px; }
   .brand { display: none; }
   .sort select { max-width: 132px; }
   .content { padding: var(--s3) var(--s3) 0; }
