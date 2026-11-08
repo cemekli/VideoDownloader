@@ -1,10 +1,27 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 export interface MenuItem {
   label: string;
   onSelect: () => void;
   danger?: boolean;
   testId?: string;
+}
+
+const GAP = 4;
+const EDGE = 8;
+
+/**
+ * Where the menu goes: fixed to the viewport, so a scrolling or narrow
+ * parent (the navigation column) cannot clip it. Below the button and
+ * toward the right by default; flipped when it would leave the window.
+ */
+export function placeMenu(button: DOMRect, menu: { width: number; height: number }, view: { width: number; height: number }): { top: number; left: number } {
+  let left = button.left;
+  if (left + menu.width > view.width - EDGE) left = button.right - menu.width;
+  left = Math.max(EDGE, Math.min(left, view.width - EDGE - menu.width));
+  let top = button.bottom + GAP;
+  if (top + menu.height > view.height - EDGE && button.top - GAP - menu.height >= EDGE) top = button.top - GAP - menu.height;
+  return { top: Math.max(EDGE, top), left };
 }
 
 /**
@@ -16,6 +33,31 @@ export function MenuButton({ label, items, testId }: { label: string; items: Men
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const b = button.current?.getBoundingClientRect();
+    const m = menu.current;
+    if (!b || !m) return;
+    setPos(placeMenu(b, { width: m.offsetWidth, height: m.offsetHeight }, { width: window.innerWidth, height: window.innerHeight }));
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    // A fixed menu would drift from its button; close it instead.
+    const shut = (e: Event) => {
+      if (e.type === "scroll" && menu.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    window.addEventListener("resize", shut);
+    window.addEventListener("scroll", shut, true);
+    return () => {
+      window.removeEventListener("resize", shut);
+      window.removeEventListener("scroll", shut, true);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
@@ -60,7 +102,15 @@ export function MenuButton({ label, items, testId }: { label: string; items: Men
         ⋯
       </button>
       {open && (
-        <div ref={menu} id={id} className="menu" role="menu" aria-label={label} onKeyDown={onKeyDown}>
+        <div
+          ref={menu}
+          id={id}
+          className="menu menu-floating"
+          role="menu"
+          aria-label={label}
+          onKeyDown={onKeyDown}
+          style={pos ?? { top: 0, left: 0, opacity: 0 }}
+        >
           {items.map((it) => (
             <button
               key={it.label}

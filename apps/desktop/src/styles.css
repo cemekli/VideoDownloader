@@ -73,7 +73,10 @@ mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: in
 
 /* Workspace: nav | content | inspector */
 .workspace { flex: 1; min-height: 0; display: flex; position: relative; }
-.nav-column { width: var(--nav-w); flex: none; border-right: 1px solid var(--border); overflow-y: auto; }
+.nav-column { width: var(--nav-w); flex: none; overflow-y: auto; overflow-x: hidden; }
+.resize-handle { flex: none; width: 5px; margin: 0 -2px; position: relative; z-index: 5; cursor: col-resize; touch-action: none; background: linear-gradient(to right, transparent 2px, var(--border) 2px, var(--border) 3px, transparent 3px); }
+.resize-handle:hover, .resize-handle:focus-visible, body.resizing .resize-handle { background: var(--accent); outline: none; }
+body.resizing { cursor: col-resize; user-select: none; }
 .sidebar { display: flex; flex-direction: column; min-height: 100%; padding: var(--s3) var(--s2); gap: var(--s3); }
 .nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .nav-bottom { margin-top: auto; }
@@ -190,6 +193,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav-empty { padding: 4px var(--s3); }
 .menu-anchor { position: relative; }
 .menu { position: absolute; right: 0; top: 100%; z-index: 35; min-width: 180px; padding: var(--s1); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); box-shadow: 0 8px 24px rgb(0 0 0 / .45); display: flex; flex-direction: column; }
+.menu.menu-floating { position: fixed; right: auto; z-index: 60; }
 .menu-item { text-align: left; padding: 7px var(--s3); border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer; white-space: nowrap; }
 .menu-item:hover, .menu-item:focus { background: var(--surface-3); outline: none; }
 .menu-item.danger { color: var(--danger); }
