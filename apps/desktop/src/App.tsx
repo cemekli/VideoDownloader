@@ -6,6 +6,7 @@ import { DuplicatesView } from "./components/DuplicatesView";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
 import { Results } from "./components/Results";
+import { ResizeHandle } from "./components/ResizeHandle";
 import { Sidebar, type Scope } from "./components/Sidebar";
 import { TopBar, type SortChoice } from "./components/TopBar";
 import { useDebounced, useMediaQuery, useOnline } from "./hooks/useEnv";
@@ -414,7 +415,7 @@ export function App({ client }: { client?: BackendClient }) {
         {(!compact || navOpen) && (
           <>
             {compact && <div className="drawer-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
-            <div className={compact ? "nav-drawer" : "nav-column"}>
+            <div className={compact ? "nav-drawer" : "nav-column"} style={compact ? undefined : { width: prefs.navWidth }} data-testid="nav-column">
               <Sidebar
                 view={view}
                 platform={platforms.length === 1 ? platforms[0]! : null}
@@ -426,6 +427,7 @@ export function App({ client }: { client?: BackendClient }) {
                 onAction={(action) => org.open({ kind: "sidebar", action })}
               />
             </div>
+            {!compact && <ResizeHandle width={prefs.navWidth} onWidth={(navWidth) => setPrefs({ navWidth })} />}
           </>
         )}
         <main className="content" aria-labelledby="library-heading">

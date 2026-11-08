@@ -73,6 +73,54 @@ test.describe("organize", () => {
     await expect(page.getByTestId("result-count")).toHaveText("1 item");
   });
 
+  test("row menu is not clipped by the navigation; the navigation resizes", async ({ page }, info) => {
+    await ready(page);
+    await nav(page, info);
+    await page.getByTestId("new-collection").click();
+    await page.keyboard.insertText("Uzun bir koleksiyon adı");
+    await page.keyboard.press("Enter");
+    await nav(page, info);
+    const row = page.getByTestId("collection-row").first();
+    await row.getByTestId("collection-menu").click();
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    const box = (await menu.boundingBox())!;
+    const view = page.viewportSize()!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(view.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(view.height);
+    // Every item is on top at its own right edge: nothing covers or clips it.
+    for (const item of await menu.getByRole("menuitem").all()) {
+      const b = (await item.boundingBox())!;
+      const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x!, y!)?.closest("[role=menuitem]")?.textContent ?? null, [b.x + b.width - 4, b.y + b.height / 2]);
+      expect(hit).toBe(await item.textContent());
+    }
+    await shot(page, "row-menu", info);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    if (info.project.name === "narrow-800") return; // the drawer has a fixed width
+
+    const column = page.getByTestId("nav-column");
+    const handle = page.getByTestId("nav-resize");
+    const before = (await column.boundingBox())!.width;
+    const h = (await handle.boundingBox())!;
+    await page.mouse.move(h.x + h.width / 2, h.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2 + 120, h.y + 200, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await column.boundingBox())!.width).toBeGreaterThan(before + 100);
+    // Kept after a reload; keyboard and double click also work.
+    const wide = Math.round((await column.boundingBox())!.width);
+    await page.reload();
+    await expect(page.getByTestId("library-card").first()).toBeVisible();
+    await expect.poll(async () => Math.round((await column.boundingBox())!.width)).toBe(wide);
+    await handle.focus();
+    await page.keyboard.press("Home");
+    await expect(handle).toHaveAttribute("aria-valuenow", "180");
+    await handle.dblclick();
+    await expect(handle).toHaveAttribute("aria-valuenow", "232");
+  });
+
   test("Recently removed and a previewed duplicate merge (ORG-11)", async ({ page }, info) => {
     await ready(page);
     await page.getByTestId("library-card").nth(1).click();
