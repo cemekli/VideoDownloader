@@ -138,9 +138,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F2.1 | Etiketler, koleksiyonlar, akıllı koleksiyonlar | ORG-01…10 | AC-06, AC-39, AC-46, AC-48 | ⬜ |
-| F2.2 | Toplu işlemler, Undo, soft-delete, Recently removed, sahipsiz medya | §7.3 | AC-07, AC-37, AC-45, AC-53, AC-60 | ⬜ |
-| F2.3 | Duplicate yönetimi ve önizlemeli birleştirme | ORG-11 | birleştirme ve Undo testleri | ⬜ |
+| F2.1 | Etiketler, koleksiyonlar, akıllı koleksiyonlar | ORG-01…10 | AC-06, AC-39, AC-46, AC-48 | 🟨 |
+| F2.2 | Toplu işlemler, Undo, soft-delete, Recently removed, sahipsiz medya | §7.3 | AC-07, AC-37, AC-45, AC-53, AC-60 | 🟨 |
+| F2.3 | Duplicate yönetimi ve önizlemeli birleştirme | ORG-11 | birleştirme ve Undo testleri | 🟨 |
 | F2.4 | Oynatıcı, güvenli local protocol, kaldığı yerden devam, remux önizlemesi | PLAY-01…04, PLAY-07 | AC-32, AC-49, NFR-10 | ⬜ |
 | F2.5 | JSON export/import, kök eşleme, relink | DATA-01…03, DATA-06, §15 | AC-15, AC-16, AC-30, AC-51 | ⬜ |
 | F2.6 | Tam DB yedeği, geri yükleme, migration öncesi yedek | §15.3 | AC-50, AC-57 | ⬜ |
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; Windows'ta elle kontrol geçti, yeşil CI bekliyor). F1.8 🟨 (Add URL, ADR-0014; Windows CI bekliyor). Sıradaki: F1 çıkış kapısının kontrolü (Windows'ta ağ kapalı akış, Yolculuk 2 E2E), sonra F2.1.
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; Windows'ta elle kontrol geçti, yeşil CI bekliyor). F1.8 🟨 (Add URL, ADR-0014; Windows CI bekliyor). F2.1–F2.3 🟨 (düzenleme, Undo, birleştirme; ADR-0015; PR açık, Windows CI ve elle kontrol bekliyor). Sıradaki: F1 çıkış kapısının kontrolü (Windows'ta ağ kapalı akış, Yolculuk 2 E2E) ve F2.4.
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 8 Kas 2026 | F2.1–F2.3 başladı: migration 0003 (etiket, koleksiyon, akıllı koleksiyon, `operation_log`, `orphan_media`), etiket/koleksiyon/favori/arşiv/kaldırma işlemleri, oturum başına Undo, 30 günlük Recently removed ve açılışta temizlik, sahipsiz medya ve yeniden import, önizlemeli öğe birleştirme. 28 yeni komut. Arayüz: Inbox, koleksiyon ağacı ve menüsü, akıllı koleksiyon düzenleyicisi, etiketler, toplu işlem çubuğu, Undo bildirimi ve `Ctrl+Z`, inspector'da etiket/koleksiyon/not düzenleme, Recently removed, Duplicates. ADR-0015. |
 | 8 Kas 2026 | F1.8 başladı: `check_url`, `save_url`, `restore_item` komutları; Add URL diyaloğu (önizleme, alan hatası, duplicate, Recently removed → Restore, çevrimdışı metni), `Ctrl+K` aramasında bağlantı önerisi, metin alanı dışında `Ctrl+V` ile yakalama. NFR-01 gerçek şemada ölçüldü (`tests/save_latency.rs`). ADR-0014. |
 | 8 Kas 2026 | F1.7 başladı: uygulama kütüphaneyi `<data>/db/library.sqlite`'ta açıyor; `list_items`, `get_item`, `import_media` komutları, Rust tarafında dosya diyaloğu ve sürükle-bırak (`tauri-plugin-dialog` 2.8.4), `vvthumb` thumbnail protokolü (CSP `img-src`), açılışta `check_storage` ve eksik küçük resimler. Library ekranı: gezinme, arama (`Ctrl+K`), filtre chip'leri, sıralama, sanallaştırılmış grid/liste, çoklu seçim, inspector, ilk kullanım/yükleniyor/hata/sonuç yok/çevrimdışı durumları. `docs/design-system.md`, ADR-0013. |
 | 7 Kas 2026 | F1.4–F1.6 başladı: `vv-import` crate'i (import, hash, duplicate adayı, thumbnail, relink, `check_storage`), ffprobe'a çözünürlük/kanal/dil, FTS sorgu oluşturucu ve Türkçe arama fixture'ı, `FILE_MISSING` ve `STORAGE_ROOT_UNAVAILABLE` hata kodları. ADR-0012. |

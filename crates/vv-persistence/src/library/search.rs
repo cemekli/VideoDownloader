@@ -111,6 +111,16 @@ pub struct Filters {
     pub archived: ArchiveFilter,
     /// Only items added at or after this UTC ms ("Recently Added", §9.2).
     pub added_since: Option<i64>,
+    /// Items carrying any of these tags.
+    pub tag_ids: Vec<String>,
+    /// Items in any of these manual collections (direct membership).
+    pub collection_ids: Vec<String>,
+    /// Inbox (§7.3): items in no manual collection.
+    pub inbox: bool,
+    /// Recently removed instead of the live library (§7.3).
+    pub removed: bool,
+    pub min_duration_ms: Option<i64>,
+    pub max_duration_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,7 +245,41 @@ pub struct SearchPage {
 }
 
 fn filter_sql(f: &Filters, params: &mut Vec<Value>) -> String {
-    let mut w = vec!["i.removed_at IS NULL".to_owned()];
+    let mut w = vec![if f.removed {
+        "i.removed_at IS NOT NULL".to_owned()
+    } else {
+        "i.removed_at IS NULL".to_owned()
+    }];
+    let mut ids = |sql: &str, vals: &[String], params: &mut Vec<Value>| {
+        if !vals.is_empty() {
+            let ph = vals.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            params.extend(vals.iter().map(|v| Value::Text(v.clone())));
+            w.push(sql.replace("{}", &ph));
+        }
+    };
+    ids(
+        "EXISTS (SELECT 1 FROM library_item_tag lt WHERE lt.item_id = i.id AND lt.tag_id IN ({}))",
+        &f.tag_ids,
+        params,
+    );
+    ids(
+        "EXISTS (SELECT 1 FROM library_item_collection lc WHERE lc.item_id = i.id AND lc.collection_id IN ({}))",
+        &f.collection_ids,
+        params,
+    );
+    if f.inbox {
+        w.push(
+            "NOT EXISTS (SELECT 1 FROM library_item_collection lc WHERE lc.item_id = i.id)".into(),
+        );
+    }
+    if let Some(d) = f.min_duration_ms {
+        params.push(Value::Integer(d));
+        w.push("i.duration_ms >= ?".into());
+    }
+    if let Some(d) = f.max_duration_ms {
+        params.push(Value::Integer(d));
+        w.push("i.duration_ms <= ?".into());
+    }
     let mut list = |col: &str, vals: Vec<&'static str>, params: &mut Vec<Value>| {
         if !vals.is_empty() {
             let ph = vals.iter().map(|_| "?").collect::<Vec<_>>().join(", ");

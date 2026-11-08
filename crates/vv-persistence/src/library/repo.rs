@@ -403,8 +403,7 @@ pub fn search_text(it: &LibraryItem) -> SearchText {
             .unwrap_or_default(),
         creator: o.creator.clone().or(it.creator.clone()).unwrap_or_default(),
         notes: it.user_notes.clone(),
-        // Tags arrive with the organization tables; the column exists so the
-        // FTS layout does not change then.
+        // Filled from `library_item_tag` by `write_search_document`.
         tags: String::new(),
     }
 }
@@ -417,7 +416,8 @@ pub fn write_search_document(c: &Connection, it: &LibraryItem) -> Result<()> {
         [&it.id],
         |r| r.get(0),
     )?;
-    let t = search_text(it);
+    let mut t = search_text(it);
+    t.tags = tag_text(c, &it.id)?;
     let f = super::search::index_text;
     c.execute("DELETE FROM search_document WHERE rowid = ?1", [seq])?;
     c.execute(
@@ -432,6 +432,28 @@ pub fn write_search_document(c: &Connection, it: &LibraryItem) -> Result<()> {
             f(&t.tags)
         ],
     )?;
+    Ok(())
+}
+
+/// The item's tag names, space separated, in name order (search document).
+pub fn tag_text(c: &Connection, item_id: &str) -> Result<String> {
+    let mut s = c.prepare_cached(
+        "SELECT t.name FROM library_item_tag lt JOIN tag t ON t.id = lt.tag_id \
+         WHERE lt.item_id = ?1 ORDER BY t.normalized_name",
+    )?;
+    let names = s
+        .query_map([item_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(names.join(" "))
+}
+
+/// Rewrites the search documents of `ids` (after tag changes, ORG-09).
+pub fn reindex_items(c: &Connection, ids: &[String]) -> Result<()> {
+    for id in ids {
+        if let Some(it) = get_item(c, id)? {
+            write_search_document(c, &it)?;
+        }
+    }
     Ok(())
 }
 

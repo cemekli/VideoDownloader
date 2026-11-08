@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddUrlDialog } from "./components/AddUrlDialog";
 import { BackendStatus } from "./components/BackendStatus";
+import { BulkBar } from "./components/BulkBar";
+import { DuplicatesView } from "./components/DuplicatesView";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
 import { Results } from "./components/Results";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, type Scope } from "./components/Sidebar";
 import { TopBar, type SortChoice } from "./components/TopBar";
 import { useDebounced, useMediaQuery, useOnline } from "./hooks/useEnv";
 import { useLibrary } from "./hooks/useLibrary";
+import { useOrganize } from "./hooks/useOrganize";
 import { usePrefs } from "./hooks/usePrefs";
 import { createClient } from "./ipc/client";
 import { errorCode } from "./ipc/errors";
@@ -38,6 +41,13 @@ interface Toast {
   id: number;
   text: string;
   tone: "info" | "error";
+  /** Offers Undo (the operation is the newest undoable one). */
+  undo?: boolean;
+}
+
+/** Ctrl+Z / Delete act on the list only, never inside a text field. */
+function inTextField(t: EventTarget | null): boolean {
+  return !!(t as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
 }
 
 export function App({ client }: { client?: BackendClient }) {
@@ -47,6 +57,7 @@ export function App({ client }: { client?: BackendClient }) {
   const online = useOnline();
 
   const [view, setView] = useState<LibraryView>("all");
+  const [scope, setScope] = useState<Scope>({ kind: "none" });
   const [text, setText] = useState("");
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [kinds, setKinds] = useState<ItemKind[]>([]);
@@ -71,12 +82,32 @@ export function App({ client }: { client?: BackendClient }) {
   const debounced = useDebounced(text, 150);
   const searchText = looksLikeUrl(debounced) ? "" : debounced;
   const query = useMemo(
-    () => ({ text: searchText, view, platforms, kinds, ...sortOf(sort, searchText.trim() !== "") }),
-    [searchText, view, platforms, kinds, sort],
+    () => ({
+      text: searchText,
+      view,
+      platforms,
+      kinds,
+      tagIds: scope.kind === "tag" ? [scope.id] : [],
+      collectionId: scope.kind === "collection" ? scope.id : null,
+      smartCollectionId: scope.kind === "smart" ? scope.id : null,
+      ...sortOf(sort, searchText.trim() !== ""),
+    }),
+    [searchText, view, platforms, kinds, sort, scope],
   );
-  const { data, loadMore } = useLibrary(c, query, reloadKey);
+
+  const toast = useCallback((text: string, tone: Toast["tone"] = "info", undo = false) => {
+    const id = Date.now() + Math.random();
+    // A newer undoable operation replaces the older one (§7.3).
+    setToasts((t) => [...t.slice(-2).map((x) => (undo ? { ...x, undo: false } : x)), { id, text, tone, undo }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), undo ? 12000 : 8000);
+  }, []);
+  const notify = useCallback((text: string, o?: { tone?: Toast["tone"]; undo?: boolean }) => toast(text, o?.tone ?? "info", !!o?.undo), [toast]);
+  const org = useOrganize({ client: c, notify, scope, onScope: (s) => setScope(s) });
+
+  const { data, loadMore } = useLibrary(c, query, reloadKey + org.version * 1000);
   // An empty result with a search or filter is "no match", not "empty library".
   const narrowed = searchText.trim() !== "" || platforms.length > 0 || kinds.length > 0;
+  const collectionName = scope.kind === "collection" ? (org.sidebar?.collections.find((x) => x.id === scope.id)?.name ?? "") : null;
 
   // A new query starts with nothing selected.
   useEffect(() => setSelection(EMPTY_SELECTION), [query]);
@@ -85,11 +116,20 @@ export function App({ client }: { client?: BackendClient }) {
   const activeId = selection.ids.size === 1 ? [...selection.ids][0]! : null;
   const inspectorVisible = compact ? drawerOpen : prefs.inspectorOpen;
 
-  const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-2), { id, text, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 8000);
-  }, []);
+  // Items an operation took out of this list leave the selection too.
+  useEffect(() => {
+    if (data.status !== "ready") return;
+    setSelection((s) => {
+      const keep = [...s.ids].filter((id) => data.items.some((i) => i.id === id));
+      if (keep.length === s.ids.size) return s;
+      const last = data.items.length - 1;
+      const clamp = (n: number | null) => (n === null || last < 0 ? null : Math.min(n, last));
+      return { ids: new Set(keep), anchor: clamp(s.anchor), focus: clamp(s.focus) };
+    });
+  }, [data]);
+
+  const selectedItems = items.filter((i) => selection.ids.has(i.id));
+  const selectedIds = selectedItems.map((i) => i.id);
 
   // Imports started by a drop on the window (backend event).
   useEffect(() => {
@@ -119,6 +159,7 @@ export function App({ client }: { client?: BackendClient }) {
       if (s.picked) {
         toast(importMessage(s));
         setReloadKey((k) => k + 1);
+        org.refresh();
       }
     } catch (e) {
       toast(importErrorMessage(errorCode(e)), "error");
@@ -139,11 +180,13 @@ export function App({ client }: { client?: BackendClient }) {
     if (back?.isConnected && back !== document.body) back.focus();
   };
 
-  /** After Save / Open / Restore: show the item in All Items, selected (§8.1 step 4). */
-  const showItem = (item: LibraryItemDto, message: string, inspect: boolean) => {
+  /** After Save / Open / Restore: show the item, selected. A new bookmark lands in Inbox (§8.1 step 4). */
+  const showItem = (item: LibraryItemDto, message: string, inspect: boolean, where: LibraryView = "all") => {
     setAddUrl(null);
     addUrlOpener.current = null;
-    setView("all");
+    setView(where);
+    setScope({ kind: "none" });
+    org.refresh();
     setText("");
     setPlatforms([]);
     setKinds([]);
@@ -208,7 +251,18 @@ export function App({ client }: { client?: BackendClient }) {
         searchRef.current?.select();
         return;
       }
-      if (addUrl !== null) return; // the dialog handles its own keys
+      if (addUrl !== null || org.dialog) return; // dialogs handle their own keys
+      // Ctrl+Z: undo the last organize operation (§7.3), outside text fields.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !inTextField(e.target)) {
+        e.preventDefault();
+        void org.undo();
+        return;
+      }
+      if (e.key === "Delete" && !inTextField(e.target) && selectedIds.length > 0 && view !== "removed" && scope.kind !== "duplicates") {
+        e.preventDefault();
+        void org.actions.remove(selectedIds);
+        return;
+      }
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (navOpen) setNavOpen(false);
       else if (inspectorVisible && (compact || document.activeElement?.closest('[data-testid="inspector"]'))) closeInspector();
@@ -217,14 +271,22 @@ export function App({ client }: { client?: BackendClient }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items, addUrl]);
+  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items, addUrl, org, selectedIds, view, scope.kind]);
 
   const goView = (v: LibraryView) => {
     setView(v);
+    setScope({ kind: "none" });
+    setPlatforms([]);
+    setNavOpen(false);
+  };
+  const goScope = (s: Scope) => {
+    setScope(s);
+    setView("all");
     setPlatforms([]);
     setNavOpen(false);
   };
   const goPlatform = (p: Platform | null) => {
+    setScope({ kind: "none" });
     setView("all");
     setPlatforms(p ? [p] : []);
     setNavOpen(false);
@@ -234,8 +296,21 @@ export function App({ client }: { client?: BackendClient }) {
     setKinds([]);
   };
 
-  const heading = platforms.length === 1 && view === "all" ? PLATFORM_LABEL[platforms[0]!] : VIEW_LABEL[view];
-  const total = data.status === "ready" ? data.total : null;
+  const sb = org.sidebar;
+  const heading =
+    scope.kind === "collection"
+      ? (collectionName ?? "Collection")
+      : scope.kind === "smart"
+        ? (sb?.smartCollections.find((x) => x.id === scope.id)?.name ?? "Smart collection")
+        : scope.kind === "tag"
+          ? `#${sb?.tags.find((x) => x.id === scope.id)?.name ?? ""}`
+          : scope.kind === "duplicates"
+            ? "Duplicates"
+            : platforms.length === 1 && view === "all"
+              ? PLATFORM_LABEL[platforms[0]!]
+              : VIEW_LABEL[view];
+  const smartInvalid = scope.kind === "smart" && !!sb?.smartCollections.find((x) => x.id === scope.id)?.invalid;
+  const total = data.status === "ready" && scope.kind !== "duplicates" ? data.total : null;
 
   const importButtons = (
     <div className="actions">
@@ -248,8 +323,28 @@ export function App({ client }: { client?: BackendClient }) {
     </div>
   );
 
+  const VIEW_EMPTY: Partial<Record<LibraryView, string>> = {
+    favorites: "Items you mark as favorite appear here.",
+    recent: "Items added in the last 30 days appear here.",
+    archive: "Archived items are kept here, out of the main list.",
+    inbox: "New bookmarks land here until you put them in a collection or archive them.",
+    removed: "Removed items wait here for 30 days, then they are deleted. Restore brings an item back with its notes, tags and collections.",
+  };
   const emptyState =
-    view === "all" ? (
+    scope.kind !== "none" ? (
+      <div className="results-state" data-testid="view-empty">
+        <h2>Nothing here yet</h2>
+        <p>
+          {scope.kind === "collection"
+            ? "Select items and use Add to collection to put them here. An item can be in many collections."
+            : scope.kind === "tag"
+              ? "No items carry this tag now."
+              : smartInvalid
+                ? "A tag or collection in these rules was deleted. Edit the rules to fix them."
+                : "No items match these rules yet."}
+        </p>
+      </div>
+    ) : view === "all" ? (
       <div className="results-state" data-testid="library-empty">
         <h2>Your library is empty</h2>
         <p>Save a video link as a bookmark, or import videos from this computer. Imported files stay where they are; VideoVault only keeps a reference. You can also paste a link with Ctrl+V or drop files on this window.</p>
@@ -262,14 +357,8 @@ export function App({ client }: { client?: BackendClient }) {
       </div>
     ) : (
       <div className="results-state" data-testid="view-empty">
-        <h2>Nothing in {VIEW_LABEL[view]} yet</h2>
-        <p>
-          {view === "favorites"
-            ? "Items you mark as favorite appear here."
-            : view === "recent"
-              ? "Items added in the last 30 days appear here."
-              : "Archived items are kept here, out of the main list."}
-        </p>
+        <h2>{view === "removed" ? "Recently removed is empty" : `Nothing in ${VIEW_LABEL[view]} yet`}</h2>
+        <p>{VIEW_EMPTY[view]}</p>
         <button type="button" className="button" onClick={() => goView("all")}>
           Show all items
         </button>
@@ -326,7 +415,16 @@ export function App({ client }: { client?: BackendClient }) {
           <>
             {compact && <div className="drawer-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
             <div className={compact ? "nav-drawer" : "nav-column"}>
-              <Sidebar view={view} platform={platforms.length === 1 ? platforms[0]! : null} onView={goView} onPlatform={goPlatform} />
+              <Sidebar
+                view={view}
+                platform={platforms.length === 1 ? platforms[0]! : null}
+                scope={scope}
+                data={sb}
+                onView={goView}
+                onPlatform={goPlatform}
+                onScope={goScope}
+                onAction={(action) => org.open({ kind: "sidebar", action })}
+              />
             </div>
           </>
         )}
@@ -347,33 +445,83 @@ export function App({ client }: { client?: BackendClient }) {
                 Clear selection
               </button>
             )}
+            {view === "removed" && scope.kind === "none" && (sb?.counts.orphans ?? 0) > 0 && (
+              <button type="button" className="link-button" onClick={() => org.open({ kind: "orphans" })} data-testid="open-orphans">
+                Orphaned media ({sb!.counts.orphans})
+              </button>
+            )}
           </div>
-          <FilterBar
-            kinds={kinds}
-            platforms={platforms}
-            onToggleKind={(k) => setKinds((ks) => (ks.includes(k) ? ks.filter((x) => x !== k) : [...ks, k]))}
-            onRemovePlatform={(p) => setPlatforms((ps) => ps.filter((x) => x !== p))}
-            onClear={clearFilters}
-          />
+          {smartInvalid && (
+            <p className="warning small" role="alert" data-testid="smart-invalid">
+              A tag or collection these rules use was deleted, so this list may be incomplete. Edit the rules from its ⋯ menu.
+            </p>
+          )}
+          {scope.kind !== "duplicates" && (
+            <>
+              <BulkBar
+                selected={selectedItems}
+                removedView={view === "removed"}
+                collectionName={collectionName}
+                onTag={() => org.open({ kind: "tag", ids: selectedIds })}
+                onAddToCollection={() => org.open({ kind: "add-to-collection", ids: selectedIds })}
+                onRemoveFromCollection={() => scope.kind === "collection" && org.actions.removeFromCollection(selectedIds, scope.id)}
+                onFavorite={(v) => org.actions.favorite(selectedIds, v)}
+                onArchive={(v) => org.actions.archive(selectedIds, v)}
+                onRemove={() => org.actions.remove(selectedIds)}
+                onRestore={() => org.actions.restore(selectedIds)}
+                onDeleteForGood={() => org.open({ kind: "delete-permanently", ids: selectedIds })}
+              />
+              <FilterBar
+                kinds={kinds}
+                platforms={platforms}
+                onToggleKind={(k) => setKinds((ks) => (ks.includes(k) ? ks.filter((x) => x !== k) : [...ks, k]))}
+                onRemovePlatform={(p) => setPlatforms((ps) => ps.filter((x) => x !== p))}
+                onClear={clearFilters}
+              />
+            </>
+          )}
           {data.status === "ready" && data.notice === "no_searchable_terms" && (
             <p className="muted" data-testid="search-notice">
               Nothing to search for in “{searchText.trim()}”; showing the whole list.
             </p>
           )}
-          <Results
-            data={data}
-            layout={prefs.layout}
-            selection={selection}
-            onSelection={setSelection}
-            onOpen={openInspector}
-            onLoadMore={loadMore}
-            onRetry={() => setReloadKey((k) => k + 1)}
-            emptyState={emptyState}
-            noMatchState={noMatch}
-            narrowed={narrowed}
-          />
+          {scope.kind === "duplicates" ? (
+            <DuplicatesView client={c} reloadKey={org.version} onMerge={(candidateId, target) => org.open({ kind: "merge", candidateId, target })} onChanged={(m) => (toast(m), org.refresh())} />
+          ) : (
+            <Results
+              data={data}
+              layout={prefs.layout}
+              selection={selection}
+              onSelection={setSelection}
+              onOpen={openInspector}
+              onLoadMore={loadMore}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              emptyState={emptyState}
+              noMatchState={noMatch}
+              narrowed={narrowed}
+            />
+          )}
         </main>
-        {inspectorVisible && <Inspector client={c} itemId={activeId} selectedCount={selection.ids.size} drawer={compact} onClose={closeInspector} />}
+        {inspectorVisible && (
+          <Inspector
+            client={c}
+            itemId={view === "removed" || scope.kind === "duplicates" ? null : activeId}
+            selectedCount={selection.ids.size}
+            drawer={compact}
+            onClose={closeInspector}
+            refreshKey={org.version}
+            collections={sb?.collections ?? []}
+            emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}
+            actions={{
+              favorite: (id, v) => org.actions.favorite([id], v),
+              archive: (id, v) => org.actions.archive([id], v),
+              tag: (id) => org.open({ kind: "tag", ids: [id] }),
+              untag: (id, t) => org.actions.untag([id], t.id, t.name),
+              addToCollection: (id) => org.open({ kind: "add-to-collection", ids: [id] }),
+              removeFromCollection: (id, cid) => org.actions.removeFromCollection([id], cid),
+            }}
+          />
+        )}
       </div>
       {addUrl !== null && (
         <AddUrlDialog
@@ -381,15 +529,29 @@ export function App({ client }: { client?: BackendClient }) {
           initialUrl={addUrl}
           online={online}
           onClose={closeAddUrl}
-          onSaved={(r) => showItem(r.item, `Saved “${r.item.title}” to your library.`, false)}
+          onSaved={(r) => showItem(r.item, `Saved “${r.item.title}” to your Inbox.`, false, "inbox")}
           onOpenExisting={(item) => showItem(item, `“${item.title}” is already in your library.`, true)}
           onRestored={(item) => showItem(item, `Restored “${item.title}”.`, true)}
         />
       )}
+      {org.dialog}
       <div className="toasts" role="status" aria-live="polite" data-testid="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.tone}`} data-testid="toast">
-            {t.text}
+            <span>{t.text}</span>
+            {t.undo && (
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setToasts((all) => all.filter((x) => x.id !== t.id));
+                  void org.undo();
+                }}
+                data-testid="toast-undo"
+              >
+                Undo
+              </button>
+            )}
             <button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))}>
               ×
             </button>

@@ -33,7 +33,7 @@ describe("Add URL", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(screen.queryByTestId("add-url-dialog")).toBeNull());
-    expect(await screen.findByTestId("toast")).toHaveTextContent("Saved “YouTube · newVideo01” to your library.");
+    expect(await screen.findByTestId("toast")).toHaveTextContent("Saved “YouTube · newVideo01” to your Inbox.");
     await waitFor(() => expect(screen.getByTestId("result-count")).toHaveTextContent("8 items"));
     const first = (await cards())[0]!;
     expect(first).toHaveTextContent("YouTube · newVideo01");
@@ -96,7 +96,7 @@ describe("Add URL", () => {
     await user.keyboard("{Enter}");
     expect(await screen.findByTestId("toast")).toHaveTextContent("Restored “Kaldırılmış bir video”.");
     await waitFor(() => expect(screen.getByTestId("result-count")).toHaveTextContent("8 items"));
-    expect(await screen.findByTestId("inspector-notes")).toHaveTextContent("Bu not geri gelmeli");
+    expect(await screen.findByTestId("inspector-notes-input")).toHaveValue("Bu not geri gelmeli");
   });
 
   it("Cancel on a removed item changes nothing", async () => {

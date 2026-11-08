@@ -29,9 +29,13 @@ pub const THUMB_SCHEME: &str = "vvthumb";
 pub enum LibraryView {
     #[default]
     All,
+    /// Not archived and in no manual collection (§7.3).
+    Inbox,
     Favorites,
     Recent,
     Archive,
+    /// Recently removed (§7.3).
+    Removed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
@@ -57,6 +61,15 @@ pub struct ListQuery {
     pub platforms: Vec<String>,
     #[serde(default)]
     pub kinds: Vec<String>,
+    /// Items carrying any of these tags.
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
+    /// A manual collection (direct members).
+    #[serde(default)]
+    pub collection_id: Option<String>,
+    /// A smart collection: its stored rules replace the filters above.
+    #[serde(default)]
+    pub smart_collection_id: Option<String>,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default = "yes")]
@@ -104,6 +117,9 @@ pub struct LibraryItemDto {
     pub thumbnail_url: Option<String>,
     pub added_at: i64,
     pub is_favorite: bool,
+    pub archived: bool,
+    /// Set while the item is in Recently removed (§7.3).
+    pub removed_at: Option<i64>,
     pub snippet: Option<SnippetDto>,
 }
 
@@ -147,6 +163,10 @@ pub struct ItemDetail {
     pub updated_at: i64,
     pub archived: bool,
     pub assets: Vec<AssetDto>,
+    pub tag_refs: Vec<crate::organize_commands::TagRef>,
+    pub collection_ids: Vec<String>,
+    /// For `set_notes` (REVISION_CONFLICT when it moved).
+    pub revision: i64,
 }
 
 fn field_name(f: Field) -> &'static str {
@@ -201,6 +221,8 @@ pub(crate) fn item_dto(
         thumbnail_url: it.thumbnail_asset_id.as_deref().map(thumbnail_url),
         added_at: it.added_at,
         is_favorite: it.is_favorite,
+        archived: it.archived_at.is_some(),
+        removed_at: it.removed_at,
         snippet,
     }
 }
@@ -216,14 +238,52 @@ fn parse_all<T: Copy>(
         .collect()
 }
 
+/// Tag names of an item, for its list row.
+pub(crate) fn tag_names(c: &Connection, id: &str) -> Result<Vec<String>, DomainError> {
+    Ok(vv_persistence::library::organize::item_tags(c, id)
+        .map_err(|_| internal("item-tags"))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect())
+}
+
 pub fn to_search_query(q: &ListQuery, now_ms: i64) -> Result<SearchQuery, DomainError> {
-    let mut filters = Filters {
-        platforms: parse_all(&q.platforms, SourcePlatform::parse, "list-bad-platform")?,
-        kinds: parse_all(&q.kinds, ItemKind::parse, "list-bad-kind")?,
-        ..Default::default()
+    to_search_query_with(q, now_ms, None)
+}
+
+/// `smart`: the rules of `q.smart_collection_id`, read by the caller.
+pub fn to_search_query_with(
+    q: &ListQuery,
+    now_ms: i64,
+    smart: Option<&vv_persistence::library::organize::SmartRules>,
+) -> Result<SearchQuery, DomainError> {
+    let mut filters = match smart {
+        Some(r) => r.filters(now_ms),
+        None => Filters {
+            platforms: parse_all(&q.platforms, SourcePlatform::parse, "list-bad-platform")?,
+            kinds: parse_all(&q.kinds, ItemKind::parse, "list-bad-kind")?,
+            tag_ids: q.tag_ids.clone(),
+            collection_ids: q.collection_id.iter().cloned().collect(),
+            ..Default::default()
+        },
     };
+    // Chips narrow a smart collection further.
+    if smart.is_some() {
+        if !q.platforms.is_empty() {
+            filters.platforms =
+                parse_all(&q.platforms, SourcePlatform::parse, "list-bad-platform")?;
+        }
+        if !q.kinds.is_empty() {
+            filters.kinds = parse_all(&q.kinds, ItemKind::parse, "list-bad-kind")?;
+        }
+    }
     match q.view {
         LibraryView::All => {}
+        LibraryView::Inbox => filters.inbox = true,
+        LibraryView::Removed => {
+            filters.removed = true;
+            filters.archived = ArchiveFilter::Include;
+        }
         LibraryView::Favorites => filters.favorite_only = true,
         LibraryView::Recent => filters.added_since = Some(now_ms - RECENT_DAYS * DAY_MS),
         LibraryView::Archive => filters.archived = ArchiveFilter::Only,
@@ -235,8 +295,12 @@ pub fn to_search_query(q: &ListQuery, now_ms: i64) -> Result<SearchQuery, Domain
         SortKey::Duration => SortField::Duration,
         SortKey::Published => SortField::PublishedAt,
     };
+    let text = match smart {
+        Some(r) if !r.text.trim().is_empty() => format!("{} {}", r.text, q.text),
+        _ => q.text.clone(),
+    };
     Ok(SearchQuery {
-        text: q.text.clone(),
+        text,
         prefix_last: true,
         filters,
         sort: Sort {
@@ -249,7 +313,16 @@ pub fn to_search_query(q: &ListQuery, now_ms: i64) -> Result<SearchQuery, Domain
 }
 
 pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage, DomainError> {
-    let sq = to_search_query(q, now_ms)?;
+    let smart = match &q.smart_collection_id {
+        Some(id) => Some(
+            vv_persistence::library::organize::get_smart_collection(c, id)
+                .map_err(|_| internal("list-smart"))?
+                .ok_or_else(|| internal("smart-collection-not-found"))?
+                .rules,
+        ),
+        None => None,
+    };
+    let sq = to_search_query_with(q, now_ms, smart.as_ref())?;
     let page = search::search(c, &sq).map_err(|_| internal("list-search"))?;
     let ids: Vec<&str> = page.hits.iter().map(|h| h.item.id.as_str()).collect();
     let states = view::local_states(c, &ids).map_err(|_| internal("list-states"))?;
@@ -257,16 +330,18 @@ pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage,
         .hits
         .iter()
         .map(|h| {
-            item_dto(
+            let mut d = item_dto(
                 &h.item,
                 states
                     .get(&h.item.id)
                     .copied()
                     .unwrap_or(LocalState::BookmarkOnly),
                 h.snippet.as_ref().map(snippet_dto),
-            )
+            );
+            d.tags = tag_names(c, &h.item.id)?;
+            Ok(d)
         })
-        .collect();
+        .collect::<Result<_, DomainError>>()?;
     Ok(ItemPage {
         total: page.total,
         offset: sq.offset,
@@ -299,7 +374,9 @@ pub(crate) fn dto_of(c: &Connection, it: &LibraryItem) -> Result<LibraryItemDto,
         .map_err(|_| internal("item-state"))?
         .remove(&it.id)
         .unwrap_or(LocalState::BookmarkOnly);
-    Ok(item_dto(it, state, None))
+    let mut d = item_dto(it, state, None);
+    d.tags = tag_names(c, &it.id)?;
+    Ok(d)
 }
 
 pub fn item_detail(c: &Connection, id: &str) -> Result<ItemDetail, DomainError> {
@@ -313,8 +390,22 @@ pub fn item_detail(c: &Connection, id: &str) -> Result<ItemDetail, DomainError> 
         .unwrap_or(LocalState::BookmarkOnly);
     let assets = view::asset_views(c, id).map_err(|_| internal("item-assets"))?;
     let o = &it.user_overrides;
+    let mut item = item_dto(&it, state, None);
+    item.tags = tag_names(c, id)?;
+    let org =
+        vv_persistence::library::organize::item_tags(c, id).map_err(|_| internal("item-tags"))?;
     Ok(ItemDetail {
-        item: item_dto(&it, state, None),
+        tag_refs: org
+            .into_iter()
+            .map(|t| crate::organize_commands::TagRef {
+                id: t.id,
+                name: t.name,
+            })
+            .collect(),
+        collection_ids: vv_persistence::library::organize::item_collections(c, id)
+            .map_err(|_| internal("item-collections"))?,
+        revision: it.revision,
+        item,
         canonical_url: it.canonical_url.clone(),
         creator: o.creator.clone().or_else(|| it.creator.clone()),
         description: o.description.clone().or_else(|| it.description.clone()),

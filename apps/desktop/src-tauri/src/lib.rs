@@ -10,6 +10,7 @@ pub mod instance;
 pub mod library;
 pub mod library_commands;
 pub mod media_protocol;
+pub mod organize_commands;
 pub mod thumb_protocol;
 
 use tauri::{Builder, DragDropEvent, Manager, Runtime, WindowEvent};
@@ -29,7 +30,35 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             library_commands::import_media,
             capture_commands::check_url,
             capture_commands::save_url,
-            capture_commands::restore_item
+            capture_commands::restore_item,
+            organize_commands::get_sidebar,
+            organize_commands::undo,
+            organize_commands::tag_items,
+            organize_commands::untag_items,
+            organize_commands::add_to_collection,
+            organize_commands::remove_from_collection,
+            organize_commands::set_favorite,
+            organize_commands::set_archived,
+            organize_commands::remove_items,
+            organize_commands::restore_items,
+            organize_commands::delete_items_permanently,
+            organize_commands::rename_tag,
+            organize_commands::merge_tags,
+            organize_commands::delete_tag,
+            organize_commands::create_collection,
+            organize_commands::rename_collection,
+            organize_commands::move_collection,
+            organize_commands::delete_collection,
+            organize_commands::save_smart_collection,
+            organize_commands::delete_smart_collection,
+            organize_commands::set_notes,
+            organize_commands::list_duplicates,
+            organize_commands::preview_merge,
+            organize_commands::merge_items,
+            organize_commands::dismiss_duplicate,
+            organize_commands::list_orphans,
+            organize_commands::reimport_orphan,
+            organize_commands::delete_orphan
         ])
         .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
             thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)

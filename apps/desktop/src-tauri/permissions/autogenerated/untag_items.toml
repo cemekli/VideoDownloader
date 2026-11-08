@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-untag-items"
+description = "Enables the untag_items command without any pre-configured scope."
+commands.allow = ["untag_items"]
+
+[[permission]]
+identifier = "deny-untag-items"
+description = "Denies the untag_items command without any pre-configured scope."
+commands.deny = ["untag_items"]

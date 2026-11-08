@@ -7,9 +7,13 @@
 //! revision they read and fail with `REVISION_CONFLICT` when it moved.
 
 pub mod bookmark;
+pub mod merge;
+pub mod organize;
+pub mod removal;
 pub mod renormalize;
 pub mod repo;
 pub mod search;
+pub mod undo;
 pub mod view;
 
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};

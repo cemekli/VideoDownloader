@@ -1,6 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppStatus, BackendClient, Diagnostics, DomainError, ImportStatus, ImportSummary, ItemDetail, ItemPage, LibraryItemDto, Pong, SaveUrlResult, UrlCheck } from "./types";
+import type {
+  AppStatus,
+  BackendClient,
+  DeleteResult,
+  Diagnostics,
+  DomainError,
+  DuplicateDto,
+  ImportStatus,
+  ImportSummary,
+  ItemDetail,
+  ItemPage,
+  LibraryItemDto,
+  MergePreview,
+  NamedRef,
+  OpResult,
+  OrganizeClient,
+  OrphanDto,
+  Pong,
+  SaveUrlResult,
+  Sidebar,
+  UndoResult,
+  UrlCheck,
+} from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
@@ -52,6 +74,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     checkUrl: (u) => library.checkUrl(u),
     saveUrl: (u) => library.saveUrl(u),
     restoreItem: (id) => library.restoreItem(id),
+    ...organizeOf(library),
     emitImportStatus: (s) => library.emitImportStatus(s),
     async ping(nonce) {
       return { nonce, contractVersion: CONTRACT_VERSION };
@@ -65,6 +88,49 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   };
 }
 
+const ORGANIZE_METHODS = [
+  "getSidebar", "undo", "tagItems", "untagItems", "addToCollection", "removeFromCollection", "setFavorite", "setArchived",
+  "removeItems", "restoreItems", "deleteItemsPermanently", "renameTag", "mergeTags", "deleteTag", "createCollection",
+  "renameCollection", "moveCollection", "deleteCollection", "saveSmartCollection", "deleteSmartCollection", "setNotes",
+  "listDuplicates", "previewMerge", "mergeItems", "dismissDuplicate", "listOrphans", "reimportOrphan", "deleteOrphan",
+] as const satisfies ReadonlyArray<keyof OrganizeClient>;
+
+function organizeOf(lib: OrganizeClient): OrganizeClient {
+  return Object.fromEntries(ORGANIZE_METHODS.map((m) => [m, (lib[m] as (...a: unknown[]) => unknown).bind(lib)])) as unknown as OrganizeClient;
+}
+
+/** Organize commands (F2.1–F2.3); argument names are the Rust ones in camelCase. */
+const organizeCommands: OrganizeClient = {
+  getSidebar: () => call<Sidebar>("get_sidebar"),
+  undo: () => call<UndoResult | null>("undo"),
+  tagItems: (itemIds, name) => call<OpResult>("tag_items", { itemIds, name }),
+  untagItems: (itemIds, tagId) => call<OpResult>("untag_items", { itemIds, tagId }),
+  addToCollection: (itemIds, collectionId) => call<OpResult>("add_to_collection", { itemIds, collectionId }),
+  removeFromCollection: (itemIds, collectionId) => call<OpResult>("remove_from_collection", { itemIds, collectionId }),
+  setFavorite: (itemIds, value) => call<OpResult>("set_favorite", { itemIds, value }),
+  setArchived: (itemIds, value) => call<OpResult>("set_archived", { itemIds, value }),
+  removeItems: (itemIds) => call<OpResult>("remove_items", { itemIds }),
+  restoreItems: (itemIds) => call<OpResult>("restore_items", { itemIds }),
+  deleteItemsPermanently: (itemIds, deleteMedia) => call<DeleteResult>("delete_items_permanently", { itemIds, deleteMedia }),
+  renameTag: (id, name) => call<OpResult>("rename_tag", { id, name }),
+  mergeTags: (sourceId, targetId) => call<OpResult>("merge_tags", { sourceId, targetId }),
+  deleteTag: (id) => call<OpResult>("delete_tag", { id }),
+  createCollection: (name, parentId) => call<NamedRef>("create_collection", { name, parentId }),
+  renameCollection: (id, name) => call<void>("rename_collection", { id, name }),
+  moveCollection: (id, parentId) => call<void>("move_collection", { id, parentId }),
+  deleteCollection: (id, policy) => call<number>("delete_collection", { id, policy }),
+  saveSmartCollection: (id, name, rules) => call<NamedRef>("save_smart_collection", { id, name, rules }),
+  deleteSmartCollection: (id) => call<void>("delete_smart_collection", { id }),
+  setNotes: (id, revision, notes) => call<ItemDetail>("set_notes", { id, revision, notes }),
+  listDuplicates: () => call<DuplicateDto[]>("list_duplicates"),
+  previewMerge: (candidateId, targetId) => call<MergePreview>("preview_merge", { candidateId, targetId }),
+  mergeItems: (candidateId, targetId) => call<OpResult>("merge_items", { candidateId, targetId }),
+  dismissDuplicate: (candidateId) => call<void>("dismiss_duplicate", { candidateId }),
+  listOrphans: () => call<OrphanDto[]>("list_orphans"),
+  reimportOrphan: (id) => call<LibraryItemDto>("reimport_orphan", { id }),
+  deleteOrphan: (id) => call<{ deleted: number; failed: number }>("delete_orphan", { id }),
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -75,6 +141,7 @@ export function createTauriClient(): BackendClient {
     checkUrl: (url) => call<UrlCheck>("check_url", { url }),
     saveUrl: (url) => call<SaveUrlResult>("save_url", { url }),
     restoreItem: (id) => call<LibraryItemDto>("restore_item", { id }),
+    ...organizeCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));

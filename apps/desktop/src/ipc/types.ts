@@ -40,11 +40,15 @@ export interface LibraryItemDto {
   thumbnailUrl: string | null;
   addedAt: number;
   isFavorite: boolean;
+  archived: boolean;
+  /** Set while the item is in Recently removed (§7.3). */
+  removedAt: number | null;
   /** Only with a search text. */
   snippet: Snippet | null;
 }
 
-export type LibraryView = "all" | "favorites" | "recent" | "archive";
+/** `inbox`: not archived and in no manual collection; `removed`: Recently removed (§7.3). */
+export type LibraryView = "all" | "inbox" | "favorites" | "recent" | "archive" | "removed";
 export type SortKey = "relevance" | "added" | "title" | "duration" | "published";
 
 export interface ListQuery {
@@ -52,6 +56,12 @@ export interface ListQuery {
   view: LibraryView;
   platforms: Platform[];
   kinds: ItemKind[];
+  /** Items carrying any of these tags. */
+  tagIds?: string[];
+  /** Direct members of a manual collection. */
+  collectionId?: string | null;
+  /** Its stored rules replace the filters above; chips narrow further. */
+  smartCollectionId?: string | null;
   sort: SortKey;
   descending: boolean;
   offset: number;
@@ -93,6 +103,10 @@ export interface ItemDetail {
   updatedAt: number;
   archived: boolean;
   assets: AssetDto[];
+  tagRefs: TagRef[];
+  collectionIds: string[];
+  /** Sent back with `setNotes`; REVISION_CONFLICT when it moved. */
+  revision: number;
 }
 
 export type ImportSource = "files" | "folder";
@@ -146,7 +160,155 @@ export interface SaveUrlResult {
   warnings: string[];
 }
 
-export interface LibraryClient {
+// ---- Organize (STATE.md F2.1–F2.3, SPEC §7.3) ----
+
+export interface TagRef {
+  id: string;
+  name: string;
+}
+
+export interface UndoInfo {
+  kind: string;
+  size: number;
+}
+
+/** Counts of a bulk or single operation (ORG-05). */
+export interface OpResult {
+  changed: number;
+  /** Already in that state. */
+  unchanged: number;
+  /** Gone or in Recently removed. */
+  failed: number;
+  /** Set when Undo now reverts this operation. */
+  undo: UndoInfo | null;
+}
+
+export interface UndoResult {
+  kind: string;
+  applied: number;
+  /** Changed again since; left alone. */
+  skipped: number;
+}
+
+export interface CollectionDto {
+  id: string;
+  name: string;
+  parentId: string | null;
+  depth: number;
+  items: number;
+}
+
+/** Rules v1: every condition must hold (§7.3). */
+export interface SmartRules {
+  text: string;
+  platforms: Platform[];
+  kinds: ItemKind[];
+  tagIds: string[];
+  collectionIds: string[];
+  favoriteOnly: boolean;
+  includeArchived: boolean;
+  addedWithinDays: number | null;
+  minDurationMs: number | null;
+  maxDurationMs: number | null;
+}
+
+export interface SmartCollectionDto {
+  id: string;
+  name: string;
+  rules: SmartRules;
+  /** A tag or collection it names is gone. */
+  invalid: boolean;
+}
+
+export interface TagDto {
+  id: string;
+  name: string;
+  items: number;
+}
+
+export interface Sidebar {
+  collections: CollectionDto[];
+  smartCollections: SmartCollectionDto[];
+  tags: TagDto[];
+  counts: { inbox: number; removed: number; duplicates: number; orphans: number };
+}
+
+export type ChildPolicy = "move_up" | "delete_all";
+
+export interface NamedRef {
+  id: string;
+  name: string;
+}
+
+export interface DeleteResult {
+  items: number;
+  /** Managed originals kept in Orphaned media. */
+  orphaned: number;
+  files: { deleted: number; failed: number };
+}
+
+export interface DuplicateDto {
+  id: string;
+  reason: string;
+  createdAt: number;
+  a: LibraryItemDto;
+  b: LibraryItemDto;
+}
+
+/** What a merge will do, shown before it runs (ORG-11). */
+export interface MergePreview {
+  target: LibraryItemDto;
+  source: LibraryItemDto;
+  notesAfter: string;
+  tagsToAdd: TagRef[];
+  collectionsToAdd: NamedRef[];
+  mediaToMove: string[];
+  aliasUrl: string | null;
+  becomesFavorite: boolean;
+}
+
+export interface OrphanDto {
+  id: string;
+  fileName: string;
+  rootLabel: string;
+  rootStatus: string;
+  sizeBytes: number | null;
+  formerTitle: string | null;
+  orphanedAt: number;
+}
+
+export interface OrganizeClient {
+  getSidebar(): Promise<Sidebar>;
+  undo(): Promise<UndoResult | null>;
+  tagItems(itemIds: string[], name: string): Promise<OpResult>;
+  untagItems(itemIds: string[], tagId: string): Promise<OpResult>;
+  addToCollection(itemIds: string[], collectionId: string): Promise<OpResult>;
+  removeFromCollection(itemIds: string[], collectionId: string): Promise<OpResult>;
+  setFavorite(itemIds: string[], value: boolean): Promise<OpResult>;
+  setArchived(itemIds: string[], value: boolean): Promise<OpResult>;
+  removeItems(itemIds: string[]): Promise<OpResult>;
+  restoreItems(itemIds: string[]): Promise<OpResult>;
+  deleteItemsPermanently(itemIds: string[], deleteMedia: boolean): Promise<DeleteResult>;
+  renameTag(id: string, name: string): Promise<OpResult>;
+  mergeTags(sourceId: string, targetId: string): Promise<OpResult>;
+  deleteTag(id: string): Promise<OpResult>;
+  createCollection(name: string, parentId: string | null): Promise<NamedRef>;
+  renameCollection(id: string, name: string): Promise<void>;
+  moveCollection(id: string, parentId: string | null): Promise<void>;
+  deleteCollection(id: string, policy: ChildPolicy): Promise<number>;
+  saveSmartCollection(id: string | null, name: string, rules: SmartRules): Promise<NamedRef>;
+  deleteSmartCollection(id: string): Promise<void>;
+  setNotes(id: string, revision: number, notes: string): Promise<ItemDetail>;
+  listDuplicates(): Promise<DuplicateDto[]>;
+  previewMerge(candidateId: string, targetId: string): Promise<MergePreview>;
+  mergeItems(candidateId: string, targetId: string): Promise<OpResult>;
+  dismissDuplicate(candidateId: string): Promise<void>;
+  listOrphans(): Promise<OrphanDto[]>;
+  reimportOrphan(id: string): Promise<LibraryItemDto>;
+  deleteOrphan(id: string): Promise<{ deleted: number; failed: number }>;
+}
+
+export interface LibraryClient extends OrganizeClient {
   listItems(query: ListQuery): Promise<ItemPage>;
   getItem(id: string): Promise<ItemDetail>;
   importMedia(source: ImportSource): Promise<ImportSummary>;

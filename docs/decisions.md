@@ -681,3 +681,56 @@ STATE.md F1.8. SPEC §7.1 (CAP-01…CAP-06, CAP-08), §7.3 (kaldırılmış öğ
 - Metadata çekme ve güvenli önizleme (CAP-07) M2'de. O zamana kadar başlık bağlantıdan türetilir ve öğe `pending` kalır.
 - Fixture istemcisindeki URL tanıma (`src/ipc/fixtureUrl.ts`) yalnızca ekran durumlarını sürmek içindir; gerçek kurallar Rust'tadır ve `tests/fixtures/normalize.json` ile test edilir.
 - Yönlendirilmiş kullanım testi (MT-17) ve arka planda pano okunmadığının elle kontrolü (MT-01) henüz yapılmadı.
+
+---
+
+## ADR-0015: Düzenleme: etiketler, koleksiyonlar, toplu işlemler, Undo ve birleştirme
+
+STATE.md F2.1–F2.3. SPEC §7.3 (ORG-01…ORG-11, Undo semantiği, soft-delete, `OrphanMedia`), §8.1 adım 4, §11.7, §18.1; AC-06, AC-07, AC-37, AC-39, AC-45, AC-46, AC-48, AC-53, AC-60.
+
+**Bağlam.** Kütüphane kaydedip arıyordu ama düzenlenemiyordu. §7.3 etiket, koleksiyon, akıllı koleksiyon, toplu işlem ve son işlemin geri alınmasını, kaldırılan öğelerin 30 gün beklemesini ve kalıcı silmede indirilmiş medyanın onaysız silinmemesini ister. ORG-11, iki kopya öğenin önizlemeli ve geri alınabilir birleştirilmesini ister.
+
+**Karar: şema (migration 0003 `organize`).**
+
+- `tag` (`normalized_name` UNIQUE), `library_item_tag` (`origin`, `proposal_id`; AI önerileri M5'te aynı tabloyu kullanır), `collection` (`parent_id` RESTRICT, en çok 8 seviye), `library_item_collection` (`added_at`), `smart_collection` (`rule_schema_version`, kurallar JSON), `operation_log` (Undo), `orphan_media` (`(storage_root_id, storage_ref)` UNIQUE).
+- Etiket adının anahtarı aramadaki katlamayla aynıdır: büyük/küçük harf ve Türkçe `İ/I/ı → i`. "İstanbul" ile "ISTANBUL" tek etikettir. Görünen ad, kullanıcının ilk yazdığı biçimdir.
+- Etiket adları `search_document.tags`'e yazılır. Etiket ekleme, çıkarma, yeniden adlandırma, birleştirme ve silme, etkilenen öğelerin arama belgelerini aynı işlemde yeniden yazar (ORG-09, SEA-05).
+
+**Karar: Undo.**
+
+- Undo kapsamındaki her işlem (etiket ekle/çıkar, koleksiyona ekle/çıkar, favori, arşiv, kaldır, etiket yeniden adlandır/birleştir, öğe birleştir) değişikliğiyle aynı işlemde `operation_log`'a bir satır yazar. Satır, işlemin değiştirdiği kayıtları ve eski değerleri taşır; değişiklik yoksa satır yazılmaz.
+- Yalnızca en yeni satır geri alınabilir ve yalnızca aynı uygulama çalışmasında: her çalışma rastgele bir oturum kimliği alır. Yeni bir Undo kapsamındaki işlem ya da yeniden başlatma, eskisini geçersiz kılar. Arka plan işleri bu tabloya yazmaz, bu yüzden Undo'yu geçersiz kılmaz (AC-60).
+- Undo yalnızca işlemin değiştirdiği alanı geri yazar, ve yalnızca alan hâlâ işlemin yazdığı değerdeyse. Kullanıcı bu arada aynı alanı değiştirdiyse o kayıt atlanır ve sayılır; bildirim "N öğe değiştiği için olduğu gibi bırakıldı" der. Arka planın değiştirdiği başka alanlar korunur.
+- Etiket birleştirmenin Undo'su kaynak etiketi aynı kimlik ve adla, tüm `library_item_tag` ilişkileriyle (köken ve tarih dahil) geri getirir (AC-46).
+- Kalıcı silme, dosya silme, etiket silme, koleksiyon silme ve akıllı koleksiyon silme Undo kapsamında değildir; arayüz önce açık onay ister.
+
+**Karar: kaldırma ve sahipsiz medya.**
+
+- Kaldırma `removed_at` yazar (soft-delete); öğe 30 gün Recently removed'da bekler. Uygulama açılışında süresi dolanlar kalıcı silinir; bu temizlik kaldırma anındaki onaya dayanır.
+- Kalıcı silme yalnızca Recently removed'daki öğeye yapılır. İndirilmiş (managed) asıl dosya, kullanıcı ayrıca "dosyaları da sil" demedikçe silinmez; `orphan_media` kaydı olur (AC-37). İçe aktarılmış dosyalara (`external_reference`) hiç dokunulmaz. Türev dosyalar (thumbnail) silinir.
+- Dosyalar veritabanı commit'inden sonra silinir. Bir dosya ancak kökünün içine çözülüyorsa silinir; köke dışarı bakan bağlantı reddedilir (thumbnail protokolüyle aynı kural). Bağlı olmayan köklerdeki dosya silinmez.
+- Sahipsiz medya listesinden "Re-import" yeni bir `local_video` öğesi oluşturur ve dosyayı taşımaz (AC-53).
+
+**Karar: birleştirme (ORG-11).**
+
+- `preview_merge` hiçbir şey yazmadan hedefe geçecek notu, etiketleri, koleksiyonları, medyayı, alias olacak bağlantıyı ve favori durumunu gösterir. Önizlemesiz birleştirme komutu yoktur; arayüz birleştirmeyi yalnızca önizleme diyaloğundan çalıştırır.
+- Birleştirmede notlar "hedef, boş satır, kaynak" olarak birleşir; etiket ve koleksiyonlar eklenir; medya hedefe taşınır; kaynağın kanonik URL'si hedefin `url_alias`'ı olur; kaynak soft-delete edilir ve aday `merged` olur. Undo bunların her birini geri alır ve adayı yeniden açar.
+- Aynı bağlantı yeniden kaydedilirse: kanonik eşleşme kaldırılmış kaynağı gösteriyorsa ama canlı bir öğede alias olarak duruyorsa, canlı öğe döner (birleştirmeden sonra "Recently removed'dan geri yükle" teklifi çıkmaz).
+
+**Karar: komutlar ve arayüz.**
+
+- 28 yeni komut, hepsi `capabilities/main.json`'da tek tek; yeni çekirdek ya da eklenti izni yok. Liste: `get_sidebar`, `undo`, `tag_items`, `untag_items`, `add_to_collection`, `remove_from_collection`, `set_favorite`, `set_archived`, `remove_items`, `restore_items`, `delete_items_permanently`, `rename_tag`, `merge_tags`, `delete_tag`, `create_collection`, `rename_collection`, `move_collection`, `delete_collection`, `save_smart_collection`, `delete_smart_collection`, `set_notes`, `list_duplicates`, `preview_merge`, `merge_items`, `dismiss_duplicate`, `list_orphans`, `reimport_orphan`, `delete_orphan`.
+- Toplu sonuç üç sayı döner: değişen, zaten öyle olan ve bulunamayan/kaldırılmış (ORG-05). Bildirim üçünü de söyler; Undo varsa bildirimde Undo düğmesi çıkar ve `Ctrl+Z` (metin alanı dışında) aynı işi yapar.
+- `list_items` görünümlerine Inbox (arşivde ve hiçbir manuel koleksiyonda olmayan) ve Recently removed eklendi; etiket, manuel koleksiyon ve akıllı koleksiyon süzgeçleri eklendi. Kaydedilen bookmark Inbox'ta gösterilir (§8.1 adım 4). Akıllı koleksiyonda filtre chip'leri kuralları daraltır.
+- Akıllı koleksiyon kuralları sürümlü sabit alanlardır (metin, platform, tür, etiket, koleksiyon, favori, arşiv dahil mi, eklenme günü, süre aralığı); bilinmeyen alan reddedilir, ham SQL saklanmaz. Kuralın andığı etiket ya da koleksiyon silinirse kenar çubuğunda "!" ile ve listede uyarıyla gösterilir; liste sessizce boş kalmaz.
+- Koleksiyon ağacında her satırın "⋯" menüsü vardır: yeniden adlandır, alt koleksiyon, "Move to…" (sürüklemenin klavye alternatifi, ORG-08) ve sil. Alt koleksiyonu olan koleksiyon silinirken "üst seviyeye taşı" (varsayılan) ya da "birlikte sil" seçilir (ORG-10). Kendi altına taşıma reddedilir.
+- Not inspector'da düzenlenir ve okunduğu `revision` ile kaydedilir; arada değiştiyse `REVISION_CONFLICT` döner ve hiçbir şey yazılmaz.
+
+**Doğrulama hatası kodu.** §19'da girdi doğrulama için bir kod yok. Backend'in reddettiği kural ihlalleri (alınmış etiket adı, döngü, derinlik, boş kural) `INTERNAL_ERROR` döner ve nedeni `diagnosticId`'de taşır (`tag-name-taken`, `collection-cycle`…). Arayüz bu girdileri baştan engeller: alınmış ada yeniden adlandırmada "Merge into…" önerilir, döngü oluşturacak hedefler seçilemez, kuralsız akıllı koleksiyon kaydedilemez. Ayrı bir kod gerekirse SPEC değişikliğiyle eklenir.
+
+**Sonuçlar ve açık noktalar.**
+
+- Fixture istemcisinin Undo'su işlemden önceki anlık görüntüyü geri yükler; alan bazlı atlama kuralı yalnızca Rust'ta test edilir (`vv-persistence/tests/organize.rs`).
+- Koleksiyon ağacında sürükle-bırak ve yeniden boyutlandırılabilir kenar çubuğu yok; klavye ve menü alternatifi var. ORG-08'in sürükleme kısmı F2.9 erişilebilirlik çalışmasıyla birlikte değerlendirilecek.
+- Add URL sırasında koleksiyon/etiket seçimi (CAP-05) henüz yok; kaydedilen öğe Inbox'tan düzenlenir.
+- Yolculuk 5 (büyük Inbox'ı düzenle) E2E'si F2 çıkış kapısında.
