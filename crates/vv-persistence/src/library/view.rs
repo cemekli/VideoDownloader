@@ -139,6 +139,24 @@ pub fn asset_views(c: &Connection, item_id: &str) -> Result<Vec<AssetView>> {
 
 /// Where a thumbnail asset lives, if `asset_id` is a thumbnail in a cache
 /// root. Used by the thumbnail protocol, which serves nothing else.
+/// Where a playable file is: `(root path, storage_ref, root status)` for an
+/// original or preview video/audio asset (the media protocol, F2.4).
+pub fn media_location(
+    c: &Connection,
+    asset_id: &str,
+) -> Result<Option<(String, String, StorageRootStatus)>> {
+    use rusqlite::OptionalExtension;
+    Ok(c.query_row(
+        "SELECT r.path, a.storage_ref, r.status FROM media_asset a \
+         JOIN storage_root r ON r.id = a.storage_root_id \
+         WHERE a.id = ?1 AND a.role IN ('original', 'preview') AND a.media_kind IN ('video', 'audio') \
+         AND r.kind IN ('managed_media', 'external_import', 'cache')",
+        [asset_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )
+    .optional()?)
+}
+
 pub fn thumbnail_location(c: &Connection, asset_id: &str) -> Result<Option<(String, String)>> {
     use rusqlite::OptionalExtension;
     Ok(c.query_row(

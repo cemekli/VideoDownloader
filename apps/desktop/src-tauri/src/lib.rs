@@ -6,11 +6,13 @@
 
 pub mod capture_commands;
 pub mod commands;
+pub mod data_commands;
 pub mod instance;
 pub mod library;
 pub mod library_commands;
 pub mod media_protocol;
 pub mod organize_commands;
+pub mod player_commands;
 pub mod thumb_protocol;
 
 use tauri::{Builder, DragDropEvent, Manager, Runtime, WindowEvent};
@@ -58,11 +60,52 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             organize_commands::dismiss_duplicate,
             organize_commands::list_orphans,
             organize_commands::reimport_orphan,
-            organize_commands::delete_orphan
+            organize_commands::delete_orphan,
+            data_commands::get_settings,
+            data_commands::update_settings,
+            data_commands::acknowledge_legal,
+            data_commands::finish_onboarding,
+            data_commands::get_storage_overview,
+            data_commands::choose_media_folder,
+            data_commands::export_library,
+            data_commands::preview_library_import,
+            data_commands::map_import_root,
+            data_commands::apply_library_import,
+            data_commands::cancel_pending,
+            data_commands::backup_library,
+            data_commands::list_backups,
+            data_commands::inspect_backup,
+            data_commands::restore_backup,
+            player_commands::get_playback,
+            player_commands::save_playback_position,
+            player_commands::open_externally,
+            player_commands::open_source,
+            player_commands::relink_asset
         ])
         .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
             thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)
         })
+        // Library media by asset id (F2.4). The E2E build also serves the
+        // playback matrix folder by file name (ADR-0004).
+        .register_uri_scheme_protocol(media_protocol::SCHEME, {
+            let e2e_root = e2e_media_root();
+            move |ctx, request| {
+                media_protocol::dispatch(
+                    &ctx.app_handle().state::<library::LibraryState>(),
+                    e2e_root.as_deref(),
+                    &request,
+                )
+            }
+        })
+}
+
+/// `VV_E2E_MEDIA_DIR`, only in the E2E test build.
+fn e2e_media_root() -> Option<std::path::PathBuf> {
+    if !cfg!(feature = "e2e-cdp") {
+        return None;
+    }
+    std::env::var_os("VV_E2E_MEDIA_DIR")
+        .and_then(|d| std::path::PathBuf::from(d).canonicalize().ok())
 }
 
 pub fn run() {
@@ -81,6 +124,7 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = register(builder)
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             instance::take_library_lock(app.handle())?;
             library::open_library(app.handle())
@@ -92,10 +136,6 @@ pub fn run() {
                 library::import_dropped(window.app_handle(), paths.clone());
             }
         });
-    #[cfg(feature = "e2e-cdp")]
-    {
-        builder = e2e::register_media_protocol(builder);
-    }
     builder
         .run(context)
         .expect("error while running VideoVault");
@@ -126,20 +166,5 @@ mod e2e {
             window.additional_browser_args =
                 Some(format!("{WRY_DEFAULT_ARGS} --remote-debugging-port={port}"));
         }
-    }
-
-    /// Serves `VV_E2E_MEDIA_DIR` over the media protocol for the playback
-    /// matrix (ADR-0004). Without the variable nothing is registered.
-    pub fn register_media_protocol<R: tauri::Runtime>(
-        builder: tauri::Builder<R>,
-    ) -> tauri::Builder<R> {
-        let Some(root) = std::env::var_os("VV_E2E_MEDIA_DIR")
-            .and_then(|d| std::path::PathBuf::from(d).canonicalize().ok())
-        else {
-            return builder;
-        };
-        builder.register_uri_scheme_protocol(crate::media_protocol::SCHEME, move |_ctx, request| {
-            crate::media_protocol::handle(&root, &request)
-        })
     }
 }

@@ -43,6 +43,11 @@ pub enum ErrorCode {
     // Local files and storage roots (STATE.md F1.4/F1.5, SPEC §19).
     FileMissing,
     StorageRootUnavailable,
+    // Playback, portability and Offline Mode (STATE.md F2.4–F2.7, SPEC §19).
+    CodecUnsupported,
+    ImportSchemaUnsupported,
+    MigrationFailed,
+    OfflineMode,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -74,6 +79,10 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::RevisionConflict,
     ErrorCode::FileMissing,
     ErrorCode::StorageRootUnavailable,
+    ErrorCode::CodecUnsupported,
+    ErrorCode::ImportSchemaUnsupported,
+    ErrorCode::MigrationFailed,
+    ErrorCode::OfflineMode,
 ];
 
 impl ErrorCode {
@@ -116,6 +125,10 @@ impl ErrorCode {
             ErrorCode::RevisionConflict => "error.revision_conflict",
             ErrorCode::FileMissing => "error.file_missing",
             ErrorCode::StorageRootUnavailable => "error.storage_root_unavailable",
+            ErrorCode::CodecUnsupported => "error.codec_unsupported",
+            ErrorCode::ImportSchemaUnsupported => "error.import_schema_unsupported",
+            ErrorCode::MigrationFailed => "error.migration_failed",
+            ErrorCode::OfflineMode => "error.offline_mode",
         }
     }
 }
@@ -139,6 +152,12 @@ pub enum SuggestedAction {
     Relink,
     /// Connect the drive or locate the folder again (`STORAGE_ROOT_UNAVAILABLE`).
     ReconnectStorage,
+    /// Open the file in another player (`CODEC_UNSUPPORTED`, PLAY-04).
+    OpenExternally,
+    /// Restore from a backup (`MIGRATION_FAILED`).
+    RestoreBackup,
+    /// Turn Offline Mode off to continue (`OFFLINE_MODE`).
+    GoOnline,
 }
 
 impl ErrorCode {
@@ -162,6 +181,11 @@ impl ErrorCode {
             RevisionConflict => Some(SuggestedAction::Reload),
             FileMissing => Some(SuggestedAction::Relink),
             StorageRootUnavailable => Some(SuggestedAction::ReconnectStorage),
+            CodecUnsupported => Some(SuggestedAction::OpenExternally),
+            // SPEC §19: the current library is not changed; nothing to retry.
+            ImportSchemaUnsupported => None,
+            MigrationFailed => Some(SuggestedAction::RestoreBackup),
+            OfflineMode => Some(SuggestedAction::GoOnline),
         }
     }
 }

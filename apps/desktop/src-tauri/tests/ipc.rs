@@ -233,6 +233,26 @@ fn main_capability_grants_only_app_commands() {
         "allow-list-orphans",
         "allow-reimport-orphan",
         "allow-delete-orphan",
+        "allow-get-settings",
+        "allow-update-settings",
+        "allow-acknowledge-legal",
+        "allow-finish-onboarding",
+        "allow-get-storage-overview",
+        "allow-choose-media-folder",
+        "allow-export-library",
+        "allow-preview-library-import",
+        "allow-map-import-root",
+        "allow-apply-library-import",
+        "allow-cancel-pending",
+        "allow-backup-library",
+        "allow-list-backups",
+        "allow-inspect-backup",
+        "allow-restore-backup",
+        "allow-get-playback",
+        "allow-save-playback-position",
+        "allow-open-externally",
+        "allow-open-source",
+        "allow-relink-asset",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -831,4 +851,164 @@ fn orphaned_media_round_trips_through_ipc() {
     );
     assert_eq!(item["kind"], "local_video");
     assert_eq!(ok(&w, "list_orphans", json!({})), json!([]));
+}
+
+// ---- Player, settings and backups (STATE.md F2.4–F2.8) ----
+
+#[test]
+fn settings_playback_and_backup_commands_match_contract_shape() {
+    use vv_persistence::library::repo::{MediaAsset, StorageRoot};
+    use vv_persistence::library::*;
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+
+    let s = ok(&w, "get_settings", json!({}));
+    assert_same_shape(&s, &spec("get_settings"), "get_settings");
+    assert_eq!(s["theme"], "dark");
+    let s = ok(
+        &w,
+        "update_settings",
+        c["commands"]["update_settings"]["args"].clone(),
+    );
+    assert_eq!(
+        (s["theme"].clone(), s["offlineMode"].clone()),
+        (json!("light"), json!(true))
+    );
+    assert!(
+        invoke(
+            &w,
+            "update_settings",
+            json!({ "patch": { "telemetry": true } }),
+            app_origin()
+        )
+        .is_err(),
+        "unknown settings are refused"
+    );
+    let err = invoke(&w, "open_source", json!({ "itemId": id }), app_origin()).unwrap_err();
+    assert_eq!(
+        err["code"], "OFFLINE_MODE",
+        "no browser opens in Offline Mode"
+    );
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": false } }),
+    );
+    ok(&w, "acknowledge_legal", json!({}));
+    let s = ok(&w, "finish_onboarding", json!({}));
+    assert!(s["legalAckAt"].is_number() && s["onboardingCompletedAt"].is_number());
+    let o = ok(&w, "get_storage_overview", json!({}));
+    assert_same_shape(&o, &spec("get_storage_overview"), "get_storage_overview");
+    assert_eq!(o["isDefault"], true);
+
+    // A local file for the item: playback lists it with its vvmedia URL.
+    let asset = {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        let c = db.writer();
+        let root = StorageRoot {
+            id: new_id(),
+            kind: StorageRootKind::ExternalImport,
+            label: "Videos".into(),
+            path: d.path().to_string_lossy().into_owned(),
+            volume_id: None,
+            status: StorageRootStatus::Available,
+            created_at: 1,
+            last_verified_at: None,
+        };
+        repo::insert_storage_root(c, &root).unwrap();
+        let mut a = MediaAsset::new(
+            &id,
+            AssetRole::Original,
+            MediaKind::Video,
+            StorageKind::ExternalReference,
+            &root.id,
+            "clip.mp4",
+            1,
+        );
+        a.container = Some("mp4".into());
+        a.video_codec = Some("h264".into());
+        a.duration_ms = Some(372_000);
+        repo::insert_media_asset(c, &a).unwrap();
+        a.id
+    };
+    let p = ok(&w, "get_playback", json!({ "itemId": id }));
+    let mut expected = spec("get_playback");
+    expected["state"] = Value::Null;
+    assert_same_shape(&p, &expected, "get_playback");
+    assert_same_shape(
+        &p["sources"][0],
+        &spec("get_playback")["sources"][0],
+        "get_playback.sources[0]",
+    );
+    assert_eq!(p["sources"][0]["support"], "supported");
+    let st = ok(
+        &w,
+        "save_playback_position",
+        json!({ "itemId": id, "assetId": asset, "positionMs": 186_000, "durationMs": 372_000 }),
+    );
+    assert_same_shape(
+        &st,
+        &spec("save_playback_position"),
+        "save_playback_position",
+    );
+    assert_eq!(st["resumable"], true);
+    // AC-49: a new reader (as after a restart) sees the same position.
+    assert_eq!(
+        ok(&w, "get_playback", json!({ "itemId": id }))["state"]["positionMs"],
+        186_000
+    );
+    assert!(invoke(
+        &w,
+        "save_playback_position",
+        json!({ "itemId": id, "assetId": new_id(), "positionMs": 1 }),
+        app_origin()
+    )
+    .is_err());
+
+    let b = ok(&w, "backup_library", json!({}));
+    assert_same_shape(&b, &spec("backup_library"), "backup_library");
+    assert_eq!(b["kind"], "manual");
+    assert_eq!(
+        ok(&w, "list_backups", json!({})).as_array().unwrap().len(),
+        1
+    );
+    let pv = ok(&w, "inspect_backup", json!({ "name": b["name"] }));
+    let mut expected = spec("inspect_backup");
+    expected["token"] = Value::Null;
+    assert_same_shape(&pv, &expected, "inspect_backup");
+    assert_eq!(pv["items"], 1);
+    for bad in ["../db/library.sqlite", "library.sqlite"] {
+        let e = invoke(&w, "inspect_backup", json!({ "name": bad }), app_origin()).unwrap_err();
+        assert_eq!(e["code"], "FILE_MISSING", "{bad}");
+    }
+    ok(&w, "save_url", c["commands"]["save_url"]["args"].clone());
+    let r = ok(
+        &w,
+        "restore_backup",
+        json!({ "request": { "name": b["name"] } }),
+    );
+    assert_same_shape(&r, &spec("restore_backup"), "restore_backup");
+    assert_eq!(r["items"], 1);
+    assert_eq!(
+        ok(&w, "list_items", json!({ "query": {} }))["total"],
+        1,
+        "the item saved after the backup is gone"
+    );
+    assert_eq!(
+        ok(&w, "list_backups", json!({})).as_array().unwrap().len(),
+        2,
+        "pre-restore backup kept"
+    );
+    assert!(invoke(
+        &w,
+        "restore_backup",
+        json!({ "request": { "token": "nope" } }),
+        app_origin()
+    )
+    .is_err());
+    ok(&w, "cancel_pending", json!({ "token": "nope" }));
 }

@@ -348,3 +348,48 @@ fn events_hold_no_paths_or_queries() {
         "token leaked: {json}"
     );
 }
+
+#[test]
+fn offline_mode_refuses_every_connection_before_dns_ac17() {
+    let d = dns();
+    let p = Policy {
+        offline: true,
+        ..Policy::default()
+    };
+    for (h, port) in [
+        ("public.test", 443),
+        ("93.184.216.34", 443),
+        ("rebind.test", 80),
+    ] {
+        assert_eq!(p.vet(&d, h, port), Err(Block::Offline), "{h}");
+    }
+    assert_eq!(
+        d.calls.load(Ordering::SeqCst),
+        0,
+        "no DNS lookup in Offline Mode"
+    );
+
+    // Through the proxy: even an allowed test target sees no connection.
+    let target = server("should not be reached");
+    let g = Guard::start(
+        Policy {
+            test_targets: vec![target.addr],
+            offline: true,
+            ..Policy::default()
+        },
+        Box::new(dns()),
+    )
+    .unwrap();
+    let a = auth_header(&g);
+    let r = send(&g, &format!("CONNECT {} HTTP/1.1\r\n{a}\r\n", target.addr));
+    assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    let r = send(
+        &g,
+        &format!(
+            "GET http://{}/ HTTP/1.1\r\nHost: {}\r\n{a}\r\n",
+            target.addr, target.addr
+        ),
+    );
+    assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    assert_eq!(target.hits.load(Ordering::SeqCst), 0);
+}
