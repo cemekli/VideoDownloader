@@ -14,6 +14,9 @@ SPEC §27 bu dosyayı zorunlu tutar. SPEC'teki DEC-01…DEC-17 kararları da kan
 | [ADR-0008](#adr-0008-tek-süreç-kütüphane-kilidi-ve-alt-süreç-ağacı) | Tek süreç, kütüphane kilidi ve alt süreç ağacı (SPEC INV-13, §13.2, AC-38) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0009](#adr-0009-benchmark-ortamı-ve-sürümlü-veri-üreticisi) | Benchmark ortamı ve sürümlü veri üreticisi (SPEC §22, §25.2, DEC-17) | Kabul edildi | 7 Kasım 2026 |
 | [ADR-0010](#adr-0010-sabitlenen-sürümler-ve-güncelleme-kuralı) | Sabitlenen sürümler ve güncelleme kuralı (SPEC DEC-01) | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0011](#adr-0011-kütüphane-şeması-url-normalizasyonu-ve-bookmark-kaydı) | Kütüphane şeması, URL normalizasyonu ve bookmark kaydı | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0012](#adr-0012-yerel-import-depolama-kökü-durumu-ve-arama) | Yerel import, depolama kökü durumu ve arama | Kabul edildi | 7 Kasım 2026 |
+| [ADR-0013](#adr-0013-library-ekranı-komutlar-thumbnail-protokolü-ve-sanallaştırma) | Library ekranı: komutlar, thumbnail protokolü ve sanallaştırma (SPEC §9.2, §9.3, §18.2) | Kabul edildi | 8 Kasım 2026 |
 
 ---
 
@@ -611,3 +614,38 @@ STATE.md F1.4–F1.6. SPEC §7.2 (IMP-01…07), §7.4 (SEA-01…05), §7.7 (DATA
 - Disk değiştirme (aynı sürücü harfine başka disk) `volume_id` ile ayırt edilmiyor; F2'de değerlendirilecek.
 - `modified` varlığın türevleri (thumbnail) henüz `stale` işaretlenmiyor; şemada alan yok, dökümler gelmeden önce eklenecek.
 - Uygulama henüz bu servisleri çağırmıyor; import ekranı ve açılışta `check_storage` F1.7'de bağlanır.
+
+---
+
+## ADR-0013: Library ekranı: komutlar, thumbnail protokolü ve sanallaştırma
+
+STATE.md F1.7. SPEC §9.2, §9.3, §9.4, §14.2, §18, §18.2; IMP-01, IMP-06, SEA-02…04, DATA-09, INV-02.
+
+**Bağlam.** F1.4–F1.6 veri katmanını kurdu ama uygulama onu çağırmıyordu. Library ekranı veritabanını açmalı, arama/filtre/sıralamayı tek sorguyla sunmalı, import'u başlatabilmeli ve küçük resimleri CSP'yi gevşetmeden göstermelidir.
+
+**Karar: kütüphanenin açılması.** `setup`, kütüphane kilidinden hemen sonra `<data>/db/library.sqlite`'ı açar (SPEC §14.2); migration öncesi yedek `<data>/backups/`. Tek yazıcı bir mutex arkasında; her okuma kendi salt okunur bağlantısını açar (`vv_persistence::open_reader`), böylece import yazıcıyı tutarken ekran cevap vermeye devam eder. Açılışta arka planda `check_storage` (DATA-09) ve eksik küçük resimler (en çok 200) çalışır.
+
+**Karar: komutlar.**
+
+- `list_items(query)`: görünüm (`all`, `favorites`, `recent` = son 30 gün, `archive`), platform/tür filtresi, metin, sıralama ve sayfa tek sorguda. Enum değerleri serde ile kapalı listedir; bilinmeyen alan ya da değer çalıştırılmadan reddedilir. Cevapta `localState` medya varlığından ve kökün durumundan türetilir, `kind`'dan değil (INV-02): hazır özgün dosya yoksa `bookmark_only`; kök erişilebilir ve dosya bulunduysa `local_ready`; kök erişilemezse `disconnected` (disk çıkarıldı, dosya silinmiş sayılmaz); kök erişilebilir ama dosya yoksa `missing`.
+- `get_item(id)`: inspector alanları. Medya için yalnızca dosya adı ve kök etiketi döner; tam yol backend'de kalır.
+- `import_media(source)`: yerel dosya diyaloğu Rust'ta açılır (`tauri-plugin-dialog` 2.8.4, yalnızca Rust tarafında kullanılır; webview'a `dialog:` izni verilmedi). Pencereye bırakılan dosyalar `WindowEvent::DragDrop` ile yine Rust'ta alınır ve sonuç `import-status` olayıyla bildirilir. Webview hiçbir zaman dosya yolu göndermez; bu yüzden yol alan bir komut yoktur. Webview'a eklenen tek çekirdek izin olay dinlemedir (`core:event:allow-listen`, `allow-unlisten`).
+- ffprobe/FFmpeg şu sırayla aranır: `VV_TOOLS_DIR` (yalnızca debug/E2E derlemesi), exe'nin yanındaki `tools/`, debug derlemede deponun `tools/bin`'i. Bulunamazsa import `TOOL_MISSING` döner ve UI bunu söyler. Kurulumla birlikte araçları dağıtmak F4'ün işi.
+
+**Karar: thumbnail protokolü.** `vvthumb://localhost/<asset-id>` (Windows'ta `http://vvthumb.localhost/...`). İstek bir yol değil, UUID biçiminde bir varlık kimliği taşır; yalnızca cache kökündeki `role = thumbnail` varlıklar çözülür, kullanıcının kendi videosu bu yoldan okunamaz. Dosya canonical yolu kökün içinde değilse ya da 4 MiB'tan büyükse 404. CSP `img-src` yalnızca `'self'` ve bu şemaya izin verir; uzak görsel yine engellidir.
+
+**Karar: arayüz.**
+
+- Sonuç alanı ARIA `listbox` (çoklu seçim) ve `option` kartlardan oluşur; roving tabindex. Ok tuşları odağı taşır ve seçer, Shift aralık seçer, Ctrl yalnızca odağı taşır, Ctrl+Space işaretler, Ctrl+A yüklü olanları seçer, Enter inspector'ı açar, Esc en üstteki yüzeyi kapatıp odağı geri verir, Ctrl+K aramaya gider (§9.4). Durumlar renkle birlikte metin ve sembolle gösterilir.
+- Sanallaştırma: kart en az 232 px, 16:9 küçük resim, sabit satır yüksekliği; yalnızca görünen satırlar ve üçer satır pay çizilir. Sayfa 100 öğe; sona yaklaşınca sonraki sayfa gelir. `aria-setsize`/`aria-posinset` toplamı söyler. Sanallaştırma için paket eklenmedi; hesap birkaç satır ve birim testli (`geometry`).
+- `<900 px`: gezinme menü düğmesiyle açılan çekmeceye, inspector modal çekmeceye dönüşür. Görünüm (grid/liste) ve inspector tercihi `localStorage`'da; okunamazsa varsayılanlar kullanılır.
+- Henüz çalışmayan bölümler (Inbox, Downloads, Collections, Sessions, AI, Settings) gizli (§9.3). Toplu seçim sayısı ve temizleme var; toplu eylemler F2'de.
+- Fixture istemcisi `?fixture=empty|many|error|slow` ile ilk kullanım, 2.000 öğe, hata ve yükleniyor durumlarını üretir; Playwright bu durumların 3 boyutta ekran görüntüsünü alır.
+
+**Sonuçlar ve açık noktalar.**
+
+- Gerçek uygulamada dosya diyaloğu ve sürükle-bırak otomatik test edilemiyor (yerel pencere). Windows'ta elle kontrol gerekiyor (MT-04); gerçek uygulama E2E'si kütüphanenin açıldığını ve `list_items`'ı doğruluyor.
+- Import ilerleme yüzdesi ve iptal düğmesi yok; import API'si iptal bayrağını alıyor, UI bağlantısı F2'de.
+- Başlık sıralaması hâlâ SQLite `lower()` (ASCII). Sıralama sayfalı ve backend'de olduğu için UI'da düzeltilemedi; Türkçe sıralama F2'ye kaldı.
+- Panel genişliğini sürükleyerek değiştirme, hover önizleme (P1), açık tema ve çeviri anahtarları (F2.8) yok.
+

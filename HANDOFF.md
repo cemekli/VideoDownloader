@@ -1,27 +1,30 @@
-# Devir notu — 7 Kasım 2026
+# Devir notu — 8 Kasım 2026
 
 Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
-- **Tamamlananlar:** F0'ın tamamı, F1.1–F1.3 (PR #13) ve F1.4–F1.6 (PR #14, ADR-0012), 19/74. Hepsi main'de, Windows + Linux CI yeşil. 7 Kasım akşamı burada durduk; açık PR yok.
-  - `crates/vv-import`: dosya/klasör import (yerinde referans, kısıtlı ffprobe, SHA-256, duplicate adayı), thumbnail, relink ve `roots::check_storage` (çıkarılan disk `disconnected`, kaybolan dosya `missing`).
-  - Arama: `vv-persistence::library::search`; güvenli sorgu oluşturucu, filtre, sıralama, sayfa, snippet. Türkçe davranış `tests/fixtures/search-tr.json`'da.
-  - Import testleri gerçek ffprobe/FFmpeg ister: yerelde `node scripts/fetch-tools.mjs` çalışmadıysa atlanır, CI'da zorunludur.
-  - Uygulama bu servisleri henüz çağırmıyor; Library ekranı (F1.7) ve Add URL (F1.8) bağlayacak.
+- **Tamamlananlar:** F0'ın tamamı, F1.1–F1.3 (PR #13) ve F1.4–F1.6 (PR #14, ADR-0012), 19/74. Hepsi main'de, Windows + Linux CI yeşil.
+- **F1.7 (Library ekranı) 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0013.
+  - Uygulama açılışta kütüphaneyi `<data>/db/library.sqlite`'ta açıyor, arka planda `check_storage` ve eksik küçük resimleri çalıştırıyor.
+  - Komutlar: `list_items` (görünüm, filtre, arama, sıralama, sayfa), `get_item` (inspector), `import_media` (dosya diyaloğu Rust'ta). Pencereye bırakılan dosyalar da Rust'ta import ediliyor; webview hiç dosya yolu göndermiyor.
+  - Küçük resimler `vvthumb` protokolüyle geliyor; CSP yalnızca buna izin veriyor.
+  - Ekran: gezinme, arama (`Ctrl+K`), filtre chip'leri, grid/liste (sanallaştırılmış), çoklu seçim, inspector, ilk kullanım/yükleniyor/hata/sonuç yok/çevrimdışı durumları. 3 boyutta ekran görüntüleri `test-artifacts/screenshots/library-*.png`.
+  - ✅ için kalan: Windows CI ve Windows'ta elle kontrol (aşağıda).
 
 ## Sonraki ilk adımlar
 
-1. Bu devir notunun PR'ı merge edildiyse `git checkout main && git pull`.
-2. F1.7: Library ekranı (grid/liste, inspector, filtreler, boş ve hata durumları); arama ve import servislerini Tauri komutlarına bağlar.
-3. Ardından F1.8: Add URL (`Ctrl+K`, `save_bookmark`).
+1. F1.7 PR'ı merge edildiyse `git checkout main && git pull`.
+2. Windows'ta elle kontrol (MT-04): `node scripts/fetch-tools.mjs` sonra `npm run desktop`; Import → Files… ile birkaç video seç, bir klasörü pencereye sürükle-bırak, küçük resimlerin geldiğini, inspector'ı ve harici disk çıkarılınca "Drive disconnected" durumunu gör. Sonucu STATE.md F1.7 satırına yaz.
+3. F1.8: Add URL (`Ctrl+K` paletinde URL önerisi, `save_bookmark`), Yolculuk 1 E2E.
 
 ## Bilinmesi gerekenler
 
-- **Çalışma düzeni:** Claude bir dalda PR açar (son PR: `claude/project-thread-t0tup8`). Cuma merge eder ve `C:\Users\cumae\VideoDownloader` içinde `git pull` yapar. STATE.md'de bir alt görev yalnızca kanıtla ✅ olur: CI linki, test sonucu ya da elle kontrol.
+- **Çalışma düzeni:** Claude bir dalda PR açar (son dal: `claude/project-thread-yn7xg0`). Cuma merge eder ve `C:\Users\cumae\VideoDownloader` içinde `git pull` yapar. STATE.md'de bir alt görev yalnızca kanıtla ✅ olur: CI linki, test sonucu ya da elle kontrol.
 - **Windows yerel komutları:**
   - `npm run verify`: tüm kapılar.
-  - `npm run desktop`: uygulamayı geliştirme modunda açar.
+  - `npm run desktop`: uygulamayı geliştirme modunda açar. Import için önce `node scripts/fetch-tools.mjs` (ffprobe/FFmpeg `tools/bin`'e iner); yoksa import "media tools missing" der.
+  - `npm run dev:fixture`, sonra tarayıcıda `?fixture=empty|many|error|slow`: Library ekranının durumları sahte veriyle.
   - `npm run desktop:e2e-exe` ve ardından `npm run e2e:desktop`: gerçek uygulama E2E.
 - **yt-dlp fixture'larını yeniden yakalamak** yalnızca yt-dlp sürümü değişince gerekir: `VV_YTDLP=<yol> npm run fixtures:ytdlp`. ffmpeg PATH'te olmalıdır; ayrıntılar ADR-0003'te.
 - **Açık noktalar (ADR-0003):**

@@ -193,9 +193,20 @@ fn main_capability_grants_only_app_commands() {
         .iter()
         .map(|p| p.as_str().expect("plain permission id").to_owned())
         .collect();
-    let expected: BTreeSet<String> = ["allow-ping", "allow-get-status", "allow-get-diagnostics"]
-        .map(String::from)
-        .into();
+    // Listening is needed for the import event (ADR-0013); emitting from the
+    // webview, dialogs and file access are not granted.
+    let expected: BTreeSet<String> = [
+        "allow-ping",
+        "allow-get-status",
+        "allow-get-diagnostics",
+        "allow-list-items",
+        "allow-get-item",
+        "allow-import-media",
+        "core:event:allow-listen",
+        "core:event:allow-unlisten",
+    ]
+    .map(String::from)
+    .into();
     assert_eq!(perms, expected);
 }
 
@@ -218,6 +229,133 @@ fn csp_allows_no_remote_sources() {
             assert!(!v.contains("unsafe-eval"), "{key} {directive} allows eval");
         }
         assert_eq!(csp["script-src"], "'self'", "{key} script-src");
+        // Thumbnails come only from the local thumbnail protocol (ADR-0013).
+        assert_eq!(
+            csp["img-src"], "'self' vvthumb: http://vvthumb.localhost",
+            "{key} img-src"
+        );
         assert_eq!(csp["object-src"], "'none'", "{key} object-src");
     }
+}
+
+// ---- Library commands (STATE.md F1.7) ----
+
+use vv_desktop::library::LibraryState;
+use vv_persistence::library::repo::{self, LibraryItem};
+use vv_persistence::library::{ItemKind, SourcePlatform};
+use vv_persistence::{Database, OpenOptions};
+
+/// A mock app whose library is open in a temp dir with one bookmark titled
+/// "Deniz kenarında sabah". Returns the item id.
+fn app_with_library(dir: &std::path::Path) -> (App<MockRuntime>, String) {
+    let app = app();
+    app.state::<LibraryState>().open(dir, None).unwrap();
+    let mut db = Database::open(&dir.join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+    let mut it = LibraryItem::new(
+        ItemKind::Bookmark,
+        SourcePlatform::Youtube,
+        1_794_000_000_000,
+    );
+    it.canonical_url = Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ".into());
+    it.title = Some("Deniz kenarında sabah".into());
+    it.duration_ms = Some(372_000);
+    repo::insert_item(db.writer(), &it).unwrap();
+    (app, it.id)
+}
+
+use tauri::Manager;
+
+#[test]
+fn list_items_matches_contract_shape() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = &c["commands"]["list_items"];
+    let res =
+        invoke(&w, "list_items", spec["args"].clone(), app_origin()).expect("list_items allowed");
+    assert_same_shape(&res, &spec["response"], "list_items");
+    assert_eq!(res["total"], 1);
+    let item = &res["items"][0];
+    assert_same_shape(item, &spec["response"]["items"][0], "list_items.items[0]");
+    assert_same_shape(
+        &item["snippet"],
+        &spec["response"]["items"][0]["snippet"],
+        "list_items.items[0].snippet",
+    );
+    assert_eq!(item["id"], json!(id));
+    assert_eq!(item["localState"], "bookmark_only");
+    assert_eq!(
+        item["snippet"]["parts"][0],
+        json!({"text": "Deniz", "highlight": true})
+    );
+}
+
+#[test]
+fn get_item_matches_contract_shape() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = &c["commands"]["get_item"];
+    let res = invoke(&w, "get_item", json!({ "id": id }), app_origin()).expect("get_item allowed");
+    let mut expected = spec["response"].clone();
+    // The test item has no media; the contract's asset row is checked by
+    // the unit tests of `item_detail`.
+    expected["assets"] = json!([]);
+    assert_same_shape(&res, &expected, "get_item");
+    assert_same_shape(&res["item"], &spec["response"]["item"], "get_item.item");
+    assert_eq!(res["assets"], json!([]));
+    let missing = invoke(
+        &w,
+        "get_item",
+        json!({ "id": "00000000-0000-4000-8000-00000000ffff" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(missing["code"], "INTERNAL_ERROR");
+}
+
+#[test]
+fn list_items_refuses_unknown_values() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    for query in [
+        json!({ "view": "everything" }),
+        json!({ "sort": "random()" }),
+        json!({ "platforms": ["myspace"] }),
+        json!({ "extra": 1 }),
+    ] {
+        assert!(
+            invoke(&w, "list_items", json!({ "query": query }), app_origin()).is_err(),
+            "{query}"
+        );
+    }
+}
+
+#[test]
+fn library_commands_fail_cleanly_before_the_library_opens() {
+    let app = app();
+    let w = window(&app, "main");
+    let err = invoke(&w, "list_items", json!({ "query": {} }), app_origin()).unwrap_err();
+    assert_eq!(err["code"], "INTERNAL_ERROR");
+    assert_eq!(err["diagnosticId"], "library-not-open");
+}
+
+#[test]
+fn import_without_tools_reports_tool_missing() {
+    // Checked before any dialog opens.
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let err = invoke(
+        &w,
+        "import_media",
+        json!({ "source": "files" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(err["code"], "TOOL_MISSING");
+    assert!(invoke(&w, "import_media", json!({ "source": "C:/" }), app_origin()).is_err());
 }

@@ -4,7 +4,8 @@
   "spec_refs": [
     "§18.1",
     "§18.2",
-    "§18.3"
+    "§18.3",
+    "§9.3"
   ],
   "note": "Wire shape of every IPC command and of DomainError. Rust tests check the backend serializes exactly these keys and types; UI tests use the same values as mocked responses. Change only together with CONTRACT_VERSION.",
   "contractVersion": 1,
@@ -38,6 +39,114 @@
         "libraryLock": true,
         "secondLaunches": 0
       }
+    },
+    "list_items": {
+      "args": {
+        "query": {
+          "text": "deniz",
+          "view": "all",
+          "platforms": [],
+          "kinds": [],
+          "sort": "relevance",
+          "descending": true,
+          "offset": 0,
+          "limit": 100
+        }
+      },
+      "response": {
+        "total": 1,
+        "offset": 0,
+        "items": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "title": "Deniz kenarında sabah",
+            "platform": "youtube",
+            "kind": "bookmark",
+            "localState": "bookmark_only",
+            "durationMs": 372000,
+            "tags": [],
+            "thumbnailUrl": null,
+            "addedAt": 1794000000000,
+            "isFavorite": false,
+            "snippet": {
+              "field": "title",
+              "parts": [
+                {
+                  "text": "Deniz",
+                  "highlight": true
+                },
+                {
+                  "text": " kenarında sabah",
+                  "highlight": false
+                }
+              ],
+              "cutStart": false,
+              "cutEnd": false
+            }
+          }
+        ],
+        "notice": null
+      }
+    },
+    "get_item": {
+      "args": {
+        "id": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": {
+        "item": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "title": "Deniz kenarında sabah",
+          "platform": "youtube",
+          "kind": "bookmark",
+          "localState": "bookmark_only",
+          "durationMs": 372000,
+          "tags": [],
+          "thumbnailUrl": null,
+          "addedAt": 1794000000000,
+          "isFavorite": false,
+          "snippet": null
+        },
+        "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "creator": null,
+        "description": null,
+        "notes": "",
+        "publishedAt": null,
+        "publishedDate": null,
+        "metadataStatus": "pending",
+        "updatedAt": 1794000000000,
+        "archived": false,
+        "assets": [
+          {
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "fileName": "sabah.mp4",
+            "rootLabel": "Videos",
+            "rootStatus": "available",
+            "integrityState": "verified",
+            "sizeBytes": 1048576,
+            "container": "mp4",
+            "videoCodec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "durationMs": 372000
+          }
+        ]
+      }
+    },
+    "import_media": {
+      "args": {
+        "source": "files"
+      },
+      "response": {
+        "picked": true,
+        "imported": 2,
+        "alreadyImported": 0,
+        "duplicates": 0,
+        "rejected": 1,
+        "skipped": 0,
+        "ignored": 0,
+        "canceled": false,
+        "firstError": "INPUT_REJECTED"
+      }
     }
   },
   "domainError": {
@@ -47,5 +156,26 @@
     "suggestedAction": "show_diagnostics",
     "diagnosticId": "diag-00000000",
     "safeDetails": {}
+  },
+  "events": {
+    "import-status": {
+      "started": {
+        "phase": "started"
+      },
+      "finished": {
+        "phase": "finished",
+        "summary": {
+          "picked": true,
+          "imported": 2,
+          "alreadyImported": 0,
+          "duplicates": 0,
+          "rejected": 1,
+          "skipped": 0,
+          "ignored": 0,
+          "canceled": false,
+          "firstError": "INPUT_REJECTED"
+        }
+      }
+    }
   }
 }

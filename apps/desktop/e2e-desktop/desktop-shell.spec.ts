@@ -18,12 +18,36 @@ test.afterAll(async () => {
 
 test("window shows real backend status, not fixture data", async () => {
   const { page } = app;
-  await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "All Items" })).toBeVisible();
   // get_status answered over real IPC; fixture mode would say "Fixture data".
   await expect(page.getByTestId("backend-status")).toHaveText(/^Desktop v\d+\.\d+\.\d+$/);
   await expect(page.getByTestId("backend-status")).toHaveAttribute("data-backend", "desktop");
   await expect(page.getByTestId("library-empty")).toBeVisible();
   await page.screenshot({ path: "../../test-artifacts/screenshots/desktop-windows.png" });
+});
+
+test("library opens from a fresh data directory and answers list_items (F1.7)", async () => {
+  const page = (await app.page.evaluate(() =>
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("list_items", { query: { text: "deniz" } }),
+  )) as { total: number; items: unknown[]; notice: string | null };
+  expect(page).toEqual({ total: 0, offset: 0, items: [], notice: null });
+  // A tampered query is refused by deserialization, not run.
+  const refused = await app.page.evaluate(async () => {
+    try {
+      await (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("list_items", { query: { sort: "random()" } });
+      return "allowed";
+    } catch {
+      return "refused";
+    }
+  });
+  expect(refused).toBe("refused");
+});
+
+test("first-use state offers import with the real backend", async () => {
+  const { page } = app;
+  await expect(page.getByTestId("empty-import-files")).toBeEnabled();
+  await expect(page.getByTestId("result-count")).toHaveText("0 items");
+  await page.screenshot({ path: "../../test-artifacts/screenshots/desktop-windows-empty.png" });
 });
 
 test("ping round-trips through the real IPC bridge", async () => {
