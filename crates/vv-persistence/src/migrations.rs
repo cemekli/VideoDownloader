@@ -48,6 +48,12 @@ pub const MIGRATIONS: &[Migration] = &[
             "../migrations/0004_playback_settings.down.sql"
         )),
     },
+    Migration {
+        version: 5,
+        name: "jobs",
+        up: include_str!("../migrations/0005_jobs.up.sql"),
+        down: Some(include_str!("../migrations/0005_jobs.down.sql")),
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

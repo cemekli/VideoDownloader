@@ -827,3 +827,28 @@ STATE.md F2.8 ve F2.9. SPEC §9.6, §9.7, NFR-12; AC-27.
 - `e2e/a11y.spec.ts` her ana yüzeyi (kütüphane, inspector, sonuç yok, oynatıcı, ayarlar, Add URL, ilk açılışın beş adımı) iki temada axe ile tarar; WCAG 2.1 A/AA kurallarında `critical` ya da `serious` bulgu testi düşürür.
 - %200 ölçek: 1366×768 ekranda 683×384 CSS piksel. Bu pencerede yatay sayfa kaydırması yok, odak görünür, Add URL ve arama klavyeyle çalışır, diyaloglar pencereye sığar. Bunun için 900 pikselden dar pencerelerde üst çubuk iki satıra kırılır.
 - Axe sorunların bir kısmını bulur. Narrator ile okuma ve Windows yüksek karşıtlık modu elle kontrol edilir (HANDOFF.md).
+
+## ADR-0019: Kalıcı iş kuyruğu: durumlar, lease, generation ve bağımlılıklar
+
+STATE.md F3.1. SPEC §12.3, §13; AC-10, AC-11, AC-58 (kuyruk tarafı).
+
+**Karar: tablo ve kısıtlar.** Migration 0005 `job` ve `job_attempt` tablolarını ekler. Durum, tür ve `cancel_reason` CHECK ile sınırlıdır. Şema da tutarsız durumu reddeder: `blocked` ancak `blocked_reason` ile, `running`/`pausing`/`canceling` ancak lease sahibi ile, `retry_wait` ancak `next_retry_at` ile olur. Aynı `idempotency_key` ile açık (terminal olmayan) tek iş olabilir (kısmi UNIQUE indeks); biten iş anahtarı bırakır. Öğe silinince işleri CASCADE ile gider. API `vv-persistence::jobs` içindedir; her geçiş tek transaction'dır.
+
+**Karar: lease ve generation.**
+
+- `claim` işi `running` yapar, `attempts` ve `generation` bir artar, 30 sn lease verir. Heartbeat (10 sn) ve ilerleme bildirimi lease'i uzatır ve işçiye `Continue`/`Pause`/`Cancel` sinyali döner.
+- İşçinin her çağrısı kendi generation'ını taşır. İş geri alınmış, iptal edilmiş ya da yeniden denenmişse çağrı `Stale` ile reddedilir. `succeed_with` domain satırlarını (ör. medya varlığı) aynı transaction'da yazar; eski generation hiçbir şey yayımlayamaz. Böylece tekrar ya da çökme sonrası tek final referans kalır (AC-11).
+- Açılışta `recover` bir önceki çalışmanın tuttuğu tüm işleri bırakır: `running` → `queued`, `pausing` → `paused`, `canceling` → `canceled`. Uygulama açıkken süresi dolan lease'leri `reclaim_expired` aynı yolla bırakır. Kesilen deneme `interrupted` olarak kaydedilir ve deneme hakkından düşmez.
+
+**Karar: yeniden deneme.** İlk deneme ve 3 tekrar (`max_attempts` 4). Geçici hata bekleme süreleri 5 sn, 30 sn ve 120 sn olur. Buna %0–20 jitter eklenir; jitter iş kimliğinden türetildiği için testler tekrarlanabilir. Sunucu `Retry-After` verdiyse en az o kadar beklenir. Kalıcı hata (DRM, desteklenmeyen, erişim yok) hemen `failed` olur. Kullanıcı retry'ı yeni bütçe ve yeni generation verir; deneme geçmişi korunur. Aynı işi yapan açık başka bir iş varsa retry reddedilir.
+
+**Karar: bağımlılık.** Tek bir `parent_job_id` bağımlılıktır. Ebeveyni bitmemiş çocuk `queued` değil, `blocked` (`parent`) bekler. Ebeveyn başarıyla bitince bekleyen çocuklar kuyruğa girer. Ebeveyn başarısız olursa ya da iptal edilirse açık torunlar `dependency_failed` ile iptal edilir: çalışanlar `canceling` olur, diğerleri hemen `canceled` olur. Ebeveyn yeniden denendiğinde yalnızca `dependency_failed` ile iptal olanlar yeniden `blocked` (`parent`) olur. Kullanıcının iptal ettiği çocuk iptal kalır (AC-58). `parent` engelini yalnızca ebeveyn kaldırır; `unblock` buna dokunmaz.
+
+**Karar: iptal, duraklatma ve engel.**
+
+- Bekleyen iş anında `canceled` olur. Çalışan iş önce `canceling` olur; işçi süreç ağacını durdurup `confirm_canceled` çağırır. `canceling` iken `succeed` reddedilir (AC-10). Süreç durdurma ve kısmi dosya temizliği F3.3/F3.4'te gelir.
+- Yalnızca devam ettirilebilen türler duraklatılabilir: download, storage_move, model_download, reindex. Diğerlerinde pause reddedilir, böylece iptal pause gibi gösterilmez. Pause, `blocked`a geçiş ve çökme kesintisi deneme hakkından düşmez.
+- Offline Mode açılınca bekleyen ağ işleri `blocked` (`offline`) olur. Çalışanlar `running_network_jobs` ile bulunur ve işçi `block` ile durur. `claim` offline iken ağ türlerini hiç vermez. Mod kapanınca offline engeli kalkar.
+- Öğe kaldırılınca açık işleri `item_removed` ile iptal edilir ve öğe geri gelse de dönmez.
+
+**Sonraki adımlar.** Eşzamanlılık şimdilik `claim` çağrısındaki `max_running` ile sınırlanır. İşçi çalışma zamanı, tür başına havuzlar ve Tauri olayları F3.2 ve sonrasında gelir.
