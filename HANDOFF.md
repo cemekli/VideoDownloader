@@ -4,14 +4,15 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Nerede kaldık
 
+- **Son durum (8 Kas 16:35):** F3.1 kalıcı iş kuyruğu ✅ (PR #23 merge edildi; 31/74). F3.7 hata sınıflandırması ✅ (PR #24; CI #42500414511 Linux + Windows yeşil; 32/74). Yarın ilk iş: Cuma PR #24'ü merge eder, sonra F3.2.
 - **Tamamlananlar:** F0, F1 ve F2'nin tamamı (30/74; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt: Cuma'nın Windows 11 `npm run verify` raporu (8 Kas 2026 15:12, gerçek uygulama E2E dahil) + Linux `verify` + Windows elle kontrol listesi (8 Kas 15:22).
 - Elle kontrolde bulunan tek sorun: Play'e basınca video başlamıyordu; PR #22 ile düzeltildi.
 - Uygulamada şu an: bookmark kaydetme, yerel import, arama, etiket/koleksiyon/toplu işlem/Undo, duplicate birleştirme, oynatıcı (kaldığı yerden devam), JSON dışa/içe aktarma, DB yedeği ve geri yükleme, Offline Mode, ilk açılış, açık/koyu tema. Ağ kullanan hiçbir özellik henüz yok.
 
 ## Sonraki ilk adımlar
 
-1. `git checkout main && git pull`.
-2. F3 (indirme motoru, M2'nin ilk yarısı). F3.1 kalıcı iş kuyruğu yazıldı (`crates/vv-persistence/src/jobs.rs`, ADR-0019; işçi çalışma zamanı henüz yok). Kalan sıra: F3.7 hata sınıflandırması → F3.2 araç sağlık kontrolü → F3.3 ağ politikası → F3.4 uzak metadata → F3.5/F3.6 format ve indirme → F3.8 Downloads ekranı. F3.11 izinli gerçek URL'ler ister; Cuma'nın seçeceği URL'lerle yapılır.
+1. PR #24'ü (F3.7) merge et, sonra `git checkout main && git pull`.
+2. F3 (indirme motoru, M2'nin ilk yarısı). F3.1 kalıcı iş kuyruğu yazıldı (`crates/vv-persistence/src/jobs.rs`, ADR-0019; işçi çalışma zamanı henüz yok). F3.7 hata sınıflandırması yazıldı (`crates/vv-persistence/src/classify.rs`, ADR-0020). Kalan sıra: F3.2 araç sağlık kontrolü → F3.3 ağ politikası → F3.4 uzak metadata → F3.5/F3.6 format ve indirme → F3.8 Downloads ekranı. F3.11 izinli gerçek URL'ler ister; Cuma'nın seçeceği URL'lerle yapılır.
 
 ## Bilinmesi gerekenler
 

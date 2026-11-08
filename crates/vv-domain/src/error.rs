@@ -48,6 +48,16 @@ pub enum ErrorCode {
     ImportSchemaUnsupported,
     MigrationFailed,
     OfflineMode,
+    // The rest of SPEC §19, for the download engine (STATE.md F3.7).
+    SessionExpired,
+    CookieAccessFailed,
+    MediaUrlExpired,
+    QuotaExceeded,
+    ModelMissing,
+    ResourceLimit,
+    SignatureInvalid,
+    DependencyFailed,
+    ToolBlocked,
 }
 
 /// Every code, in declaration order. Tests use it to check that each code has
@@ -83,16 +93,75 @@ pub const ALL_ERROR_CODES: &[ErrorCode] = &[
     ErrorCode::ImportSchemaUnsupported,
     ErrorCode::MigrationFailed,
     ErrorCode::OfflineMode,
+    ErrorCode::SessionExpired,
+    ErrorCode::CookieAccessFailed,
+    ErrorCode::MediaUrlExpired,
+    ErrorCode::QuotaExceeded,
+    ErrorCode::ModelMissing,
+    ErrorCode::ResourceLimit,
+    ErrorCode::SignatureInvalid,
+    ErrorCode::DependencyFailed,
+    ErrorCode::ToolBlocked,
 ];
 
 impl ErrorCode {
+    /// Wire name, the same string serde writes (`NETWORK_UNAVAILABLE`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ErrorCode::InvalidUrl => "INVALID_URL",
+            ErrorCode::UrlBlocked => "URL_BLOCKED",
+            ErrorCode::UrlHasCredentials => "URL_HAS_CREDENTIALS",
+            ErrorCode::InternalError => "INTERNAL_ERROR",
+            ErrorCode::NetworkUnavailable => "NETWORK_UNAVAILABLE",
+            ErrorCode::RateLimited => "RATE_LIMITED",
+            ErrorCode::LoginRequired => "LOGIN_REQUIRED",
+            ErrorCode::AccessDenied => "ACCESS_DENIED",
+            ErrorCode::ContentUnavailable => "CONTENT_UNAVAILABLE",
+            ErrorCode::RegionRestricted => "REGION_RESTRICTED",
+            ErrorCode::DrmUnsupported => "DRM_UNSUPPORTED",
+            ErrorCode::ExtractorUnsupported => "EXTRACTOR_UNSUPPORTED",
+            ErrorCode::ExtractorFailed => "EXTRACTOR_FAILED",
+            ErrorCode::PlaylistUnsupported => "PLAYLIST_UNSUPPORTED",
+            ErrorCode::DiskFull => "DISK_FULL",
+            ErrorCode::PathNotWritable => "PATH_NOT_WRITABLE",
+            ErrorCode::ToolMissing => "TOOL_MISSING",
+            ErrorCode::Timeout => "TIMEOUT",
+            ErrorCode::Canceled => "CANCELED",
+            ErrorCode::ChecksumMismatch => "CHECKSUM_MISMATCH",
+            ErrorCode::InputRejected => "INPUT_REJECTED",
+            ErrorCode::MediaCorrupt => "MEDIA_CORRUPT",
+            ErrorCode::DuplicateItem => "DUPLICATE_ITEM",
+            ErrorCode::RevisionConflict => "REVISION_CONFLICT",
+            ErrorCode::FileMissing => "FILE_MISSING",
+            ErrorCode::StorageRootUnavailable => "STORAGE_ROOT_UNAVAILABLE",
+            ErrorCode::CodecUnsupported => "CODEC_UNSUPPORTED",
+            ErrorCode::ImportSchemaUnsupported => "IMPORT_SCHEMA_UNSUPPORTED",
+            ErrorCode::MigrationFailed => "MIGRATION_FAILED",
+            ErrorCode::OfflineMode => "OFFLINE_MODE",
+            ErrorCode::SessionExpired => "SESSION_EXPIRED",
+            ErrorCode::CookieAccessFailed => "COOKIE_ACCESS_FAILED",
+            ErrorCode::MediaUrlExpired => "MEDIA_URL_EXPIRED",
+            ErrorCode::QuotaExceeded => "QUOTA_EXCEEDED",
+            ErrorCode::ModelMissing => "MODEL_MISSING",
+            ErrorCode::ResourceLimit => "RESOURCE_LIMIT",
+            ErrorCode::SignatureInvalid => "SIGNATURE_INVALID",
+            ErrorCode::DependencyFailed => "DEPENDENCY_FAILED",
+            ErrorCode::ToolBlocked => "TOOL_BLOCKED",
+        }
+    }
+
     /// Whether retrying the same request can succeed (SPEC §19 "İş davranışı").
     pub fn retryable(self) -> bool {
         // Only transient conditions. EXTRACTOR_FAILED is not: SPEC §19 offers
         // the user a retry, the job does not retry by itself.
+        // MEDIA_URL_EXPIRED is retried by resolving the page again, a bounded
+        // number of times (SPEC §19).
         matches!(
             self,
-            ErrorCode::NetworkUnavailable | ErrorCode::RateLimited | ErrorCode::Timeout
+            ErrorCode::NetworkUnavailable
+                | ErrorCode::RateLimited
+                | ErrorCode::Timeout
+                | ErrorCode::MediaUrlExpired
         )
     }
 
@@ -129,6 +198,15 @@ impl ErrorCode {
             ErrorCode::ImportSchemaUnsupported => "error.import_schema_unsupported",
             ErrorCode::MigrationFailed => "error.migration_failed",
             ErrorCode::OfflineMode => "error.offline_mode",
+            ErrorCode::SessionExpired => "error.session_expired",
+            ErrorCode::CookieAccessFailed => "error.cookie_access_failed",
+            ErrorCode::MediaUrlExpired => "error.media_url_expired",
+            ErrorCode::QuotaExceeded => "error.quota_exceeded",
+            ErrorCode::ModelMissing => "error.model_missing",
+            ErrorCode::ResourceLimit => "error.resource_limit",
+            ErrorCode::SignatureInvalid => "error.signature_invalid",
+            ErrorCode::DependencyFailed => "error.dependency_failed",
+            ErrorCode::ToolBlocked => "error.tool_blocked",
         }
     }
 }
@@ -158,6 +236,12 @@ pub enum SuggestedAction {
     RestoreBackup,
     /// Turn Offline Mode off to continue (`OFFLINE_MODE`).
     GoOnline,
+    /// Connect the signed-in profile again (`SESSION_EXPIRED`).
+    Reconnect,
+    /// Fix the AI model or resource settings (`MODEL_MISSING`, `RESOURCE_LIMIT`).
+    CheckModelSettings,
+    /// Retry the parent job this one waited for (`DEPENDENCY_FAILED`).
+    RetryParent,
 }
 
 impl ErrorCode {
@@ -186,6 +270,17 @@ impl ErrorCode {
             ImportSchemaUnsupported => None,
             MigrationFailed => Some(SuggestedAction::RestoreBackup),
             OfflineMode => Some(SuggestedAction::GoOnline),
+            SessionExpired => Some(SuggestedAction::Reconnect),
+            // SPEC §19: a safe explanation (lock, OS encryption, permission).
+            CookieAccessFailed => Some(SuggestedAction::ShowDiagnostics),
+            MediaUrlExpired => Some(SuggestedAction::Retry),
+            QuotaExceeded => Some(SuggestedAction::FreeSpace),
+            ModelMissing | ResourceLimit => Some(SuggestedAction::CheckModelSettings),
+            SignatureInvalid => Some(SuggestedAction::RepairTool),
+            DependencyFailed => Some(SuggestedAction::RetryParent),
+            // SPEC §19: explain and show tool verification; never suggest
+            // turning security software off.
+            ToolBlocked => Some(SuggestedAction::ShowDiagnostics),
         }
     }
 }
@@ -281,6 +376,7 @@ mod tests {
         let mut keys = std::collections::BTreeSet::new();
         for &code in ALL_ERROR_CODES {
             let wire = serde_json::to_value(code).unwrap();
+            assert_eq!(wire.as_str().unwrap(), code.as_str());
             let wire = wire.as_str().unwrap().to_ascii_lowercase();
             let key = code.message_key();
             assert!(keys.insert(key), "duplicate key {key}");

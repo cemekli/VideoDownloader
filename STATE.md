@@ -170,7 +170,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F3.4 | Uzak metadata ve thumbnail (backend üzerinden) | CAP-04, CAP-07, §3 | fixture testleri + gerçek herkese açık URL | ⬜ |
 | F3.5 | Format listesi, kalite önayarları, oynatılabilir hedef container | DL-01, DL-02 | fixture testleri | ⬜ |
 | F3.6 | İndirme, birleştirme, bütünlük doğrulaması, staging'den final konuma | DL-03…07, §14.3 | AC-08, AC-09, AC-12 | ⬜ |
-| F3.7 | Hata sınıflandırması ve durum eşlemesi | §12.1, §19 | tablo bazlı birim testleri | ⬜ |
+| F3.7 | Hata sınıflandırması ve durum eşlemesi | §12.1, §19 | tablo bazlı birim testleri | ✅ §19'un tüm kodları (`ErrorCode`), `vv-persistence::classify` (iş davranışı + §12.1 eşlemesi), 7 tablo bazlı Rust testi (`tests/classify.rs`, kod listesi SPEC.md'den okunur) + `labels.test.ts`; ADR-0020; CI #42500414511 (Linux + Windows) yeşil, PR #24 |
 | F3.8 | Downloads ekranı | §9.3 | Yolculuk 6 E2E | ⬜ |
 | F3.9 | Depolama kotası ve kök taşıma (`storage_move`) | DATA-07, DATA-08 | AC-33, AC-43 | ⬜ |
 | F3.10 | Gizli veri redaksiyonu ve canary testleri | §20.3 | AC-18 | ⬜ |
@@ -294,7 +294,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1 ve F2 tamamlandı** (30/74 alt görev ✅; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt CI yerine Windows + Linux `verify` raporları ve Windows elle kontrolü (`docs/testing.md` "CI ne zaman çalışır"). F3 başladı: F3.1 kalıcı iş kuyruğu ✅ (31/74, ADR-0019). Sıradaki: F3.7 hata sınıflandırması.
+**F0, F1 ve F2 tamamlandı** (30/74 alt görev ✅; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt CI yerine Windows + Linux `verify` raporları ve Windows elle kontrolü (`docs/testing.md` "CI ne zaman çalışır"). F3 başladı: F3.1 kalıcı iş kuyruğu ✅ (31/74, ADR-0019). F3.7 hata sınıflandırması ✅ (32/74, ADR-0020). Sıradaki: F3.2 araç sağlık kontrolü.
 
 ## Değişiklik günlüğü
 
