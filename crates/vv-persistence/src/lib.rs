@@ -5,6 +5,7 @@
 //! pending migrations, after taking a consistent backup when the database
 //! already holds data.
 
+pub mod jobs;
 pub mod library;
 pub mod lock;
 pub mod migrations;
