@@ -1,4 +1,6 @@
-//! STATE.md F3.7: error classification and state mapping, table driven
+//! STATE.md F3.7: error classification and state mapping, table driven. Covers
+//! DL-08 (disk, session, region, deleted content and extractor errors each get
+//! their own job behaviour, state and action)
 //! (SPEC §12.1, §19; ADR-0020).
 
 use vv_domain::error::{ErrorCode, ALL_ERROR_CODES};

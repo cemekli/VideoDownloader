@@ -852,3 +852,21 @@ STATE.md F3.1. SPEC §12.3, §13; AC-10, AC-11, AC-58 (kuyruk tarafı).
 - Öğe kaldırılınca açık işleri `item_removed` ile iptal edilir ve öğe geri gelse de dönmez.
 
 **Sonraki adımlar.** Eşzamanlılık şimdilik `claim` çağrısındaki `max_running` ile sınırlanır. İşçi çalışma zamanı, tür başına havuzlar ve Tauri olayları F3.2 ve sonrasında gelir.
+
+## ADR-0020: Hata sınıflandırması ve durum eşlemesi
+
+STATE.md F3.7. SPEC §12.1, §18.3, §19; DL-08.
+
+**Karar: tek kod listesi.** `vv_domain::error::ErrorCode` §19'daki kodların hepsini içerir. Eksik dokuz kod eklendi: `SESSION_EXPIRED`, `COOKIE_ACCESS_FAILED`, `MEDIA_URL_EXPIRED`, `QUOTA_EXCEEDED`, `MODEL_MISSING`, `RESOURCE_LIMIT`, `SIGNATURE_INVALID`, `DEPENDENCY_FAILED`, `TOOL_BLOCKED`. `tests/classify.rs` kod listesini SPEC.md'den okur; SPEC'e kod eklenip enum'a eklenmezse test düşer. Arayüzde her kodun kendi cümlesi vardır (`error.<KOD>`). `labels.test.ts` bunu Rust listesine karşı denetler.
+
+**Karar: iş davranışı.** `vv_persistence::classify::job_handling` her kod için tek bir kural döner. Kural eksiksizdir: yeni bir kod kural yazılmadan derlenmez.
+
+- Yeniden dene (backoff, ADR-0019): `NETWORK_UNAVAILABLE`, `RATE_LIMITED`, `TIMEOUT`, `MEDIA_URL_EXPIRED`. `MEDIA_URL_EXPIRED` sayfadan yeniden çözümlenir ve deneme hakkıyla sınırlıdır. UI'daki `retryable` alanı tam olarak bu kümedir.
+- Bekle (`blocked`, deneme sayılmaz). Nedenler: `offline` (`OFFLINE_MODE`), `disk` (`DISK_FULL`, `QUOTA_EXCEEDED`), `auth` (`LOGIN_REQUIRED`, `SESSION_EXPIRED`, `COOKIE_ACCESS_FAILED`), `tool` (`TOOL_MISSING`, `TOOL_BLOCKED`), `storage_root`, `path` (`PATH_NOT_WRITABLE`), `model` (`MODEL_MISSING`, `RESOURCE_LIMIT`). Kullanıcı engeli giderince iş `unblock` ile kuyruğa döner.
+- İptal: `CANCELED` kullanıcı iptalidir ve hata gibi gösterilmez. Çalışma sırasında başka bir nedenle iptal istenmişse o neden korunur. `DEPENDENCY_FAILED` `dependency_failed` nedeniyle iptal olur.
+- Diğer tüm kodlar kalıcıdır: `failed` olur, otomatik tekrar yoktur. `EXTRACTOR_FAILED` da buna dahildir; kullanıcı retry edebilir.
+- İşçi geçişi kendisi seçmez, `apply_to_job` çağırır.
+
+**Karar: durum eşlemesi.** `state_change` §12.1 tablosunu uygular; tabloda olmayan kodlar hiçbir durumu değiştirmez. `CONTENT_UNAVAILABLE` yalnızca silinme kanıtı varsa `deleted`, yoksa `unavailable` olur. Başarı ancak kimlik doğrulanmış erişim kanıtıyla `authorized` ve `session_available` üretir (`last_verified_at` güncellenir); kanıt yoksa `public_ok` olur ve profile dokunulmaz. `access_denied` yalnızca `ACCESS_DENIED`'dan, `expired` yalnızca `SESSION_EXPIRED`'dan gelir. Öğe alanlarını `apply_to_item` yazar. Profil alanları AuthProfile tablosuyla M3'te yazılır.
+
+**Sınır.** Aracın çıktısını koda çevirmek araç katmanındadır (`vv_ytdlp::outcome::classify`). Belirsiz bir hata `EXTRACTOR_FAILED` olarak kalır; daha kesin bir açıklama uydurulmaz.
