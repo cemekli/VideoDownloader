@@ -2,6 +2,7 @@
 // (SPEC §9.6, `src/i18n`). The backend sends codes; the text lives here.
 
 import { t, tn, type MessageKey } from "./i18n";
+import { en } from "./i18n/en";
 import type { ItemKind, LibraryView, LocalState, OpResult, Platform } from "./ipc/types";
 
 const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "generic", "local"];
@@ -100,10 +101,12 @@ export function orgErrorMessage(e: unknown): string {
   return key ? t(key) : t("org.error.other", { code: code ?? "IPC_FAILED" });
 }
 
-const ERROR_KEYS = new Set([
-  "CODEC_UNSUPPORTED", "IMPORT_SCHEMA_UNSUPPORTED", "MIGRATION_FAILED", "OFFLINE_MODE", "FILE_MISSING", "STORAGE_ROOT_UNAVAILABLE", "INPUT_REJECTED",
-  "MEDIA_CORRUPT", "PATH_NOT_WRITABLE", "TOOL_MISSING", "DUPLICATE_ITEM",
-]);
+/** Codes with their own sentence: every SPEC §19 code (see labels.test.ts). */
+export const ERROR_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(en)
+    .filter((k) => /^error\.[A-Z_]+$/.test(k))
+    .map((k) => k.slice("error.".length)),
+);
 
 /** A short sentence for a §19 error code. */
 export function errorMessage(code: string): string {
