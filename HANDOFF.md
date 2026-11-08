@@ -5,7 +5,7 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 ## Nerede kaldık
 
 - **Tamamlananlar:** F0'ın tamamı, F1.1–F1.3 (PR #13) ve F1.4–F1.6 (PR #14, ADR-0012), 19/74. Hepsi main'de, Windows + Linux CI yeşil.
-- **F1.7 (Library ekranı) 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0013.
+- **F1.7 (Library ekranı) 🟨:** PR #16 ile merge edildi; Windows'ta elle kontrol (MT-04) 8 Kas 2026'da geçti. Yalnızca yeşil CI bekliyor (GitHub release indirmeleri 504 veriyordu). ADR-0013.
   - Uygulama açılışta kütüphaneyi `<data>/db/library.sqlite`'ta açıyor, arka planda `check_storage` ve eksik küçük resimleri çalıştırıyor.
   - Komutlar: `list_items` (görünüm, filtre, arama, sıralama, sayfa), `get_item` (inspector), `import_media` (dosya diyaloğu Rust'ta). Pencereye bırakılan dosyalar da Rust'ta import ediliyor; webview hiç dosya yolu göndermiyor.
   - Küçük resimler `vvthumb` protokolüyle geliyor; CSP yalnızca buna izin veriyor.
@@ -14,8 +14,8 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
 
 ## Sonraki ilk adımlar
 
-1. F1.7 PR'ı merge edildiyse `git checkout main && git pull`.
-2. Windows'ta elle kontrol (MT-04): `node scripts/fetch-tools.mjs` sonra `npm run desktop`; Import → Files… ile birkaç video seç, bir klasörü pencereye sürükle-bırak, küçük resimlerin geldiğini, inspector'ı ve harici disk çıkarılınca "Drive disconnected" durumunu gör. Sonucu STATE.md F1.7 satırına yaz.
+1. `git checkout main && git pull`.
+2. GitHub indirmeleri düzelince CI'ı yeniden çalıştır; Windows + Linux yeşilse STATE.md F1.7 satırını ✅ yap ve CI linkini ekle.
 3. F1.8: Add URL (`Ctrl+K` paletinde URL önerisi, `save_bookmark`), Yolculuk 1 E2E.
 
 ## Bilinmesi gerekenler

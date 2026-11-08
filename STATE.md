@@ -119,7 +119,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F1.4 | Yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail | IMP-01…07, §14.1 | AC-04, AC-34, AC-35, AC-59: `vv-import/tests/import.rs` (gerçek ffprobe/FFmpeg 9.0.2; thumbnail, iptal, link testleri dahil). Dosya seçici ve sürükle-bırak (IMP-01) F1.7'de. ADR-0012; Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
 | F1.5 | Depolama kökü durumu: `missing` ve `disconnected` ayrımı | DATA-09 | AC-47: `vv-import/tests/import.rs` (kök çıkarılınca `disconnected`, varlıklar `missing` olmuyor, geri gelince doğrulanıyor); Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
 | F1.6 | FTS5 arama, güvenli sorgu oluşturucu, sıralama, Türkçe arama fixture'ı | SEA-01…05, §16.1 | AC-05, AC-31, Türkçe fixture (`tests/fixtures/search-tr.json`, 21 vaka): `vv-persistence/tests/search.rs`. Filtre chip'leri (SEA-02 UI) F1.7'de; Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
-| F1.7 | Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları | §9.2, §9.3 | Fixture E2E 3 görünümde (`e2e/library-shell.spec.ts`, 15 test × 3; ilk kullanım, yükleniyor, hata, sonuç yok, çevrimdışı, 2.000 öğe, inspector, liste ekran görüntüleri), Vitest (`App.test.tsx`, `selection.test.ts`), Rust (`library_view.rs`, `tests/ipc.rs`, `library_commands.rs`), gerçek uygulamada `list_items` (`desktop-shell.spec.ts`). ADR-0013. Bekleyen: Windows CI ve dosya diyaloğu/sürükle-bırak için elle kontrol (MT-04) | 🟨 |
+| F1.7 | Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları | §9.2, §9.3 | Fixture E2E 3 görünümde (`e2e/library-shell.spec.ts`, 15 test × 3; ilk kullanım, yükleniyor, hata, sonuç yok, çevrimdışı, 2.000 öğe, inspector, liste ekran görüntüleri), Vitest (`App.test.tsx`, `selection.test.ts`), Rust (`library_view.rs`, `tests/ipc.rs`, `library_commands.rs`), gerçek uygulamada `list_items` (`desktop-shell.spec.ts`). ADR-0013. Windows'ta elle kontrol (MT-04) 8 Kas 2026'da geçti: Import → Files… ile dosya, sürükle-bırak ile klasör import edildi, küçük resimler geldi. Bekleyen: yeşil Windows + Linux CI (8 Kas'ta GitHub release indirmeleri HTTP 504 verdiği için CI araç indirme adımında durdu) | 🟨 |
 | F1.8 | Add URL ekranı ve `Ctrl+K` | §8.1, §9.4 | Yolculuk 1 E2E; NFR-01, NFR-02 ölçümü | ⬜ |
 
 **Çıkış kapısı**
@@ -294,7 +294,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; CI ve Windows'ta elle kontrol bekliyor). Sıradaki: F1.8 (Add URL).
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; Windows'ta elle kontrol geçti, yeşil CI bekliyor). Sıradaki: F1.8 (Add URL).
 
 ## Değişiklik günlüğü
 
