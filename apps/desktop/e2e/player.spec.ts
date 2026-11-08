@@ -57,6 +57,11 @@ test.describe("player", () => {
     await player.getByTestId("player-close").click();
     await expect(player).toHaveCount(0);
     await expect(page.getByTestId("inspector-play")).toBeFocused();
+
+    // Under 5 s watched there is nothing to resume: Play starts at once.
+    await page.getByTestId("inspector-play").click();
+    await expect(player.getByTestId("player-resume")).toHaveCount(0);
+    await expect.poll(() => player.getByTestId("player-video").evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0)).toBe(true);
   });
 
   test("HEVC: a warning first, then the outcome is named and another player offered (AC-32, PLAY-04)", async ({ page }, info) => {
