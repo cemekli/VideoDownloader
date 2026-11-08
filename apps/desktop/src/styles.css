@@ -287,8 +287,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .spacer { flex: 1; }
 
 @media (max-width: 899px) {
-  /* The top bar wraps instead of pushing controls off the side; font
-     widths differ between machines, so no fixed fit is assumed. */
+  /* The top bar wraps instead of pushing controls off the side: font
+     widths differ between machines, and 200% scale on a 1366 px screen
+     leaves 683 CSS px (AC-27). */
   .topbar { gap: var(--s2); height: auto; min-height: var(--topbar-h); flex-wrap: wrap; row-gap: var(--s2); padding: var(--s2) var(--s3); }
   .search { flex-basis: 160px; }
   .brand { display: none; }
@@ -296,12 +297,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .content { padding: var(--s3) var(--s3) 0; }
   .onboarding-card { padding: var(--s4); }
   .modal { padding: var(--s4); }
-}
-/* Narrow windows and 200% scale on a 1366 px screen (683 CSS px, AC-27):
-   the top bar wraps instead of pushing controls off the side. */
-@media (max-width: 899px) {
-  .topbar { height: auto; min-height: var(--topbar-h); flex-wrap: wrap; row-gap: var(--s2); padding: var(--s2) var(--s3); }
-  .search { flex-basis: 160px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .card, .chip, .button, .nav-item { transition: background-color 120ms ease, border-color 120ms ease; }
