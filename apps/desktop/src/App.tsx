@@ -5,6 +5,9 @@ import { BulkBar } from "./components/BulkBar";
 import { DuplicatesView } from "./components/DuplicatesView";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
+import { Onboarding } from "./components/Onboarding";
+import { Player } from "./components/Player";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { Results } from "./components/Results";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { Sidebar, type Scope } from "./components/Sidebar";
@@ -13,11 +16,13 @@ import { useDebounced, useMediaQuery, useOnline } from "./hooks/useEnv";
 import { useLibrary } from "./hooks/useLibrary";
 import { useOrganize } from "./hooks/useOrganize";
 import { usePrefs } from "./hooks/usePrefs";
+import { useSettings } from "./hooks/useSettings";
+import { t } from "./i18n";
 import { createClient } from "./ipc/client";
 import { errorCode } from "./ipc/errors";
 import { looksLikeUrl, withScheme } from "./url";
 import type { BackendClient, ImportSource, ItemKind, LibraryItemDto, LibraryView, ListQuery, Platform } from "./ipc/types";
-import { importErrorMessage, importMessage, PLATFORM_LABEL, VIEW_LABEL } from "./labels";
+import { errorMessage, importErrorMessage, importMessage, PLATFORM_LABEL, VIEW_LABEL } from "./labels";
 import { EMPTY_SELECTION, type Selection } from "./selection";
 
 /** Below this width the inspector becomes a drawer and navigation hides (§9.2). */
@@ -56,6 +61,11 @@ export function App({ client }: { client?: BackendClient }) {
   const [prefs, setPrefs] = usePrefs();
   const compact = useMediaQuery(COMPACT_QUERY);
   const online = useOnline();
+  const { settings, update: updateSettings, replace: replaceSettings } = useSettings(c);
+  const offlineMode = !!settings?.offlineMode;
+  /** Item open in the player (F2.4), and whether Settings is open. */
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [view, setView] = useState<LibraryView>("all");
   const [scope, setScope] = useState<Scope>({ kind: "none" });
@@ -252,7 +262,12 @@ export function App({ client }: { client?: BackendClient }) {
         searchRef.current?.select();
         return;
       }
-      if (addUrl !== null || org.dialog) return; // dialogs handle their own keys
+      if ((e.ctrlKey || e.metaKey) && e.key === "," && addUrl === null && !org.dialog && !playing) {
+        e.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (addUrl !== null || org.dialog || playing || settingsOpen) return; // dialogs handle their own keys
       // Ctrl+Z: undo the last organize operation (§7.3), outside text fields.
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !inTextField(e.target)) {
         e.preventDefault();
@@ -272,7 +287,13 @@ export function App({ client }: { client?: BackendClient }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items, addUrl, org, selectedIds, view, scope.kind]);
+  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items, addUrl, org, selectedIds, view, scope.kind, playing, settingsOpen]);
+
+  const openSource = (id: string) =>
+    c.openSource(id).then(
+      () => toast(t("player.opened_source")),
+      (e) => toast(errorMessage(errorCode(e)), "error"),
+    );
 
   const goView = (v: LibraryView) => {
     setView(v);
@@ -409,6 +430,7 @@ export function App({ client }: { client?: BackendClient }) {
         }}
         showMenuButton={compact}
         onMenu={() => setNavOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
         status={<BackendStatus client={c} />}
       />
       <div className="workspace">
@@ -431,10 +453,19 @@ export function App({ client }: { client?: BackendClient }) {
           </>
         )}
         <main className="content" aria-labelledby="library-heading">
-          {!online && (
-            <div className="banner" role="status" data-testid="offline-banner">
-              You are offline. Your library, search and imports keep working; online features wait until you reconnect.
+          {offlineMode ? (
+            <div className="banner" role="status" data-testid="offline-mode-banner">
+              {t("offline.mode")}{" "}
+              <button type="button" className="link-button" onClick={() => void updateSettings({ offlineMode: false })} data-testid="offline-mode-off">
+                {t("offline.turn_off")}
+              </button>
             </div>
+          ) : (
+            !online && (
+              <div className="banner" role="status" data-testid="offline-banner">
+                {t("offline.network")}
+              </div>
+            )
           )}
           <div className="content-header">
             <h1 id="library-heading">{heading}</h1>
@@ -521,6 +552,8 @@ export function App({ client }: { client?: BackendClient }) {
               untag: (id, t) => org.actions.untag([id], t.id, t.name),
               addToCollection: (id) => org.open({ kind: "add-to-collection", ids: [id] }),
               removeFromCollection: (id, cid) => org.actions.removeFromCollection([id], cid),
+              play: (id) => setPlaying(id),
+              openSource,
             }}
           />
         )}
@@ -529,7 +562,7 @@ export function App({ client }: { client?: BackendClient }) {
         <AddUrlDialog
           client={c}
           initialUrl={addUrl}
-          online={online}
+          online={online && !offlineMode}
           onClose={closeAddUrl}
           onSaved={(r) => showItem(r.item, `Saved “${r.item.title}” to your Inbox.`, false, "inbox")}
           onOpenExisting={(item) => showItem(item, `“${item.title}” is already in your library.`, true)}
@@ -537,6 +570,23 @@ export function App({ client }: { client?: BackendClient }) {
         />
       )}
       {org.dialog}
+      {playing && <Player client={c} itemId={playing} onClose={() => setPlaying(null)} notify={(m, tone) => toast(m, tone)} />}
+      {settingsOpen && settings && (
+        <SettingsDialog
+          client={c}
+          settings={settings}
+          onSettings={updateSettings}
+          onClose={() => setSettingsOpen(false)}
+          notify={(m, tone) => toast(m, tone)}
+          onLibraryChanged={() => {
+            setReloadKey((k) => k + 1);
+            org.refresh();
+          }}
+        />
+      )}
+      {settings && settings.onboardingCompletedAt === null && (
+        <Onboarding client={c} settings={settings} onSettings={updateSettings} onDone={replaceSettings} notify={(m, tone) => toast(m, tone)} />
+      )}
       <div className="toasts" role="status" aria-live="polite" data-testid="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.tone}`} data-testid="toast">

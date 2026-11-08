@@ -473,6 +473,11 @@ pub async fn import_media<R: Runtime>(
         return Err(DomainError::new(ErrorCode::ToolMissing, "import-no-tools"));
     }
     blocking(app.clone(), move |st| {
+        if let Some(picked) = crate::e2e_picked() {
+            return st
+                .get()?
+                .import(&picked, true, crate::library::cancel_flag(st));
+        }
         let mut dialog = app.dialog().file();
         if let Some(w) = app.get_webview_window("main") {
             dialog = dialog.set_parent(&w);

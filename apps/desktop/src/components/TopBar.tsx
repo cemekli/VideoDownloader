@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ImportSource } from "../ipc/types";
+import { t } from "../i18n";
 
 export type SortChoice = "auto" | "oldest" | "title" | "duration" | "published";
 
@@ -23,6 +24,7 @@ export const TopBar = forwardRef<
     onAcceptSuggestion: () => void;
     showMenuButton: boolean;
     onMenu: () => void;
+    onSettings: () => void;
     status: React.ReactNode;
   }
 >(function TopBar(p, searchRef) {
@@ -81,6 +83,9 @@ export const TopBar = forwardRef<
       </div>
       <button type="button" className="button button-quiet" aria-pressed={p.inspectorOpen} onClick={p.onToggleInspector} data-testid="toggle-inspector">
         Details
+      </button>
+      <button type="button" className="icon-button" aria-label={t("settings.open")} title={`${t("settings.open")} (Ctrl+,)`} onClick={p.onSettings} data-testid="settings-button">
+        ⚙
       </button>
       {p.status}
     </header>

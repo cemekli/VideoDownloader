@@ -1,129 +1,111 @@
-// User-facing names for backend values. Kept in one place so F2.8 can turn
-// them into translation keys (SPEC §9.6).
+// User-facing names for backend values, resolved through translation keys
+// (SPEC §9.6, `src/i18n`). The backend sends codes; the text lives here.
 
+import { t, tn, type MessageKey } from "./i18n";
 import type { ItemKind, LibraryView, LocalState, OpResult, Platform } from "./ipc/types";
 
-export const PLATFORM_LABEL: Record<Platform, string> = {
-  youtube: "YouTube",
-  facebook: "Facebook",
-  instagram: "Instagram",
-  tiktok: "TikTok",
-  x: "X",
-  vk: "VK",
-  generic: "Web",
-  local: "Local file",
-};
+const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "generic", "local"];
+const KINDS: ItemKind[] = ["bookmark", "remote_video", "local_video"];
+const STATES: LocalState[] = ["bookmark_only", "local_ready", "disconnected", "missing"];
+const VIEWS: LibraryView[] = ["all", "inbox", "removed", "favorites", "recent", "archive"];
 
-export const KIND_LABEL: Record<ItemKind, string> = {
-  bookmark: "Bookmarks",
-  remote_video: "Online videos",
-  local_video: "Local files",
-};
-
-/** Text and a symbol for each state, so it never depends on colour alone (§9.4). */
-export const LOCAL_STATE: Record<LocalState, { label: string; icon: string; hint: string }> = {
-  bookmark_only: { label: "Bookmark only", icon: "🔖", hint: "Saved link; no file on this computer." },
-  local_ready: { label: "Downloaded", icon: "✓", hint: "The file is on this computer." },
-  disconnected: { label: "Drive disconnected", icon: "⏏", hint: "The drive or folder with this file is not connected. Nothing was deleted." },
-  missing: { label: "File missing", icon: "!", hint: "The file is no longer where it was imported from." },
-};
-
-export const VIEW_LABEL: Record<LibraryView, string> = {
-  all: "All Items",
-  inbox: "Inbox",
-  removed: "Recently removed",
-  favorites: "Favorites",
-  recent: "Recently Added",
-  archive: "Archive",
-};
-
-const IMPORT_REASON: Record<string, string> = {
-  INPUT_REJECTED: "it is a playlist, manifest or other unsupported input",
-  MEDIA_CORRUPT: "it is damaged or not a video or audio file",
-  TOOL_MISSING: "the media tools are missing",
-  TIMEOUT: "reading it took too long",
-  FILE_MISSING: "it could not be found",
-};
-
-export function importReason(code: string | null): string {
-  return (code && IMPORT_REASON[code]) || "it could not be read";
+/** A record whose values are read through `t()` at access time, so a locale change shows up without a reload. */
+function keyed<K extends string, V>(keys: readonly K[], value: (k: K) => V): Record<K, V> {
+  const out = {} as Record<K, V>;
+  for (const k of keys) Object.defineProperty(out, k, { enumerable: true, get: () => value(k) });
+  return out;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+export const PLATFORM_LABEL: Record<Platform, string> = keyed(PLATFORMS, (p) => t(`platform.${p}` as MessageKey));
+
+export const KIND_LABEL: Record<ItemKind, string> = keyed(KINDS, (k) => t(`kind.${k}` as MessageKey));
+
+const STATE_ICON: Record<LocalState, string> = { bookmark_only: "🔖", local_ready: "✓", disconnected: "⏏", missing: "!" };
+
+/** Text and a symbol for each state, so it never depends on colour alone (§9.4). */
+export const LOCAL_STATE: Record<LocalState, { label: string; icon: string; hint: string }> = keyed(STATES, (s) => ({
+  label: t(`state.${s}.label` as MessageKey),
+  icon: STATE_ICON[s],
+  hint: t(`state.${s}.hint` as MessageKey),
+}));
+
+export const VIEW_LABEL: Record<LibraryView, string> = keyed(VIEWS, (v) => t(`view.${v}` as MessageKey));
+
+const IMPORT_REASONS = new Set(["INPUT_REJECTED", "MEDIA_CORRUPT", "TOOL_MISSING", "TIMEOUT", "FILE_MISSING"]);
+
+export function importReason(code: string | null): string {
+  return code && IMPORT_REASONS.has(code) ? t(`import.reason.${code}` as MessageKey) : t("import.reason.other");
+}
 
 export function importMessage(s: { imported: number; alreadyImported: number; duplicates: number; rejected: number; skipped: number; canceled: boolean; firstError: string | null }): string {
   const parts: string[] = [];
-  if (s.imported) parts.push(`Imported ${plural(s.imported, "file", "files")}.`);
-  if (s.duplicates) parts.push(`${plural(s.duplicates, "file looks", "files look")} like a copy of an existing item; nothing was merged.`);
-  if (s.alreadyImported) parts.push(`${plural(s.alreadyImported, "file was", "files were")} already in the library.`);
-  if (s.rejected) parts.push(`${plural(s.rejected, "file was", "files were")} not imported: ${importReason(s.firstError)}.`);
-  if (s.skipped) parts.push(`${plural(s.skipped, "item was", "items were")} skipped (links, cloud-only or unreadable).`);
-  if (s.canceled) parts.push("Import was canceled; finished files were kept.");
-  return parts.join(" ") || "No video or audio files were found.";
+  if (s.imported) parts.push(tn("import.done", s.imported));
+  if (s.duplicates) parts.push(tn("import.duplicates", s.duplicates));
+  if (s.alreadyImported) parts.push(tn("import.already", s.alreadyImported));
+  if (s.rejected) parts.push(tn("import.rejected", s.rejected, { reason: importReason(s.firstError) }));
+  if (s.skipped) parts.push(tn("import.skipped", s.skipped));
+  if (s.canceled) parts.push(t("import.canceled"));
+  return parts.join(" ") || t("import.nothing");
 }
 
 export function importErrorMessage(code: string): string {
-  if (code === "TOOL_MISSING") return "Import needs the bundled media tools (ffprobe), which were not found.";
-  return `Import failed (${code}).`;
+  if (code === "TOOL_MISSING") return t("import.error.tool_missing");
+  return t("import.error.other", { code });
 }
 
-const URL_ERROR: Record<string, string> = {
-  INVALID_URL: "This is not a web link. Paste a link that starts with https://.",
-  URL_BLOCKED: "Links to this computer or a local network can't be saved.",
-  URL_HAS_CREDENTIALS: "This link contains a password or a temporary access key. Copy the normal link of the video instead.",
-};
+const URL_ERRORS = new Set(["INVALID_URL", "URL_BLOCKED", "URL_HAS_CREDENTIALS"]);
 
 /** Field error for an Add URL refusal (§8.1: a fixable field error). */
 export function urlErrorMessage(code: string): string {
-  return URL_ERROR[code] ?? `The link could not be saved (${code}).`;
+  return URL_ERRORS.has(code) ? t(`url.error.${code}` as MessageKey) : t("url.error.other", { code });
 }
 
 export function urlWarningMessage(code: string): string {
-  if (code === "PLAYLIST_UNSUPPORTED") return "This is a playlist, channel or profile. It is saved as one bookmark; its videos are not added one by one.";
+  if (code === "PLAYLIST_UNSUPPORTED") return t("url.warning.PLAYLIST_UNSUPPORTED");
   return code;
 }
 
 /**
  * Result of a bulk or single operation, with honest counts (ORG-05):
- * `done` says what happened to the changed items.
+ * `done` says what happened to the changed items; `{n}` is "3 items".
  */
-export function opMessage(done: string, r: OpResult, unchangedReason = "were already like that"): string {
-  const parts = [r.changed ? `${done.replace("{n}", plural(r.changed, "item", "items"))}` : "Nothing changed."];
-  if (r.unchanged) parts.push(`${plural(r.unchanged, "item", "items")} ${r.unchanged === 1 ? unchangedReason.replace(/^were/, "was") : unchangedReason}.`);
-  if (r.failed) parts.push(`${plural(r.failed, "item was", "items were")} not found or already removed.`);
+export function opMessage(done: string, r: OpResult, unchangedReason = t("op.unchanged.default")): string {
+  const parts = [r.changed ? done.replace("{n}", tn("op.items", r.changed)) : t("op.nothing")];
+  if (r.unchanged) parts.push(tn("op.unchanged", r.unchanged, { reason: r.unchanged === 1 ? unchangedReason.replace(/^were/, "was") : unchangedReason }));
+  if (r.failed) parts.push(tn("op.failed", r.failed));
   return parts.join(" ");
 }
 
-const UNDO_DONE: Record<string, string> = {
-  tag_items: "Tagging undone.",
-  untag_items: "Tags put back.",
-  add_to_collection: "Removed from the collection again.",
-  remove_from_collection: "Put back into the collection.",
-  set_favorite: "Favorites undone.",
-  set_archived: "Archive change undone.",
-  remove: "Items restored.",
-  rename_tag: "Tag name put back.",
-  merge_tags: "Tag merge undone.",
-  merge_items: "Merge undone.",
-};
+const UNDO_KINDS = new Set(["tag_items", "untag_items", "add_to_collection", "remove_from_collection", "set_favorite", "set_archived", "remove", "rename_tag", "merge_tags", "merge_items"]);
 
 export function undoMessage(r: { kind: string; applied: number; skipped: number }): string {
-  const head = UNDO_DONE[r.kind] ?? "Undone.";
-  return r.skipped ? `${head} ${plural(r.skipped, "item was", "items were")} left as they are because ${r.skipped === 1 ? "it was" : "they were"} changed since.` : head;
+  const head = UNDO_KINDS.has(r.kind) ? t(`undo.${r.kind}` as MessageKey) : t("undo.other");
+  return r.skipped ? `${head} ${tn("undo.skipped", r.skipped)}` : head;
 }
 
-const ORG_ERROR: Record<string, string> = {
-  "tag-name-taken": "A tag with this name already exists. Use Merge into… to combine them.",
-  "collection-cycle": "A collection can't be moved inside itself.",
-  "collection tree too deep": "Collections can be nested at most 8 levels deep.",
-  "root-disconnected": "The drive with this file is not connected.",
-  "item is not in Recently removed": "Only items in Recently removed can be deleted for good.",
+const ORG_ERROR: Record<string, MessageKey> = {
+  "tag-name-taken": "org.error.tag_name_taken",
+  "collection-cycle": "org.error.collection_cycle",
+  "collection tree too deep": "org.error.collection_depth",
+  "root-disconnected": "org.error.root_disconnected",
+  "item is not in Recently removed": "org.error.not_removed",
 };
 
 /** Message for a refused organize step; `diagnosticId` carries the reason. */
 export function orgErrorMessage(e: unknown): string {
   const d = (e as { domain?: { diagnosticId?: string } | null })?.domain?.diagnosticId;
   const code = (e as { code?: string })?.code;
-  if (code === "REVISION_CONFLICT") return "This item was changed somewhere else. Reload it and try again.";
-  return (d && ORG_ERROR[d]) || `That did not work (${code ?? "IPC_FAILED"}).`;
+  if (code === "REVISION_CONFLICT") return t("org.error.revision_conflict");
+  const key = d ? ORG_ERROR[d] : undefined;
+  return key ? t(key) : t("org.error.other", { code: code ?? "IPC_FAILED" });
+}
+
+const ERROR_KEYS = new Set([
+  "CODEC_UNSUPPORTED", "IMPORT_SCHEMA_UNSUPPORTED", "MIGRATION_FAILED", "OFFLINE_MODE", "FILE_MISSING", "STORAGE_ROOT_UNAVAILABLE", "INPUT_REJECTED",
+  "MEDIA_CORRUPT", "PATH_NOT_WRITABLE", "TOOL_MISSING", "DUPLICATE_ITEM",
+]);
+
+/** A short sentence for a §19 error code. */
+export function errorMessage(code: string): string {
+  return ERROR_KEYS.has(code) ? t(`error.${code}` as MessageKey) : t("error.other", { code });
 }

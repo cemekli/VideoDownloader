@@ -99,6 +99,16 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
         })
 }
 
+/// `VV_E2E_PICK`, only in the E2E test build: the paths the native file
+/// dialog stands for, so a real-window test can import without clicking a
+/// system dialog. The shipped build always shows the dialog.
+pub(crate) fn e2e_picked() -> Option<Vec<std::path::PathBuf>> {
+    if !cfg!(feature = "e2e-cdp") {
+        return None;
+    }
+    std::env::var_os("VV_E2E_PICK").map(|v| std::env::split_paths(&v).collect())
+}
+
 /// `VV_E2E_MEDIA_DIR`, only in the E2E test build.
 fn e2e_media_root() -> Option<std::path::PathBuf> {
     if !cfg!(feature = "e2e-cdp") {
