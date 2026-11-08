@@ -62,6 +62,12 @@ async function waitFor<T>(what: string, timeoutMs: number, probe: () => Promise<
 export interface LaunchOptions {
   /** Extra environment for the app, e.g. VV_E2E_MEDIA_DIR for the playback matrix. */
   env?: Record<string, string>;
+  /**
+   * Keep the first-run screens (F2.8). By default a new library is marked
+   * as onboarded through the real IPC and the page reloads, so a test starts
+   * on the library screen.
+   */
+  firstRun?: boolean;
 }
 
 export async function launchDesktopApp(options: LaunchOptions = {}): Promise<DesktopApp> {
@@ -114,6 +120,24 @@ export async function launchDesktopApp(options: LaunchOptions = {}): Promise<Des
         .find((p) => /^(https?:\/\/tauri\.localhost|tauri:\/\/localhost)/.test(p.url())),
     );
     await page.waitForLoadState("domcontentloaded");
+    if (!options.firstRun) {
+      const fresh = await waitFor("the settings command", 15_000, () =>
+        page
+          .evaluate(async () => {
+            const invoke = (window as unknown as { __TAURI_INTERNALS__: { invoke: (cmd: string) => Promise<{ onboardingCompletedAt: number | null }> } }).__TAURI_INTERNALS__.invoke;
+            const s = await invoke("get_settings");
+            if (s.onboardingCompletedAt !== null) return false;
+            await invoke("acknowledge_legal");
+            await invoke("finish_onboarding");
+            return true;
+          })
+          .catch(() => undefined),
+      );
+      if (fresh) {
+        await page.reload();
+        await page.waitForLoadState("domcontentloaded");
+      }
+    }
     return {
       page,
       browser,

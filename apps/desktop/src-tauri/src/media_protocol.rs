@@ -5,10 +5,11 @@
 //! through this handler because WebView2's behaviour depends on the protocol
 //! (MIME type, range answers), not only on the codec.
 //!
-//! Today it is registered only in the E2E test build (feature `e2e-cdp`) and
-//! serves `VV_E2E_MEDIA_DIR`. F2.4 turns it into the shipped protocol: there a
-//! request names a `MediaAsset` id that is resolved through the database, never
-//! a file name chosen by the webview.
+//! Shipped since F2.4 (ADR-0016): a request names a `MediaAsset` id, which is
+//! resolved through the database to an original or preview video/audio file
+//! inside an available storage root, never a path chosen by the webview. The
+//! E2E test build (feature `e2e-cdp`) also serves plain file names from
+//! `VV_E2E_MEDIA_DIR` for the playback matrix.
 
 use std::borrow::Cow;
 use std::fs::File;
@@ -157,15 +158,87 @@ fn read_range(path: &Path, range: ByteRange) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-/// Answers one protocol request. `root` must already be canonicalized.
+/// Answers one protocol request for a file name under `root` (E2E matrix).
+/// `root` must already be canonicalized.
 pub fn handle(root: &Path, request: &Request<Vec<u8>>) -> Response<Body> {
-    let head = request.method() == Method::HEAD;
-    if request.method() != Method::GET && !head {
-        return plain(StatusCode::METHOD_NOT_ALLOWED);
+    if let Some(r) = refuse_method(request) {
+        return r;
     }
     let Some(path) = resolve(root, request.uri().path()) else {
         return plain(StatusCode::NOT_FOUND);
     };
+    serve(&path, request)
+}
+
+fn refuse_method(request: &Request<Vec<u8>>) -> Option<Response<Body>> {
+    (request.method() != Method::GET && request.method() != Method::HEAD)
+        .then(|| plain(StatusCode::METHOD_NOT_ALLOWED))
+}
+
+/// The file of a playable asset, when its root is available and the file
+/// resolves inside the root (a planted link or junction is refused).
+pub fn asset_file(root: &Path, storage_ref: &str) -> Option<PathBuf> {
+    let root = std::fs::canonicalize(root).ok()?;
+    let file = std::fs::canonicalize(vv_import::fsutil::resolve_ref(&root, storage_ref)).ok()?;
+    (file.starts_with(&root) && file.is_file()).then_some(file)
+}
+
+/// The shipped handler: `/<asset-id>`, resolved through the database.
+pub fn handle_asset(
+    state: &crate::library::LibraryState,
+    request: &Request<Vec<u8>>,
+) -> Response<Body> {
+    if let Some(r) = refuse_method(request) {
+        return r;
+    }
+    let id = request.uri().path().trim_start_matches('/');
+    if !crate::thumb_protocol::valid_id(id) {
+        return plain(StatusCode::NOT_FOUND);
+    }
+    let loc = state
+        .get()
+        .and_then(|lib| lib.reader())
+        .ok()
+        .and_then(|c| vv_persistence::library::view::media_location(&c, id).ok())
+        .flatten();
+    let Some((root, storage_ref, status)) = loc else {
+        return plain(StatusCode::NOT_FOUND);
+    };
+    if status != vv_persistence::library::StorageRootStatus::Available {
+        return plain(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    match asset_file(Path::new(&root), &storage_ref) {
+        Some(path) => serve(&path, request),
+        None => plain(StatusCode::NOT_FOUND),
+    }
+}
+
+/// Asset ids go to the library; other names only to the E2E matrix folder.
+pub fn dispatch(
+    state: &crate::library::LibraryState,
+    e2e_root: Option<&Path>,
+    request: &Request<Vec<u8>>,
+) -> Response<Body> {
+    let name = request.uri().path().trim_start_matches('/');
+    match e2e_root {
+        Some(root) if !crate::thumb_protocol::valid_id(name) => handle(root, request),
+        _ => handle_asset(state, request),
+    }
+}
+
+/// `http://vvmedia.localhost/<id>` on Windows, `vvmedia://localhost/<id>` elsewhere.
+pub fn media_url(asset_id: &str) -> String {
+    if cfg!(windows) {
+        format!("http://{SCHEME}.localhost/{asset_id}")
+    } else {
+        format!("{SCHEME}://localhost/{asset_id}")
+    }
+}
+
+/// Range-serves one resolved file.
+fn serve(path: &Path, request: &Request<Vec<u8>>) -> Response<Body> {
+    let head = request.method() == Method::HEAD;
+    let path = path.to_path_buf();
     let Ok(len) = path.metadata().map(|m| m.len()) else {
         return plain(StatusCode::NOT_FOUND);
     };

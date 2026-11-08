@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-legal"
+description = "Enables the acknowledge_legal command without any pre-configured scope."
+commands.allow = ["acknowledge_legal"]
+
+[[permission]]
+identifier = "deny-acknowledge-legal"
+description = "Denies the acknowledge_legal command without any pre-configured scope."
+commands.deny = ["acknowledge_legal"]

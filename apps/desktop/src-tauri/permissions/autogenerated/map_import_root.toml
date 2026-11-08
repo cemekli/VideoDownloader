@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-map-import-root"
+description = "Enables the map_import_root command without any pre-configured scope."
+commands.allow = ["map_import_root"]
+
+[[permission]]
+identifier = "deny-map-import-root"
+description = "Denies the map_import_root command without any pre-configured scope."
+commands.deny = ["map_import_root"]

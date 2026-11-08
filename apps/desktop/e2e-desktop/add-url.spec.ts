@@ -21,9 +21,9 @@ test("save a link, restart, find it (Journey 1, AC-01)", async () => {
       await page.getByTestId("add-url-button").click();
       await expect(page.getByTestId("add-url-input")).toBeFocused();
       const t0 = Date.now();
-      await page.keyboard.insertText("https://www.youtube.com/watch?v=vvE2eVid01&si=share");
+      await page.keyboard.insertText("https://www.youtube.com/watch?v=vvE2eVid001&si=share");
       await page.keyboard.press("Enter");
-      const card = page.getByTestId("library-card").filter({ hasText: "YouTube · vvE2eVid01" });
+      const card = page.getByTestId("library-card").filter({ hasText: "YouTube · vvE2eVid001" });
       await expect(card).toBeVisible();
       const ms = Date.now() - t0;
       test.info().annotations.push({ type: "NFR-02", description: `paste → visible card: ${ms} ms (target ≈ 5 s, 2 primary actions)` });
@@ -33,7 +33,7 @@ test("save a link, restart, find it (Journey 1, AC-01)", async () => {
 
       // The same link again goes to the existing item.
       await page.getByTestId("add-url-button").click();
-      await page.keyboard.insertText("https://youtu.be/vvE2eVid01");
+      await page.keyboard.insertText("https://youtu.be/vvE2eVid001");
       await expect(page.getByTestId("add-url-existing")).toBeVisible();
       await page.keyboard.press("Escape");
     } finally {
@@ -44,9 +44,9 @@ test("save a link, restart, find it (Journey 1, AC-01)", async () => {
     try {
       const { page } = app;
       await expect(page.getByTestId("result-count")).toHaveText("1 item");
-      await page.getByTestId("search-input").fill("vvE2eVid01");
+      await page.getByTestId("search-input").fill("vvE2eVid001");
       await expect(page.getByTestId("library-card")).toHaveCount(1);
-      await expect(page.getByTestId("library-card").first()).toContainText("YouTube · vvE2eVid01");
+      await expect(page.getByTestId("library-card").first()).toContainText("YouTube · vvE2eVid001");
     } finally {
       await app.close();
     }

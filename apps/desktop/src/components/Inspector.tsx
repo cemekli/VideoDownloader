@@ -5,6 +5,7 @@ import { formatBytes, formatDate, formatDuration } from "../format";
 import { KIND_LABEL, LOCAL_STATE, PLATFORM_LABEL, orgErrorMessage } from "../labels";
 import { StateBadge, Thumbnail } from "./ItemCard";
 import { useOnline } from "../hooks/useEnv";
+import { t } from "../i18n";
 
 type State = { status: "idle" } | { status: "loading"; id: string } | { status: "error"; id: string; code: string } | { status: "ready"; detail: ItemDetail };
 
@@ -33,6 +34,10 @@ export interface InspectorActions {
   untag(id: string, tag: TagRef): void;
   addToCollection(id: string): void;
   removeFromCollection(id: string, collectionId: string): void;
+  /** Opens the player (F2.4). */
+  play?(id: string): void;
+  /** Opens the source page in the browser (PLAY-03). */
+  openSource?(id: string): void;
 }
 
 /**
@@ -154,6 +159,16 @@ function Details({
       </h3>
       {actions && (
         <div className="inspector-actions">
+          {actions.play && detail.assets.length > 0 && (
+            <button type="button" className="button button-primary" onClick={() => actions.play!(item.id)} data-testid="inspector-play">
+              ▶ {t("player.play")}
+            </button>
+          )}
+          {actions.openSource && detail.canonicalUrl && detail.assets.length === 0 && (
+            <button type="button" className="button" onClick={() => actions.openSource!(item.id)} data-testid="inspector-open-source">
+              {t("player.open_source")}
+            </button>
+          )}
           <button type="button" className="button button-quiet" aria-pressed={item.isFavorite} onClick={() => actions.favorite(item.id, !item.isFavorite)} data-testid="inspector-favorite">
             {item.isFavorite ? "★ Favorite" : "☆ Favorite"}
           </button>

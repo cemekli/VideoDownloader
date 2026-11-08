@@ -1,7 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  ApplyImport,
   AppStatus,
+  BackupDto,
+  BackupPreview,
+  DataClient,
+  ExportResult,
+  LibraryImportReport,
+  PendingImport,
+  PlaybackInfo,
+  PlaybackState,
+  RestoreResult,
+  Settings,
+  StorageOverview,
   BackendClient,
   DeleteResult,
   Diagnostics,
@@ -26,6 +38,7 @@ import type {
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
+import { createFixtureData } from "./fixtureData";
 
 export { IpcError } from "./errors";
 
@@ -64,8 +77,10 @@ export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStat
  * Used by `vite --mode fixture`, Vitest and Playwright E2E.
  */
 export function createFixtureClient(records?: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureClient {
-  const library = createFixtureLibrary(records ?? scenarioRecords(scenario), scenario);
+  const recs = records ?? scenarioRecords(scenario);
+  const library = createFixtureLibrary(recs, scenario);
   return {
+    ...createFixtureData(recs, scenario, library),
     kind: "fixture",
     listItems: (q) => library.listItems(q),
     getItem: (id) => library.getItem(id),
@@ -131,6 +146,30 @@ const organizeCommands: OrganizeClient = {
   deleteOrphan: (id) => call<{ deleted: number; failed: number }>("delete_orphan", { id }),
 };
 
+/** Player, settings, export/import and backups (F2.4–F2.8). */
+const dataCommands: DataClient = {
+  getSettings: () => call<Settings>("get_settings"),
+  updateSettings: (patch) => call<Settings>("update_settings", { patch }),
+  acknowledgeLegal: () => call<Settings>("acknowledge_legal"),
+  finishOnboarding: () => call<Settings>("finish_onboarding"),
+  getStorageOverview: () => call<StorageOverview>("get_storage_overview"),
+  chooseMediaFolder: () => call<StorageOverview | null>("choose_media_folder"),
+  exportLibrary: (includeAbsolutePaths) => call<ExportResult>("export_library", { includeAbsolutePaths }),
+  previewLibraryImport: () => call<PendingImport | null>("preview_library_import"),
+  mapImportRoot: (token, rootId) => call<string | null>("map_import_root", { token, rootId }),
+  applyLibraryImport: (request: ApplyImport) => call<LibraryImportReport>("apply_library_import", { request }),
+  cancelPending: (token) => call<void>("cancel_pending", { token }),
+  backupLibrary: () => call<BackupDto>("backup_library"),
+  listBackups: () => call<BackupDto[]>("list_backups"),
+  inspectBackup: (name) => call<BackupPreview | null>("inspect_backup", { name }),
+  restoreBackup: (request) => call<RestoreResult>("restore_backup", { request }),
+  getPlayback: (itemId) => call<PlaybackInfo>("get_playback", { itemId }),
+  savePlaybackPosition: (itemId, assetId, positionMs, durationMs) => call<PlaybackState>("save_playback_position", { itemId, assetId, positionMs, durationMs }),
+  openExternally: (assetId) => call<void>("open_externally", { assetId }),
+  openSource: (itemId) => call<void>("open_source", { itemId }),
+  relinkAsset: (assetId) => call<ItemDetail | null>("relink_asset", { assetId }),
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -142,6 +181,7 @@ export function createTauriClient(): BackendClient {
     saveUrl: (url) => call<SaveUrlResult>("save_url", { url }),
     restoreItem: (id) => call<LibraryItemDto>("restore_item", { id }),
     ...organizeCommands,
+    ...dataCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));
@@ -155,9 +195,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run"];
 
-/** `?fixture=empty|many|error|slow` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

@@ -26,7 +26,7 @@ export function Modal({ title, onClose, children, testId, wide }: { title: strin
       return;
     }
     if (e.key !== "Tab") return;
-    const f = [...(box.current?.querySelectorAll<HTMLElement>("input, select, textarea, button:not(:disabled)") ?? [])];
+    const f = [...(box.current?.querySelectorAll<HTMLElement>("input, select, textarea, button:not(:disabled), video[tabindex]") ?? [])];
     const i = f.indexOf(document.activeElement as HTMLElement);
     if (e.shiftKey && i <= 0) {
       e.preventDefault();

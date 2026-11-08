@@ -9,6 +9,7 @@
 pub mod bookmark;
 pub mod merge;
 pub mod organize;
+pub mod playback;
 pub mod removal;
 pub mod renormalize;
 pub mod repo;

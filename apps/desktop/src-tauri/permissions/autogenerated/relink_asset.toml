@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-relink-asset"
+description = "Enables the relink_asset command without any pre-configured scope."
+commands.allow = ["relink_asset"]
+
+[[permission]]
+identifier = "deny-relink-asset"
+description = "Denies the relink_asset command without any pre-configured scope."
+commands.deny = ["relink_asset"]

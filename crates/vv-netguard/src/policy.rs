@@ -19,6 +19,9 @@ pub enum Block {
     Unresolved,
     /// The request itself was malformed or used an unsupported form.
     BadRequest,
+    /// Offline Mode is on (DATA-05, AC-17): nothing leaves the machine, not
+    /// even a DNS lookup.
+    Offline,
 }
 
 pub trait Resolver: Send + Sync {
@@ -40,6 +43,8 @@ pub struct Policy {
     /// Test only: exact loopback targets the local test servers listen on.
     /// The shipped app never sets this (ADR-0007).
     pub test_targets: Vec<SocketAddr>,
+    /// Offline Mode: every connection is refused before name resolution.
+    pub offline: bool,
 }
 
 impl Default for Policy {
@@ -47,6 +52,7 @@ impl Default for Policy {
         Policy {
             allowed_ports: vec![80, 443],
             test_targets: Vec::new(),
+            offline: false,
         }
     }
 }
@@ -54,6 +60,9 @@ impl Default for Policy {
 impl Policy {
     /// Returns the one address the proxy will connect to.
     pub fn vet(&self, resolver: &dyn Resolver, host: &str, port: u16) -> Result<SocketAddr, Block> {
+        if self.offline {
+            return Err(Block::Offline);
+        }
         let host = host.trim_end_matches('.').to_ascii_lowercase();
         let host = host
             .strip_prefix('[')

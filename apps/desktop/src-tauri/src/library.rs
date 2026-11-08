@@ -33,6 +33,7 @@ const THUMBNAIL_BATCH: u32 = 200;
 pub struct Library {
     writer: Mutex<Database>,
     db_path: PathBuf,
+    data_dir: PathBuf,
     cache_dir: PathBuf,
     tools: Option<MediaTools>,
 }
@@ -45,6 +46,9 @@ pub struct LibraryState {
     cancel: AtomicBool,
     /// This app run. Undo reaches only operations of the current run (§7.3).
     session: OnceLock<String>,
+    /// Checked JSON imports waiting for the user's choices (F2.5), by token.
+    pub(crate) imports:
+        Mutex<std::collections::HashMap<String, crate::data_commands::PendingImport>>,
 }
 
 fn not_open() -> DomainError {
@@ -68,6 +72,7 @@ impl LibraryState {
         let lib = Library {
             writer: Mutex::new(db),
             db_path,
+            data_dir: data_dir.to_path_buf(),
             cache_dir: data_dir.join("cache"),
             tools,
         };
@@ -102,8 +107,34 @@ impl Library {
         f(db.writer())
     }
 
+    /// Runs `f` on the database itself (backups and restore need it).
+    pub fn with_db<T>(
+        &self,
+        f: impl FnOnce(&mut Database) -> Result<T, DomainError>,
+    ) -> Result<T, DomainError> {
+        let mut db = self
+            .writer
+            .lock()
+            .map_err(|_| internal("library-poisoned"))?;
+        f(&mut db)
+    }
+
     pub fn has_tools(&self) -> bool {
         self.tools.is_some()
+    }
+
+    pub fn tools(&self) -> Option<&MediaTools> {
+        self.tools.as_ref()
+    }
+
+    /// `<data>/backups/`: manual, pre-restore and pre-migration backups.
+    pub fn backup_dir(&self) -> PathBuf {
+        self.data_dir.join("backups")
+    }
+
+    /// `<data>/media/`: the default folder for managed media (§14.2).
+    pub fn default_media_dir(&self) -> PathBuf {
+        self.data_dir.join("media")
     }
 
     /// Imports `paths` and then makes the missing thumbnails. Holds the

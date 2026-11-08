@@ -778,6 +778,270 @@
         "deleted": 1,
         "failed": 0
       }
+    },
+    "get_settings": {
+      "args": {},
+      "response": {
+        "offlineMode": false,
+        "theme": "dark",
+        "updateCheck": "manual",
+        "locale": "en",
+        "onboardingCompletedAt": null,
+        "legalAckAt": null,
+        "activeDownloadRootId": null
+      }
+    },
+    "update_settings": {
+      "args": {
+        "patch": {
+          "theme": "light",
+          "offlineMode": true
+        }
+      },
+      "response": {
+        "offlineMode": true,
+        "theme": "light",
+        "updateCheck": "manual",
+        "locale": "en",
+        "onboardingCompletedAt": null,
+        "legalAckAt": null,
+        "activeDownloadRootId": null
+      }
+    },
+    "acknowledge_legal": {
+      "args": {},
+      "response": {
+        "offlineMode": false,
+        "theme": "dark",
+        "updateCheck": "manual",
+        "locale": "en",
+        "onboardingCompletedAt": null,
+        "legalAckAt": 1794000390000,
+        "activeDownloadRootId": null
+      }
+    },
+    "finish_onboarding": {
+      "args": {},
+      "response": {
+        "offlineMode": false,
+        "theme": "dark",
+        "updateCheck": "manual",
+        "locale": "en",
+        "onboardingCompletedAt": 1794000400000,
+        "legalAckAt": 1794000390000,
+        "activeDownloadRootId": null
+      }
+    },
+    "get_storage_overview": {
+      "args": {},
+      "response": {
+        "label": "media",
+        "isDefault": true,
+        "freeBytes": 250000000000,
+        "cloudSynced": false
+      }
+    },
+    "choose_media_folder": {
+      "args": {},
+      "response": {
+        "label": "Videos",
+        "isDefault": false,
+        "freeBytes": 250000000000,
+        "cloudSynced": false
+      }
+    },
+    "export_library": {
+      "args": {
+        "includeAbsolutePaths": false
+      },
+      "response": {
+        "saved": true,
+        "items": 12,
+        "mediaReferences": 3,
+        "bytes": 48213,
+        "fileName": "videovault-library-2026-11-08.json"
+      }
+    },
+    "preview_library_import": {
+      "args": {},
+      "response": {
+        "token": "00000000-0000-4000-8000-0000000000t1",
+        "fileName": "videovault-library-2026-11-08.json",
+        "preview": {
+          "schemaVersion": 1,
+          "exportedAt": "2026-11-08T12:00:00Z",
+          "appVersion": "0.0.1",
+          "itemsNew": 3,
+          "itemsMatched": 1,
+          "itemsSkipped": 0,
+          "removed": 1,
+          "collections": 2,
+          "smartCollections": 1,
+          "tags": 4,
+          "mediaReferences": 2,
+          "absolutePaths": 0,
+          "roots": [
+            {
+              "id": "00000000-0000-4000-8000-0000000000r1",
+              "kind": "managed_media",
+              "label": "VideoVault",
+              "hasPath": false,
+              "references": 2
+            }
+          ],
+          "unknownFields": 0
+        }
+      }
+    },
+    "map_import_root": {
+      "args": {
+        "token": "00000000-0000-4000-8000-0000000000t1",
+        "rootId": "00000000-0000-4000-8000-0000000000r1"
+      },
+      "response": "Videos"
+    },
+    "apply_library_import": {
+      "args": {
+        "request": {
+          "token": "00000000-0000-4000-8000-0000000000t1",
+          "policy": "keep_existing",
+          "useOriginalLocations": false
+        }
+      },
+      "response": {
+        "itemsAdded": 3,
+        "itemsMatched": 1,
+        "itemsSkipped": 0,
+        "removedReset": 1,
+        "collectionsAdded": 2,
+        "tagsAdded": 3,
+        "smartCollectionsAdded": 1,
+        "mediaLinked": 1,
+        "mediaMissing": 1,
+        "placeholderRoots": 1,
+        "externalRoots": 0,
+        "searchDocuments": 4
+      }
+    },
+    "cancel_pending": {
+      "args": {
+        "token": "00000000-0000-4000-8000-0000000000t1"
+      },
+      "response": null
+    },
+    "backup_library": {
+      "args": {},
+      "response": {
+        "name": "backup-1794000500000.sqlite",
+        "kind": "manual",
+        "createdAt": 1794000500000,
+        "sizeBytes": 409600
+      }
+    },
+    "list_backups": {
+      "args": {},
+      "response": [
+        {
+          "name": "backup-1794000500000.sqlite",
+          "kind": "manual",
+          "createdAt": 1794000500000,
+          "sizeBytes": 409600
+        }
+      ]
+    },
+    "inspect_backup": {
+      "args": {
+        "name": "backup-1794000500000.sqlite"
+      },
+      "response": {
+        "token": null,
+        "name": "backup-1794000500000.sqlite",
+        "schemaVersion": 4,
+        "items": 12,
+        "removed": 1,
+        "collections": 2,
+        "tags": 4,
+        "mediaFiles": 3
+      }
+    },
+    "restore_backup": {
+      "args": {
+        "request": {
+          "name": "backup-1794000500000.sqlite"
+        }
+      },
+      "response": {
+        "items": 12,
+        "removed": 1,
+        "preRestoreBackup": "pre-restore-1794000700000.sqlite",
+        "migrated": [],
+        "mediaMissing": 0
+      }
+    },
+    "get_playback": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "title": "Deniz kenarında sabah",
+        "sources": [
+          {
+            "assetId": "00000000-0000-4000-8000-00000000a001",
+            "url": "vvmedia://localhost/00000000-0000-4000-8000-00000000a001",
+            "role": "original",
+            "mediaKind": "video",
+            "container": "mp4",
+            "videoCodec": "h264",
+            "durationMs": 372000,
+            "available": true,
+            "support": "supported"
+          }
+        ],
+        "state": {
+          "assetId": "00000000-0000-4000-8000-00000000a001",
+          "positionMs": 186000,
+          "durationMs": 372000,
+          "lastPlayedAt": 1794000600000,
+          "completed": false,
+          "resumable": true
+        },
+        "hasSourceUrl": true
+      }
+    },
+    "save_playback_position": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "assetId": "00000000-0000-4000-8000-00000000a001",
+        "positionMs": 186000,
+        "durationMs": 372000
+      },
+      "response": {
+        "assetId": "00000000-0000-4000-8000-00000000a001",
+        "positionMs": 186000,
+        "durationMs": 372000,
+        "lastPlayedAt": 1794000600000,
+        "completed": false,
+        "resumable": true
+      }
+    },
+    "open_externally": {
+      "args": {
+        "assetId": "00000000-0000-4000-8000-00000000a001"
+      },
+      "response": null
+    },
+    "open_source": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": null
+    },
+    "relink_asset": {
+      "args": {
+        "assetId": "00000000-0000-4000-8000-00000000a001"
+      },
+      "response": null
     }
   },
   "domainError": {

@@ -365,4 +365,175 @@ export interface StatusClient {
   getDiagnostics(): Promise<Diagnostics>;
 }
 
-export type BackendClient = LibraryClient & StatusClient;
+// ---- Player, settings, portability (STATE.md F2.4–F2.8) ----
+
+export type Theme = "dark" | "light" | "system";
+export type UpdateCheck = "manual" | "automatic";
+
+export interface Settings {
+  offlineMode: boolean;
+  theme: Theme;
+  updateCheck: UpdateCheck;
+  locale: string;
+  onboardingCompletedAt: number | null;
+  legalAckAt: number | null;
+  activeDownloadRootId: string | null;
+}
+
+export type SettingsPatch = Partial<Pick<Settings, "offlineMode" | "theme" | "updateCheck" | "locale">>;
+
+export interface StorageOverview {
+  /** Folder name only; paths stay in the backend. */
+  label: string;
+  isDefault: boolean;
+  freeBytes: number | null;
+  /** Inside OneDrive or a similar synced folder (§14.2, DATA-10). */
+  cloudSynced: boolean;
+}
+
+export interface ExportResult {
+  saved: boolean;
+  items: number;
+  mediaReferences: number;
+  bytes: number;
+  fileName: string | null;
+}
+
+export interface ImportRootPreview {
+  id: string;
+  kind: string;
+  label: string;
+  hasPath: boolean;
+  references: number;
+}
+
+export interface ImportPreview {
+  schemaVersion: number;
+  exportedAt: string;
+  appVersion: string;
+  itemsNew: number;
+  itemsMatched: number;
+  itemsSkipped: number;
+  removed: number;
+  collections: number;
+  smartCollections: number;
+  tags: number;
+  mediaReferences: number;
+  absolutePaths: number;
+  roots: ImportRootPreview[];
+  unknownFields: number;
+}
+
+export interface PendingImport {
+  token: string;
+  fileName: string;
+  preview: ImportPreview;
+}
+
+export type ConflictPolicy = "keep_existing" | "replace_user_fields";
+
+export interface ApplyImport {
+  token: string;
+  policy: ConflictPolicy;
+  useOriginalLocations: boolean;
+}
+
+export interface LibraryImportReport {
+  itemsAdded: number;
+  itemsMatched: number;
+  itemsSkipped: number;
+  removedReset: number;
+  collectionsAdded: number;
+  tagsAdded: number;
+  smartCollectionsAdded: number;
+  mediaLinked: number;
+  mediaMissing: number;
+  placeholderRoots: number;
+  externalRoots: number;
+  searchDocuments: number;
+}
+
+export interface BackupDto {
+  name: string;
+  kind: "manual" | "pre_restore" | "pre_migration";
+  createdAt: number;
+  sizeBytes: number;
+}
+
+export interface BackupPreview {
+  /** Set when the file came from the dialog; pass it to `restoreBackup`. */
+  token: string | null;
+  name: string;
+  schemaVersion: number;
+  items: number;
+  removed: number;
+  collections: number;
+  tags: number;
+  mediaFiles: number;
+}
+
+export type RestoreRequest = { name: string; token?: undefined } | { token: string; name?: undefined };
+
+export interface RestoreResult {
+  items: number;
+  removed: number;
+  preRestoreBackup: string;
+  migrated: number[];
+  mediaMissing: number;
+}
+
+export type CodecSupport = "supported" | "unsupported" | "unknown";
+
+export interface PlaybackSource {
+  assetId: string;
+  url: string;
+  role: "original" | "preview";
+  mediaKind: "video" | "audio";
+  container: string | null;
+  videoCodec: string | null;
+  durationMs: number | null;
+  available: boolean;
+  support: CodecSupport;
+}
+
+export interface PlaybackState {
+  assetId: string;
+  positionMs: number;
+  durationMs: number | null;
+  lastPlayedAt: number;
+  completed: boolean;
+  resumable: boolean;
+}
+
+export interface PlaybackInfo {
+  itemId: string;
+  title: string;
+  sources: PlaybackSource[];
+  state: PlaybackState | null;
+  hasSourceUrl: boolean;
+}
+
+export interface DataClient {
+  getSettings(): Promise<Settings>;
+  updateSettings(patch: SettingsPatch): Promise<Settings>;
+  acknowledgeLegal(): Promise<Settings>;
+  finishOnboarding(): Promise<Settings>;
+  getStorageOverview(): Promise<StorageOverview>;
+  chooseMediaFolder(): Promise<StorageOverview | null>;
+  exportLibrary(includeAbsolutePaths: boolean): Promise<ExportResult>;
+  previewLibraryImport(): Promise<PendingImport | null>;
+  mapImportRoot(token: string, rootId: string): Promise<string | null>;
+  applyLibraryImport(request: ApplyImport): Promise<LibraryImportReport>;
+  cancelPending(token: string): Promise<void>;
+  backupLibrary(): Promise<BackupDto>;
+  listBackups(): Promise<BackupDto[]>;
+  inspectBackup(name: string | null): Promise<BackupPreview | null>;
+  restoreBackup(request: RestoreRequest): Promise<RestoreResult>;
+  getPlayback(itemId: string): Promise<PlaybackInfo>;
+  savePlaybackPosition(itemId: string, assetId: string, positionMs: number, durationMs: number | null): Promise<PlaybackState>;
+  openExternally(assetId: string): Promise<void>;
+  openSource(itemId: string): Promise<void>;
+  relinkAsset(assetId: string): Promise<ItemDetail | null>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient;

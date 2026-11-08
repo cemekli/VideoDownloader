@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-media-folder"
+description = "Enables the choose_media_folder command without any pre-configured scope."
+commands.allow = ["choose_media_folder"]
+
+[[permission]]
+identifier = "deny-choose-media-folder"
+description = "Denies the choose_media_folder command without any pre-configured scope."
+commands.deny = ["choose_media_folder"]

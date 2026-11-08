@@ -124,9 +124,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 **Çıkış kapısı**
 
-- [ ] Ağ kapalıyken kaydet, import et, ara ve yeniden başlat akışı Windows'ta çalışıyor.
-- [ ] Yukarıdaki AC'ler otomatik testte geçiyor.
-- [ ] Yolculuk 1 (beş saniyede kaydet) ve 2 (eski bookmark'ı bul) için E2E testleri var.
+- [ ] Ağ kapalıyken kaydet, import et, ara ve yeniden başlat akışı Windows'ta çalışıyor. Otomatik test hazır: `e2e-desktop/offline-flow.spec.ts` (Offline Mode açık; kaydet, import, etiketle, ara, oynat, yeniden başlat). Bekleyen: Windows'ta `npm run e2e:desktop` ve ağ kablosu çıkarılmış elle deneme.
+- [x] Yukarıdaki AC'ler otomatik testte geçiyor (Linux `verify` 8 Kas 2026; Windows CI F1.7/F1.8 satırlarında bekliyor).
+- [x] Yolculuk 1 (beş saniyede kaydet) ve 2 (eski bookmark'ı bul) için E2E testleri var: `e2e/add-url.spec.ts`, `e2e/journeys.spec.ts` (hatırlanan kelime, not içinden arama, filtre, ayrıntı, kaynak sayfa; yanlış kelimede "sonuç yok" ve tek adımda geri dönüş).
 
 ---
 
@@ -141,18 +141,18 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F2.1 | Etiketler, koleksiyonlar, akıllı koleksiyonlar | ORG-01…10 | AC-06, AC-39, AC-46, AC-48 | 🟨 |
 | F2.2 | Toplu işlemler, Undo, soft-delete, Recently removed, sahipsiz medya | §7.3 | AC-07, AC-37, AC-45, AC-53, AC-60 | 🟨 |
 | F2.3 | Duplicate yönetimi ve önizlemeli birleştirme | ORG-11 | birleştirme ve Undo testleri | 🟨 |
-| F2.4 | Oynatıcı, güvenli local protocol, kaldığı yerden devam, remux önizlemesi | PLAY-01…04, PLAY-07 | AC-32, AC-49, NFR-10 | ⬜ |
-| F2.5 | JSON export/import, kök eşleme, relink | DATA-01…03, DATA-06, §15 | AC-15, AC-16, AC-30, AC-51 | ⬜ |
-| F2.6 | Tam DB yedeği, geri yükleme, migration öncesi yedek | §15.3 | AC-50, AC-57 | ⬜ |
-| F2.7 | Offline Mode | DATA-05 | AC-17 | ⬜ |
-| F2.8 | İlk açılış, tema, çeviri anahtarı altyapısı | §9.6, §9.7 | E2E | ⬜ |
-| F2.9 | Erişilebilirlik temel kontrolleri (axe, klavye, 200% ölçek) | NFR-12 | AC-27 + otomatik axe taraması | ⬜ |
+| F2.4 | Oynatıcı, güvenli local protocol, kaldığı yerden devam, remux önizlemesi | PLAY-01…04, PLAY-07 | AC-32, AC-49, NFR-10 | 🟨 ADR-0016. `vvmedia` protokolü (`tests/media_protocol.rs`), konum kuralı ve AC-49 yeniden başlatma (`vv-persistence`), `player_commands.rs` + `tests/ipc.rs`; fixture E2E `e2e/player.spec.ts` 3 görünümde (devam 0:02, seek ±500 ms, HEVC `partial`/`failed` + harici oynatıcı, bağlı olmayan sürücü), Vitest `Data.test.tsx`; gerçek uygulamada çevrimdışı oynatma `e2e-desktop/offline-flow.spec.ts`. PLAY-07 daraltıldı: matriste remux gerektiren container yok (ADR-0016). Bekleyen: Windows `verify` + elle kontrol |
+| F2.5 | JSON export/import, kök eşleme, relink | DATA-01…03, DATA-06, §15 | AC-15, AC-16, AC-30, AC-51 | 🟨 ADR-0017. `vv-persistence/tests/portable.rs` (AC-15 gidiş-dönüş, AC-16, AC-30 symlink/junction, AC-51, yer tutucu kök, çakışma politikası); `data_commands.rs`; arayüz `e2e/settings.spec.ts`. Bekleyen: Windows `verify` + elle kontrol |
+| F2.6 | Tam DB yedeği, geri yükleme, migration öncesi yedek | §15.3 | AC-50, AC-57 | 🟨 ADR-0017. `restore.rs` + `tests/portable.rs` (AC-50 iki test, eski şemadan geri yükleme, AC-57, ret durumları); arayüz `e2e/settings.spec.ts`. Bekleyen: Windows `verify` + elle kontrol |
+| F2.7 | Offline Mode | DATA-05 | AC-17 | 🟨 ADR-0016. `vv-netguard` DNS'ten önce ret (`offline_mode_refuses_every_connection_before_dns_ac17`), `open_source` reddi, kalıcı şerit; `e2e/settings.spec.ts`, `Data.test.tsx`, gerçek uygulama `e2e-desktop/offline-flow.spec.ts`. Bekleyen: Windows `verify` + elle kontrol |
+| F2.8 | İlk açılış, tema, çeviri anahtarı altyapısı | §9.6, §9.7 | E2E | 🟨 ADR-0018. `src/i18n` (anahtar kataloğu, `Intl` çoğul/sayı/tarih), açık/koyu/sistem tema, beş adımlı ilk açılış; `e2e/settings.spec.ts` (klavyeyle beş adım, Skip, tema yeniden yüklemede korunur), `Data.test.tsx`. Bekleyen: Windows elle kontrol |
+| F2.9 | Erişilebilirlik temel kontrolleri (axe, klavye, 200% ölçek) | NFR-12 | AC-27 + otomatik axe taraması | 🟨 ADR-0018. `e2e/a11y.spec.ts`: 7 yüzey × 2 tema axe'te critical/serious bulgu yok; 683×384'te (%200) yatay kaydırma yok, klavyeyle kaydet/ara. Bulunan sorun: dar pencerede üst çubuk taşıyordu, artık kırılıyor. Bekleyen: Narrator ve yüksek karşıtlık elle |
 
 **Çıkış kapısı**
 
-- [ ] SPEC §3'teki M1 çıkış koşulu: ağsız kaydet–düzenle–ara–oynat akışı yeniden başlatmada veriyi koruyor.
-- [ ] Yolculuk 5 (büyük Inbox'ı düzenle) için E2E testi var.
-- [ ] JSON ve DB yedeğinden geri dönüş Windows'ta doğrulandı.
+- [ ] SPEC §3'teki M1 çıkış koşulu: ağsız kaydet–düzenle–ara–oynat akışı yeniden başlatmada veriyi koruyor. Otomatik test hazır (`e2e-desktop/offline-flow.spec.ts`); Windows'ta çalıştırılması bekliyor.
+- [x] Yolculuk 5 (büyük Inbox'ı düzenle) için E2E testi var: `e2e/journeys.spec.ts` (2.000 öğede klavyeyle 20 seçim, toplu etiket, Undo, arşiv, `Ctrl+Z`; seçim korunuyor).
+- [ ] JSON ve DB yedeğinden geri dönüş Windows'ta doğrulandı (elle kontrol listesi HANDOFF.md'de).
 
 ---
 
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; Windows'ta elle kontrol geçti, yeşil CI bekliyor). F1.8 🟨 (Add URL, ADR-0014; Windows CI bekliyor). F2.1–F2.3 🟨 (düzenleme, Undo, birleştirme; ADR-0015; PR açık, Windows CI ve elle kontrol bekliyor). Sıradaki: F1 çıkış kapısının kontrolü (Windows'ta ağ kapalı akış, Yolculuk 2 E2E) ve F2.4.
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; Windows'ta elle kontrol geçti, yeşil CI bekliyor). F1.8 🟨 (Add URL, ADR-0014; Windows'ta elle kontrol geçti). F2.1–F2.3 🟨 (düzenleme, Undo, birleştirme; ADR-0015; Windows'ta elle kontrol geçti). F2.4–F2.9 🟨 (oynatıcı, dışa/içe aktarma, yedek, Offline Mode, ilk açılış, tema, erişilebilirlik; ADR-0016…0018; Linux `verify` geçti, Windows `verify` ve elle kontrol bekliyor). F1 ve F2 çıkış kapılarının E2E testleri yazıldı; Windows'ta gerçek uygulama E2E'si ve elle kontrol kaldı. Sıradaki: F3 (indirme motoru).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 8 Kas 2026 | F2.4–F2.9 ve çıkış kapısı testleri: migration 0004 (`playback_state`, `app_setting`), `vvmedia` protokolü ve oynatıcı (devam, klavye, HEVC algılama), JSON dışa/içe aktarma (önizleme, kök eşleme, güvenli yol), DB yedeği ve denetimli geri yükleme, Offline Mode (`vv-netguard` DNS öncesi ret), çeviri anahtarları, açık tema, beş adımlı ilk açılış; 20 yeni komut. E2E: oynatıcı, ayarlar, ilk açılış, axe (iki tema), %200 ölçek, Yolculuk 2 ve 5; gerçek uygulamada çevrimdışı akış. PLAY-07 daraltıldı (ADR-0016). |
 | 8 Kas 2026 | F2.1–F2.3 başladı: migration 0003 (etiket, koleksiyon, akıllı koleksiyon, `operation_log`, `orphan_media`), etiket/koleksiyon/favori/arşiv/kaldırma işlemleri, oturum başına Undo, 30 günlük Recently removed ve açılışta temizlik, sahipsiz medya ve yeniden import, önizlemeli öğe birleştirme. 28 yeni komut. Arayüz: Inbox, koleksiyon ağacı ve menüsü, akıllı koleksiyon düzenleyicisi, etiketler, toplu işlem çubuğu, Undo bildirimi ve `Ctrl+Z`, inspector'da etiket/koleksiyon/not düzenleme, Recently removed, Duplicates. ADR-0015. |
 | 8 Kas 2026 | F1.8 başladı: `check_url`, `save_url`, `restore_item` komutları; Add URL diyaloğu (önizleme, alan hatası, duplicate, Recently removed → Restore, çevrimdışı metni), `Ctrl+K` aramasında bağlantı önerisi, metin alanı dışında `Ctrl+V` ile yakalama. NFR-01 gerçek şemada ölçüldü (`tests/save_latency.rs`). ADR-0014. |
 | 8 Kas 2026 | F1.7 başladı: uygulama kütüphaneyi `<data>/db/library.sqlite`'ta açıyor; `list_items`, `get_item`, `import_media` komutları, Rust tarafında dosya diyaloğu ve sürükle-bırak (`tauri-plugin-dialog` 2.8.4), `vvthumb` thumbnail protokolü (CSP `img-src`), açılışta `check_storage` ve eksik küçük resimler. Library ekranı: gezinme, arama (`Ctrl+K`), filtre chip'leri, sıralama, sanallaştırılmış grid/liste, çoklu seçim, inspector, ilk kullanım/yükleniyor/hata/sonuç yok/çevrimdışı durumları. `docs/design-system.md`, ADR-0013. |

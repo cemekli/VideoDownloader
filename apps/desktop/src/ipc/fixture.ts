@@ -6,6 +6,7 @@
 import libraryFixture from "@fixtures/library-small.json";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
+import { fixtureMedia } from "./fixtureData";
 import { fixtureParseUrl } from "./fixtureUrl";
 import { createFixtureOrganize, createOrganizeState, matchesRules, tagKey, tagRefs, type OrganizeState } from "./fixtureOrganize";
 import type {
@@ -31,7 +32,10 @@ const DAY = 86_400_000;
 export const RECENT_DAYS = 30;
 
 /** Named data sets, picked with `?fixture=<name>` in fixture mode. */
-export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow";
+/** The one asset of a fixture item: its id with the last group marked "a". */
+export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${itemId.slice(25)}`;
+
+export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run";
 
 export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt"> {
   creator: string | null;
@@ -267,14 +271,14 @@ function detail(r: FixtureRecord, org: OrganizeState): ItemDetail {
   const assets: AssetDto[] = r.fileName
     ? [
         {
-          id: `${r.id.slice(0, -4)}a001`,
+          id: fixtureAssetId(r.id),
           fileName: r.fileName,
           rootLabel: r.localState === "disconnected" ? "Backup drive" : "Videos",
           rootStatus: r.localState === "disconnected" ? "disconnected" : "available",
           integrityState: r.localState === "missing" ? "missing" : "verified",
           sizeBytes: r.durationMs ? Math.round(r.durationMs * 250) : null,
           container: r.fileName.split(".").pop() ?? null,
-          videoCodec: "h264",
+          videoCodec: fixtureMedia(r.fileName)?.codec ?? "h264",
           width: 1920,
           height: 1080,
           durationMs: r.durationMs,
@@ -322,7 +326,7 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
     return r ? { item: toDto(r, null), removed: r.removed, matchedBy: "canonical_url" } : null;
   };
   const fail = () => Promise.reject(new IpcError("INTERNAL_ERROR", "list_items: error.internal"));
-  const org = createOrganizeState(records, scenario === "default");
+  const org = createOrganizeState(records, scenario === "default" || scenario === "first-run");
   let clock = FIXTURE_NOW + 3_600_000;
   const organize = createFixtureOrganize(records, org, (r) => toDto(r, null), () => (clock += 1000));
   return {
