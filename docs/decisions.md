@@ -649,3 +649,35 @@ STATE.md F1.7. SPEC §9.2, §9.3, §9.4, §14.2, §18, §18.2; IMP-01, IMP-06, S
 - Başlık sıralaması hâlâ SQLite `lower()` (ASCII). Sıralama sayfalı ve backend'de olduğu için UI'da düzeltilemedi; Türkçe sıralama F2'ye kaldı.
 - Panel genişliğini sürükleyerek değiştirme, hover önizleme (P1), açık tema ve çeviri anahtarları (F2.8) yok.
 
+
+## ADR-0014: Add URL: komutlar, Ctrl+K ve Ctrl+V ile yakalama
+
+STATE.md F1.8. SPEC §7.1 (CAP-01…CAP-06, CAP-08), §7.3 (kaldırılmış öğenin URL'si), §8.1, §9.3, §9.4; NFR-01, NFR-02; AC-01, AC-02, AC-45.
+
+**Bağlam.** `save_bookmark` (F1.2) ve normalizasyon (F1.3) hazırdı ama arayüzden çağrılamıyordu. Yolculuk 1, hazır bir bağlantının en çok iki birincil eylemle ve yaklaşık beş saniyede kütüphanede görünmesini ister; ağ işi bu süreye girmez.
+
+**Karar: komutlar.**
+
+- `check_url(url)`: kullanıcı yazarken çalışır. Doğrulama ve normalizasyon çevrimdışıdır; platform, biçim (`video`, `collection`, `short_link`, `unknown`), kanonik URL, bağlantıdan türetilen başlık, uyarılar ve varsa aynı içeriği tutan öğe döner. Hiçbir şey yazmaz; okuma bağlantısında çalışır.
+- `save_url(url)`: `save_bookmark`'ı tek yazıcıda çalıştırır. Sonuç `created` ya da `existing`'dir. `existing` hiçbir şey yazmaz ve öğeyi gösterir (CAP-06). Öğe Recently removed'daysa `removed: true` döner.
+- `restore_item(id)`: `removed_at`'i temizler. Notlar, override'lar ve ilişkiler kaldırmada silinmediği için öğeyle birlikte geri gelir (AC-45). Canlı bir öğede hiçbir şey değiştirmez.
+- Reddedilen girdi yalnızca §19 kodunu taşır (`INVALID_URL`, `URL_BLOCKED`, `URL_HAS_CREDENTIALS`); yazılan metin hata nesnesine, loga veya cevaba girmez. Arayüze yalnızca kanonik biçim döner (CAP-08). 8 KiB'tan uzun girdi `INVALID_URL`'dir.
+- Üç komut da `capabilities/main.json`'a tek tek eklendi; yeni bir çekirdek ya da eklenti izni yok.
+
+**Karar: arayüz.**
+
+- Üst çubukta birincil düğme "Add URL"; Import ikincil oldu. Diyalog açılınca alan odaktadır, yapıştırılan bağlantı 120 ms sonra denetlenir. Save Bookmark denetim cevabını beklemez: yapıştır ve Enter hemen kaydeder, backend aynı denetimleri yapar (CAP-03).
+- Diyalog durumları: önizleme (platform ve başlık), alan hatası, uyarı (`PLAYLIST_UNSUPPORTED`), "zaten kütüphanede" (birincil eylem Open item), "Recently removed içinde" (birincil eylem Restore, yanında Cancel). Çevrimdışıyken önizleme, kaydın hemen yapıldığını ve ayrıntıların bağlantı gelince beklediğini söyler. Inspector'da `pending` metadata çevrimdışıyken "Offline" görünür (CAP-04).
+- Kayıttan sonra All Items açılır, arama ve filtreler temizlenir, yeni öğe en üstte seçili ve odakta görünür, bildirim çıkar. Mevcut ya da geri yüklenen öğe aynı şekilde gösterilir ve inspector'da açılır.
+- `Ctrl+K` aramaya gider. Arama kutusundaki metin bir bağlantıysa (`http(s)://` ya da `www.` ile başlıyorsa) aranmaz; altında "Save this link as a bookmark" önerisi çıkar, Enter Add URL'yi bağlantıyla açar (§9.4).
+- `Ctrl+V`: odak bir metin alanında değilken yapıştırılan bağlantı Add URL'yi açar; metin alanlarında normal yapıştırma korunur. Pano yalnızca kullanıcının yapıştırma olayından okunur, arka planda hiç okunmaz (CAP-01).
+- Diyalog `role="dialog"`, `aria-modal`; Tab içinde döner, Esc kapatır ve odağı açan düğmeye geri verir.
+
+**Ölçüm.** `src-tauri/tests/save_latency.rs`, 10.000 öğelik kütüphanede `save_url`'ün çekirdeğini (doğrulama, normalizasyon, eşleşme araması, öğe ve FTS commit'i, liste satırı) 300 kez ölçer ve `test-artifacts/nfr-01/report.json` yazar. Linux konteynerde debug derlemede p95 1,4 ms (NFR-01 bütçesi 500 ms). Arayüz tarafında fixture E2E ve gerçek uygulama E2E'si, yapıştırmadan kartın görünmesine kadar geçen süreyi ölçer ve 5 s altında olmasını ister.
+
+**Sonuçlar ve açık noktalar.**
+
+- Etiket ve koleksiyon seçimi (CAP-05) ve Inbox görünümü koleksiyonlarla birlikte F2'de gelir. Koleksiyon olmadan Inbox, All Items ile aynı listeyi gösterirdi; bu yüzden kayıt şimdilik All Items'ta görünür.
+- Metadata çekme ve güvenli önizleme (CAP-07) M2'de. O zamana kadar başlık bağlantıdan türetilir ve öğe `pending` kalır.
+- Fixture istemcisindeki URL tanıma (`src/ipc/fixtureUrl.ts`) yalnızca ekran durumlarını sürmek içindir; gerçek kurallar Rust'tadır ve `tests/fixtures/normalize.json` ile test edilir.
+- Yönlendirilmiş kullanım testi (MT-17) ve arka planda pano okunmadığının elle kontrolü (MT-01) henüz yapılmadı.

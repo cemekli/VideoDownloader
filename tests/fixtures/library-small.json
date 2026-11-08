@@ -1,6 +1,6 @@
 {
   "fixture": "library-small",
-  "version": 2,
+  "version": 3,
   "seed": 1,
   "spec_refs": [
     "§25.2",
@@ -9,7 +9,7 @@
     "§9.3",
     "DATA-09"
   ],
-  "note": "Synthetic items only. No real private URLs, cookies or personal files (SPEC §25.2). Fields follow LibraryItemDto plus the inspector fields of ItemDetail (tests/fixtures/ipc-contract.json). addedAt is relative to 2026-11-01T00:00:00Z so sorting is deterministic.",
+  "note": "Synthetic items only. No real private URLs, cookies or personal files (SPEC §25.2). Fields follow LibraryItemDto plus the inspector fields of ItemDetail (tests/fixtures/ipc-contract.json). addedAt is relative to 2026-11-01T00:00:00Z so sorting is deterministic. removed: true marks an item in Recently removed (hidden from lists; Add URL offers it back, AC-45).",
   "items": [
     {
       "id": "00000000-0000-4000-8000-000000000001",
@@ -139,6 +139,24 @@
       "notes": "",
       "fixtureThumbnail": true,
       "fileName": "konser.mp4"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "title": "Kaldırılmış bir video",
+      "platform": "youtube",
+      "kind": "bookmark",
+      "localState": "bookmark_only",
+      "durationMs": null,
+      "tags": [],
+      "addedAt": 1791000000000,
+      "isFavorite": false,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": "https://www.youtube.com/watch?v=removedVid1",
+      "notes": "Bu not geri gelmeli",
+      "fixtureThumbnail": false,
+      "fileName": null,
+      "removed": true
     }
   ]
 }

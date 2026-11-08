@@ -202,6 +202,9 @@ fn main_capability_grants_only_app_commands() {
         "allow-list-items",
         "allow-get-item",
         "allow-import-media",
+        "allow-check-url",
+        "allow-save-url",
+        "allow-restore-item",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -358,4 +361,73 @@ fn import_without_tools_reports_tool_missing() {
     .unwrap_err();
     assert_eq!(err["code"], "TOOL_MISSING");
     assert!(invoke(&w, "import_media", json!({ "source": "C:/" }), app_origin()).is_err());
+}
+
+// ---- Add URL (STATE.md F1.8) ----
+
+#[test]
+fn add_url_commands_match_contract_shape() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let url = c["commands"]["save_url"]["args"].clone();
+
+    let fresh = invoke(&w, "check_url", url.clone(), app_origin()).expect("check_url allowed");
+    assert_eq!(fresh["existing"], Value::Null);
+    assert_eq!(fresh["title"], "YouTube · vvTestVid01");
+
+    let saved = invoke(&w, "save_url", url.clone(), app_origin()).expect("save_url allowed");
+    assert_same_shape(&saved, &c["commands"]["save_url"]["response"], "save_url");
+    assert_same_shape(
+        &saved["item"],
+        &c["commands"]["save_url"]["response"]["item"],
+        "save_url.item",
+    );
+    assert_eq!(saved["outcome"], "created");
+
+    let check = invoke(&w, "check_url", url.clone(), app_origin()).unwrap();
+    assert_same_shape(&check, &c["commands"]["check_url"]["response"], "check_url");
+    assert_same_shape(
+        &check["existing"],
+        &c["commands"]["check_url"]["response"]["existing"],
+        "check_url.existing",
+    );
+    assert_eq!(check["existing"]["item"]["id"], saved["item"]["id"]);
+
+    let again = invoke(&w, "save_url", url, app_origin()).unwrap();
+    assert_eq!(again["outcome"], "existing");
+    assert_eq!(again["matchedBy"], "canonical_url");
+
+    let restored = invoke(
+        &w,
+        "restore_item",
+        json!({ "id": saved["item"]["id"] }),
+        app_origin(),
+    )
+    .expect("restore_item allowed");
+    assert_same_shape(
+        &restored,
+        &c["commands"]["restore_item"]["response"],
+        "restore_item",
+    );
+}
+
+#[test]
+fn add_url_refusals_are_domain_errors_without_the_input() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    for cmd in ["check_url", "save_url"] {
+        let err = invoke(
+            &w,
+            cmd,
+            json!({ "url": "https://user:hunter2@example.com/v" }),
+            app_origin(),
+        )
+        .unwrap_err();
+        assert_eq!(err["code"], "URL_HAS_CREDENTIALS", "{cmd}");
+        assert!(!err.to_string().contains("hunter2"), "{cmd}: {err}");
+        assert!(invoke(&w, cmd, json!({ "url": 7 }), app_origin()).is_err());
+    }
 }

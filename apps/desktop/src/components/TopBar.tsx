@@ -17,6 +17,10 @@ export const TopBar = forwardRef<
     onToggleInspector: () => void;
     importing: boolean;
     onImport: (s: ImportSource) => void;
+    onAddUrl: () => void;
+    /** Shown under the search box when the text is a link (Ctrl+K capture, §9.4). */
+    urlSuggestion: string | null;
+    onAcceptSuggestion: () => void;
     showMenuButton: boolean;
     onMenu: () => void;
     status: React.ReactNode;
@@ -38,9 +42,24 @@ export const TopBar = forwardRef<
           placeholder="Search titles, notes, creators…"
           value={p.text}
           onChange={(e) => p.onText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && p.urlSuggestion) {
+              e.preventDefault();
+              p.onAcceptSuggestion();
+            }
+          }}
+          aria-describedby={p.urlSuggestion ? "url-suggestion" : undefined}
           data-testid="search-input"
         />
+        {p.urlSuggestion && (
+          <button type="button" id="url-suggestion" className="search-suggestion" onClick={p.onAcceptSuggestion} data-testid="url-suggestion">
+            <span aria-hidden="true">＋</span> Save this link as a bookmark <kbd>Enter</kbd>
+          </button>
+        )}
       </div>
+      <button type="button" className="button button-primary" onClick={p.onAddUrl} data-testid="add-url-button">
+        Add URL
+      </button>
       <ImportMenu importing={p.importing} onImport={p.onImport} />
       <label className="sort">
         <span className="sr-only">Sort by</span>
@@ -93,7 +112,7 @@ export function ImportMenu({ importing, onImport }: { importing: boolean; onImpo
       <button
         ref={trigger}
         type="button"
-        className="button button-primary"
+        className="button"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={importing}

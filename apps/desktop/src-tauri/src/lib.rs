@@ -4,6 +4,7 @@
 //! call is decided by `capabilities/main.json`; `build.rs` turns that check on
 //! for app commands.
 
+pub mod capture_commands;
 pub mod commands;
 pub mod instance;
 pub mod library;
@@ -25,7 +26,10 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             commands::get_diagnostics,
             library_commands::list_items,
             library_commands::get_item,
-            library_commands::import_media
+            library_commands::import_media,
+            capture_commands::check_url,
+            capture_commands::save_url,
+            capture_commands::restore_item
         ])
         .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
             thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)

@@ -4,6 +4,7 @@ import { errorCode } from "../ipc/errors";
 import { formatBytes, formatDate, formatDuration } from "../format";
 import { KIND_LABEL, LOCAL_STATE, PLATFORM_LABEL } from "../labels";
 import { StateBadge, Thumbnail } from "./ItemCard";
+import { useOnline } from "../hooks/useEnv";
 
 type State = { status: "idle" } | { status: "loading"; id: string } | { status: "error"; id: string; code: string } | { status: "ready"; detail: ItemDetail };
 
@@ -112,6 +113,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function Details({ detail }: { detail: ItemDetail }) {
   const { item } = detail;
+  const online = useOnline();
   return (
     <div data-testid="inspector-details">
       <Thumbnail item={item} large />
@@ -136,7 +138,7 @@ function Details({ detail }: { detail: ItemDetail }) {
             </span>
           </Row>
         )}
-        {item.kind !== "local_video" && detail.metadataStatus !== "ready" && <Row label="Metadata">{detail.metadataStatus === "pending" ? "Not fetched yet" : detail.metadataStatus}</Row>}
+        {item.kind !== "local_video" && detail.metadataStatus !== "ready" && <Row label="Metadata">{detail.metadataStatus === "pending" ? (online ? "Not fetched yet" : "Offline") : detail.metadataStatus}</Row>}
       </dl>
       {detail.description && (
         <section>

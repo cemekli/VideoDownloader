@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AddUrlDialog } from "./components/AddUrlDialog";
 import { BackendStatus } from "./components/BackendStatus";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
@@ -10,7 +11,8 @@ import { useLibrary } from "./hooks/useLibrary";
 import { usePrefs } from "./hooks/usePrefs";
 import { createClient } from "./ipc/client";
 import { errorCode } from "./ipc/errors";
-import type { BackendClient, ImportSource, ItemKind, LibraryView, ListQuery, Platform } from "./ipc/types";
+import { looksLikeUrl, withScheme } from "./url";
+import type { BackendClient, ImportSource, ItemKind, LibraryItemDto, LibraryView, ListQuery, Platform } from "./ipc/types";
 import { importErrorMessage, importMessage, PLATFORM_LABEL, VIEW_LABEL } from "./labels";
 import { EMPTY_SELECTION, type Selection } from "./selection";
 
@@ -57,8 +59,17 @@ export function App({ client }: { client?: BackendClient }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
+  /** Add URL dialog: the text it opens with, or null when closed. */
+  const [addUrl, setAddUrl] = useState<string | null>(null);
+  const addUrlOpener = useRef<HTMLElement | null>(null);
+  /** Item to select (and maybe inspect) once the list shows it. */
+  const [reveal, setReveal] = useState<{ id: string; inspect: boolean } | null>(null);
 
-  const searchText = useDebounced(text, 150);
+  // A link typed or pasted into search is offered to Add URL instead of
+  // being searched for (§9.4 Ctrl+K capture).
+  const urlInSearch = looksLikeUrl(text);
+  const debounced = useDebounced(text, 150);
+  const searchText = looksLikeUrl(debounced) ? "" : debounced;
   const query = useMemo(
     () => ({ text: searchText, view, platforms, kinds, ...sortOf(sort, searchText.trim() !== "") }),
     [searchText, view, platforms, kinds, sort],
@@ -116,6 +127,47 @@ export function App({ client }: { client?: BackendClient }) {
     }
   };
 
+  const openAddUrl = useCallback((initial = "") => {
+    addUrlOpener.current = document.activeElement as HTMLElement | null;
+    setAddUrl(initial);
+  }, []);
+
+  const closeAddUrl = () => {
+    setAddUrl(null);
+    const back = addUrlOpener.current;
+    addUrlOpener.current = null;
+    if (back?.isConnected && back !== document.body) back.focus();
+  };
+
+  /** After Save / Open / Restore: show the item in All Items, selected (§8.1 step 4). */
+  const showItem = (item: LibraryItemDto, message: string, inspect: boolean) => {
+    setAddUrl(null);
+    addUrlOpener.current = null;
+    setView("all");
+    setText("");
+    setPlatforms([]);
+    setKinds([]);
+    setReveal({ id: item.id, inspect });
+    setReloadKey((k) => k + 1);
+    toast(message);
+  };
+
+  // Ctrl+V outside a text field: a pasted link opens Add URL (CAP-01). The
+  // clipboard is read only from this paste event, never in the background.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (addUrl !== null) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable]")) return;
+      const pasted = e.clipboardData?.getData("text/plain") ?? "";
+      if (!looksLikeUrl(pasted)) return;
+      e.preventDefault();
+      openAddUrl(withScheme(pasted));
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [addUrl, openAddUrl]);
+
   const openInspector = (index: number) => {
     const item = items[index];
     if (!item) return;
@@ -124,6 +176,19 @@ export function App({ client }: { client?: BackendClient }) {
     if (compact) setDrawerOpen(true);
     else setPrefs({ inspectorOpen: true });
   };
+
+  useEffect(() => {
+    if (!reveal || data.status !== "ready") return;
+    const index = data.items.findIndex((i) => i.id === reveal.id);
+    if (index < 0) return;
+    setReveal(null);
+    setSelection({ ids: new Set([reveal.id]), anchor: index, focus: index });
+    if (reveal.inspect) {
+      if (compact) setDrawerOpen(true);
+      else setPrefs({ inspectorOpen: true });
+    }
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-testid="library-card"][data-id="${reveal.id}"]`)?.focus());
+  }, [reveal, data, compact, setPrefs]);
 
   const closeInspector = useCallback(() => {
     if (compact) setDrawerOpen(false);
@@ -143,6 +208,7 @@ export function App({ client }: { client?: BackendClient }) {
         searchRef.current?.select();
         return;
       }
+      if (addUrl !== null) return; // the dialog handles its own keys
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (navOpen) setNavOpen(false);
       else if (inspectorVisible && (compact || document.activeElement?.closest('[data-testid="inspector"]'))) closeInspector();
@@ -151,7 +217,7 @@ export function App({ client }: { client?: BackendClient }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items]);
+  }, [navOpen, inspectorVisible, compact, closeInspector, text, selection.ids.size, items, addUrl]);
 
   const goView = (v: LibraryView) => {
     setView(v);
@@ -173,7 +239,7 @@ export function App({ client }: { client?: BackendClient }) {
 
   const importButtons = (
     <div className="actions">
-      <button type="button" className="button button-primary" disabled={importing} onClick={() => runImport("files")} data-testid="empty-import-files">
+      <button type="button" className="button" disabled={importing} onClick={() => runImport("files")} data-testid="empty-import-files">
         Import files…
       </button>
       <button type="button" className="button" disabled={importing} onClick={() => runImport("folder")} data-testid="empty-import-folder">
@@ -186,7 +252,12 @@ export function App({ client }: { client?: BackendClient }) {
     view === "all" ? (
       <div className="results-state" data-testid="library-empty">
         <h2>Your library is empty</h2>
-        <p>Import videos from this computer to get started. Files stay where they are; VideoVault only keeps a reference. You can also drop files on this window.</p>
+        <p>Save a video link as a bookmark, or import videos from this computer. Imported files stay where they are; VideoVault only keeps a reference. You can also paste a link with Ctrl+V or drop files on this window.</p>
+        <div className="actions">
+          <button type="button" className="button button-primary" onClick={() => openAddUrl()} data-testid="empty-add-url">
+            Add URL…
+          </button>
+        </div>
         {importButtons}
       </div>
     ) : (
@@ -238,6 +309,14 @@ export function App({ client }: { client?: BackendClient }) {
         onToggleInspector={() => (inspectorVisible ? closeInspector() : compact ? setDrawerOpen(true) : setPrefs({ inspectorOpen: true }))}
         importing={importing}
         onImport={runImport}
+        onAddUrl={() => openAddUrl()}
+        urlSuggestion={urlInSearch ? text.trim() : null}
+        onAcceptSuggestion={() => {
+          const url = withScheme(text);
+          setText("");
+          openAddUrl(url);
+          addUrlOpener.current = searchRef.current;
+        }}
         showMenuButton={compact}
         onMenu={() => setNavOpen(true)}
         status={<BackendStatus client={c} />}
@@ -296,6 +375,17 @@ export function App({ client }: { client?: BackendClient }) {
         </main>
         {inspectorVisible && <Inspector client={c} itemId={activeId} selectedCount={selection.ids.size} drawer={compact} onClose={closeInspector} />}
       </div>
+      {addUrl !== null && (
+        <AddUrlDialog
+          client={c}
+          initialUrl={addUrl}
+          online={online}
+          onClose={closeAddUrl}
+          onSaved={(r) => showItem(r.item, `Saved “${r.item.title}” to your library.`, false)}
+          onOpenExisting={(item) => showItem(item, `“${item.title}” is already in your library.`, true)}
+          onRestored={(item) => showItem(item, `Restored “${item.title}”.`, true)}
+        />
+      )}
       <div className="toasts" role="status" aria-live="polite" data-testid="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.tone}`} data-testid="toast">

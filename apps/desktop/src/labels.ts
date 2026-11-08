@@ -64,3 +64,19 @@ export function importErrorMessage(code: string): string {
   if (code === "TOOL_MISSING") return "Import needs the bundled media tools (ffprobe), which were not found.";
   return `Import failed (${code}).`;
 }
+
+const URL_ERROR: Record<string, string> = {
+  INVALID_URL: "This is not a web link. Paste a link that starts with https://.",
+  URL_BLOCKED: "Links to this computer or a local network can't be saved.",
+  URL_HAS_CREDENTIALS: "This link contains a password or a temporary access key. Copy the normal link of the video instead.",
+};
+
+/** Field error for an Add URL refusal (§8.1: a fixable field error). */
+export function urlErrorMessage(code: string): string {
+  return URL_ERROR[code] ?? `The link could not be saved (${code}).`;
+}
+
+export function urlWarningMessage(code: string): string {
+  if (code === "PLAYLIST_UNSUPPORTED") return "This is a playlist, channel or profile. It is saved as one bookmark; its videos are not added one by one.";
+  return code;
+}

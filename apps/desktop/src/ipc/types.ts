@@ -116,11 +116,44 @@ export type ImportStatus = { phase: "started" } | { phase: "finished"; summary: 
 
 export type Unlisten = () => void;
 
+/** An item that already holds the content of a URL (CAP-06). */
+export interface ExistingItem {
+  item: LibraryItemDto;
+  /** In Recently removed: offer Restore / Cancel (§7.3, AC-45). */
+  removed: boolean;
+  matchedBy: "canonical_url" | "alias" | "source_id";
+}
+
+/** `check_url`: offline validation as the user types. Nothing is written. */
+export interface UrlCheck {
+  platform: Platform;
+  shape: "video" | "collection" | "short_link" | "unknown";
+  /** Canonical form only; the typed text is never echoed back (CAP-08). */
+  canonicalUrl: string;
+  /** Title a new bookmark gets until metadata arrives (CAP-04). */
+  title: string;
+  existing: ExistingItem | null;
+  /** Non-blocking §19 codes, e.g. PLAYLIST_UNSUPPORTED. */
+  warnings: string[];
+}
+
+export interface SaveUrlResult {
+  /** `existing`: nothing was written; the URL belongs to `item`. */
+  outcome: "created" | "existing";
+  item: LibraryItemDto;
+  removed: boolean;
+  matchedBy: ExistingItem["matchedBy"] | null;
+  warnings: string[];
+}
+
 export interface LibraryClient {
   listItems(query: ListQuery): Promise<ItemPage>;
   getItem(id: string): Promise<ItemDetail>;
   importMedia(source: ImportSource): Promise<ImportSummary>;
   onImportStatus(cb: (s: ImportStatus) => void): Promise<Unlisten>;
+  checkUrl(url: string): Promise<UrlCheck>;
+  saveUrl(url: string): Promise<SaveUrlResult>;
+  restoreItem(id: string): Promise<LibraryItemDto>;
 }
 
 // ---- IPC contract v1 (tests/fixtures/ipc-contract.json, SPEC §18) ----
