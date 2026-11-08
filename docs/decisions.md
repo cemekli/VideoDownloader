@@ -734,3 +734,96 @@ STATE.md F2.1–F2.3. SPEC §7.3 (ORG-01…ORG-11, Undo semantiği, soft-delete,
 - Koleksiyon ağacında sürükle-bırak ve yeniden boyutlandırılabilir kenar çubuğu yok; klavye ve menü alternatifi var. ORG-08'in sürükleme kısmı F2.9 erişilebilirlik çalışmasıyla birlikte değerlendirilecek.
 - Add URL sırasında koleksiyon/etiket seçimi (CAP-05) henüz yok; kaydedilen öğe Inbox'tan düzenlenir.
 - Yolculuk 5 (büyük Inbox'ı düzenle) E2E'si F2 çıkış kapısında.
+
+## ADR-0016: Oynatıcı, `vvmedia` protokolü, ayarlar ve Offline Mode
+
+STATE.md F2.4 ve F2.7. SPEC PLAY-01…04, PLAY-07, DATA-04, DATA-05, §11.4 `PlaybackState`, §11.6 `AppSettings`, §20.2; AC-17, AC-32, AC-49, NFR-10.
+
+**Bağlam.** Kütüphane dosyaları import ediyordu ama oynatamıyordu. ADR-0004 WebView2'de H.264, VP8, VP9 ve AV1'in MP4, WebM, MKV ve MOV içinde oynadığını, HEVC'nin ise yalnızca sesle (`partial`) açıldığını gösterdi. Ayarlar ve Offline Mode için kalıcı bir yer yoktu.
+
+**Karar: şema (migration 0004 `playback_settings`).**
+
+- `playback_state`: öğe başına bir satır (`asset_id`, konum, süre, `completed`, `last_played_at`). Konum kaydetmek kullanıcı düzenlemesi değildir: öğenin `revision`'ını artırmaz, Undo'ya girmez.
+- Bitti sayılma: sürenin %95'i ya da 60 saniyeden uzun videoda son 10 saniye. Devam teklifi: bitmemiş ve en az 5 saniye izlenmiş. Kural yalnızca `vv-persistence/src/library/playback.rs`'te; fixture istemcisi aynı kuralı kopyalar.
+- `app_setting`: anahtar başına bir JSON değeri. Okunamayan değer (eski/yeni sürüm, elle düzenleme) uygulamayı durdurmaz, varsayılana döner. Ayarlar: tema, dil (şimdilik yalnızca `en`), Offline Mode, güncelleme denetimi (`manual` varsayılan), indirme kökü, yasal onay ve ilk açılış zamanı.
+
+**Karar: `vvmedia` protokolü.**
+
+- Oynatıcı dosyayı `vvmedia://<asset-uuid>` (Windows'ta `http://vvmedia.localhost/<asset-uuid>`) ile ister. Protokol yalnızca UUID kabul eder; yolu veritabanından kendisi çözer (`media_location`), yalnızca `original` ya da `preview` rolündeki video/ses varlıklarını verir ve dosyanın kökün içine çözüldüğünü doğrular (thumbnail protokolüyle aynı kural). Kök bağlı değilse 503 döner. Webview hiç dosya yolu görmez.
+- Byte aralıkları (`Range`) desteklenir; ileri sarma tüm dosyayı okumaz.
+- CSP'de yalnızca `media-src 'self' vvmedia: http://vvmedia.localhost` eklendi.
+- E2E test derlemesi (`e2e-cdp`) aynı protokolden `VV_E2E_MEDIA_DIR` klasörünü de dosya adıyla sunar (oynatma matrisi); gönderilen derlemede bu yol yoktur.
+
+**Karar: oynatıcı.**
+
+- Oynatıcı, inspector'daki "Play" ile açılan bir diyalogdur. Kayıtlı konum varsa "Resume from 0:42" ve "Start from the beginning" sorar; konum her 5 saniyede, duraklatınca, bitince ve kapatınca kaydedilir.
+- Oynayıp oynamadığına `canPlayType` ile değil, elemanın yaptığıyla karar verilir: `loadeddata`'da video genişliği 0 ise "yalnızca ses" (`partial`), `error` olayında "oynatılamadı". İkisi de `CODEC_UNSUPPORTED` açıklamasını ve "Open in another player" eylemini gösterir. Backend HEVC dosyaları baştan `unsupported` işaretler; oynatıcı açılırken uyarı gösterir.
+- Klavye: Space/K oynat-duraklat, ←/→ 5 s, J/L 10 s, Home başa, M ses, F tam ekran, Esc kapat. Yerleşik denetimler de klavyeyle erişilebilir.
+- Dosyası olmayan bookmark'ta "Play" yoktur, "Open source page" vardır (PLAY-03). Dosyası bağlı olmayan sürücüdeyse oynatıcı nedenini söyler ve "Locate file…" (yeniden bağla) sunar.
+- "Open in another player" ve "Open source page" `tauri-plugin-opener` ile Rust tarafında açılır; webview'e opener izni verilmedi. Kaynak URL açılmadan önce yakalama politikasından yeniden geçer.
+
+**Karar: PLAY-07 (remux önizlemesi) daraltıldı.** M0 matrisinde (ADR-0004) MKV ve MOV, uyumlu codec'lerle WebView2'de oynadı; remux ile kurtarılacak bir container kalmadı. HEVC'nin sorunu container değil codec olduğundan remux işe yaramaz; transcode M1 kapsamı dışında. Bu yüzden `make_preview` yazılmadı. PLAY-07'nin M1'deki karşılığı: desteklenmeyen dosyada açıklama ve harici oynatıcı (AC-32). WebView2 sürümü bir container'ı bırakırsa matris testi (`e2e-desktop/playback-matrix.spec.ts`) bunu gösterir ve remux o zaman eklenir.
+
+**Karar: Offline Mode.**
+
+- Ayar açıkken ağ denetimi (`vv-netguard`, ADR-0007) her bağlantıyı DNS çözümlemesinden önce `Offline` nedeniyle reddeder. Uygulamanın ağa çıkan her işi (ileride metadata, indirme, model, güncelleme) bu denetimden geçmek zorundadır.
+- Arayüz kalıcı bir şerit gösterir ("Offline Mode is on…", "Turn off" düğmesi). "Open source page" `OFFLINE_MODE` hatasıyla reddedilir. Kaydetme, import, arama, düzenleme ve oynatma çalışır (DATA-04).
+- Ayar kalıcıdır; yeniden başlatmada açık kalır.
+
+**Sonuçlar ve açık noktalar.**
+
+- Fixture modunda oynatıcı gerçek matris dosyalarını Vite'ın `/fixture-media/` yolundan oynatır (yalnızca `--mode fixture`); `holiday.mp4` H.264, `postgres-replication.mp4` HEVC dosyasına bağlıdır. Matris dosyaları 3 saniye olduğundan varsayılan fixture'da Holiday clip için 0:02'de kayıtlı bir konum hazır gelir.
+- Bölümler ve filmstrip (PLAY-05) M2'de.
+
+## ADR-0017: JSON dışa/içe aktarma ve veritabanı yedeği
+
+STATE.md F2.5 ve F2.6. SPEC §15, DATA-01…03, DATA-06, INV-09; AC-15, AC-16, AC-30, AC-50, AC-51, AC-57.
+
+**Bağlam.** Kullanıcının kütüphanesini başka bir bilgisayara taşıyabilmesi ve bozulan ya da yanlış değişen veriden dönebilmesi gerekiyordu. İki ayrı ihtiyaç var: taşınabilir, okunur bir dışa aktarma ve aynı makinede birebir geri dönüş.
+
+**Karar: JSON dışa aktarma (`portable.rs`).**
+
+- Biçim `videovault-library`, `schema_version` 1. Tablo başına satır listesi: öğeler, alias'lar, kökler, medya referansları, etiketler, koleksiyonlar, akıllı koleksiyonlar, açık duplicate adayları ve oynatma konumları. Bilinmeyen üst düzey alanlar okunup korunur.
+- Çerez, kimlik bilgisi ve token yoktur (INV-09). Mutlak dosya yolları varsayılan olarak yazılmaz; medya, kök kimliği ve kök içindeki göreli yolla anılır. Kullanıcı "include file locations" seçerse mutlak yollar da eklenir.
+- Dosya önce `.partial` olarak yazılır, sonra yeniden adlandırılır; yarım dosya kalmaz. Arayüz dışa aktarmanın medya yedeği olmadığını söyler (DATA-03).
+
+**Karar: JSON içe aktarma.**
+
+- İki adım: `preview_library_import` dosyayı okur, doğrular ve yazmadan ne olacağını sayar (yeni, eşleşen, atlanacak öğeler; kökler; mutlak yollar). `apply_library_import` önizlemenin jetonuyla ve kullanıcının seçimleriyle tek bir SQLite işleminde yazar; arama indeksi aynı işlemde yeniden kurulur.
+- Doğrulama sırası: boyut (en çok 256 MiB), JSON, `schema_version` (yeni sürüm `IMPORT_SCHEMA_UNSUPPORTED`), biçim adı, sonra her göreli yolun güvenli olması (mutlak yol, `..`, sürücü harfi ve UNC reddedilir). Hata olursa hiçbir şey yazılmaz (AC-16).
+- Eşleşme: kanonik URL, alias, platform + kaynak kimliği ya da içerik hash'i. Varsayılan politika "mevcut olanı koru"; "kullanıcı alanlarını değiştir" seçilebilir.
+- Kök eşleme: her kök için kullanıcı bu makinedeki bir klasörü seçer. Seçilmeyen kök "bağlı değil" bir yer tutucu olur; öğeler kaybolmaz, sonra yeniden bağlanır (DATA-03). Bir dosya ancak kanonik yolu seçilen kökün içindeyse bağlanır; dışarı bakan symlink ya da junction reddedilir (AC-30).
+- Mutlak yollar yalnızca kullanıcı "use original locations" derse kullanılır ve `external_import` köküne bağlanır.
+- Kaldırılmış öğelerin 30 günlük süresi içe aktarma anından yeniden başlar.
+
+**Karar: veritabanı yedeği ve geri yükleme (`restore.rs`).**
+
+- Yedek SQLite online backup API ile alınır, dosya kopyası değildir. Adlar: `backup-…` (elle), `pre-restore-…` (geri yüklemeden önce), `pre-migration-…` (migration'dan önce, uygulama açılışında).
+- Geri yükleme önce yedeği bellekte açar ve denetler: SQLite bütünlüğü, VideoVault şeması, bilinen migration özetleri, bu uygulamadan yeni olmaması. Sonra bellekteki kopyayı güncel şemaya taşır, mevcut kütüphaneyi `pre-restore` olarak yedekler ve denetlenmiş görüntüyü tek adımda canlı veritabanının üstüne yazar. 4. adımdan önce canlı veritabanında hiçbir şey değişmez.
+- Liste yalnızca uygulamanın yedek klasöründeki dosyaları gösterir; başka bir dosya "Restore from a file…" ile seçilir ve önce özeti gösterilir (öğe, kaldırılmış öğe, koleksiyon, etiket, medya sayısı).
+- Geri yüklemeden sonra eksik medya sayılır ve bildirimde söylenir.
+
+**Sonuçlar.** Yedekler kullanıcı verisi klasöründedir; başka bir diske kopyalamak kullanıcıya kalır (F4'te otomatik yedek planı değerlendirilecek). Fixture istemcisi dışa/içe aktarmanın yalnızca arayüzünü sınar; asıl testler `vv-persistence/tests/portable.rs`'te.
+
+## ADR-0018: Çeviri anahtarları, tema, ilk açılış ve erişilebilirlik kontrolleri
+
+STATE.md F2.8 ve F2.9. SPEC §9.6, §9.7, NFR-12; AC-27.
+
+**Karar: çeviri anahtarları.**
+
+- Tüm arayüz metinleri `src/i18n/en.ts` kataloğunda anahtarla durur; bileşenler `t(key, vars)` ve sayılı metinler için `tn(key, count)` kullanır. Tekil/çoğul seçimi `Intl.PluralRules`, sayı ve tarih biçimi `Intl` ile yapılır; böylece Türkçe katalog eklenince kod değişmez.
+- Katalog TypeScript'te `as const`; olmayan anahtar derleme hatasıdır. Backend hata kodları `error.<CODE>` anahtarına eşlenir.
+- M1'de yalnızca İngilizce var; dil ayarı backend'de `en` dışını reddeder. Türkçe katalog F4'te.
+
+**Karar: tema.**
+
+- Koyu tema varsayılan. Açık tema `[data-theme="light"]` altında yalnızca renk token'larını değiştirir; bileşen stilleri ortaktır. "Same as Windows" sistem ayarını izler ve sistem değişince anında uyar.
+- İlk boyamada yanıp sönme olmasın diye `public/theme-init.js` temayı `localStorage`'dan okuyup React'ten önce uygular; asıl kaynak backend ayarıdır ve yüklenince ikisi eşitlenir.
+
+**Karar: ilk açılış.** Beş kısa adım: hoş geldin, sorumluluk (yasal onay), medya klasörü, güncellemeler ve Offline Mode, tema. Her adım atlanabilir; "Skip" varsayılanları korur (koyu tema, elle güncelleme, varsayılan klasör). Hesap, bağış, model indirme ya da oturum açma sorulmaz. Her adımda odak başlığa gider; yalnızca klavyeyle tamamlanabilir. Bittiğinde zamanı kaydedilir ve bir daha açılmaz. Sorumluluk metni Settings → About'ta yeniden okunur.
+
+**Karar: erişilebilirlik kontrolleri (F2.9).**
+
+- `e2e/a11y.spec.ts` her ana yüzeyi (kütüphane, inspector, sonuç yok, oynatıcı, ayarlar, Add URL, ilk açılışın beş adımı) iki temada axe ile tarar; WCAG 2.1 A/AA kurallarında `critical` ya da `serious` bulgu testi düşürür.
+- %200 ölçek: 1366×768 ekranda 683×384 CSS piksel. Bu pencerede yatay sayfa kaydırması yok, odak görünür, Add URL ve arama klavyeyle çalışır, diyaloglar pencereye sığar. Bunun için 900 pikselden dar pencerelerde üst çubuk iki satıra kırılır.
+- Axe sorunların bir kısmını bulur. Narrator ile okuma ve Windows yüksek karşıtlık modu elle kontrol edilir (HANDOFF.md).

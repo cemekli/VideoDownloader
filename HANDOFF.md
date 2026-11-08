@@ -1,4 +1,4 @@
-# Devir notu — 8 Kasım 2026
+# Devir notu — 8 Kasım 2026 (akşam)
 
 Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
@@ -14,22 +14,33 @@ Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md)
   - Komutlar `check_url` (yazarken denetim, yazmaz), `save_url`, `restore_item` (Recently removed'dan geri alma).
   - Üst çubukta Add URL; yapıştır + Enter kaydeder. `Ctrl+K` aramasına bağlantı yapıştırılırsa "Save this link" önerisi çıkar. Liste odaktayken `Ctrl+V` ile bağlantı yapıştırmak Add URL'yi açar.
   - NFR-01: 10.000 öğede p95 1,4 ms (Linux debug). Gerçek uygulama E2E'si kaydet → kapat → aç → ara akışını Windows'ta dener.
-- **F2.1–F2.3 (düzenleme) 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0015.
-  - Migration 0003: etiket, koleksiyon (ağaç), akıllı koleksiyon, Undo günlüğü, sahipsiz medya.
-  - Kenar çubuğu: Inbox (sayaçlı), koleksiyon ağacı ("⋯" menüsü: yeniden adlandır, alt koleksiyon, taşı, sil), akıllı koleksiyonlar, etiketler (yeniden adlandır, birleştir, sil), Duplicates, Archive, Recently removed.
-  - Seçim olunca toplu işlem çubuğu: Tag, Add to collection, Favorite, Archive, Remove. Bildirimde Undo; `Ctrl+Z` de geri alır. `Delete` seçili öğeleri Recently removed'a taşır.
-  - Inspector'da favori, arşiv, etiketler, koleksiyonlar ve not düzenlenir.
-  - Recently removed: Restore ve "Delete for good" (indirilmiş dosyaları silmek ayrı onay). Silinmeyen indirilmiş dosyalar "Orphaned media"da; oradan yeniden import edilebilir.
-  - Duplicates: iki öğeden birini seç, önizlemeyi gör, birleştir; Undo geri alır.
-  - Kaydedilen bookmark artık Inbox'ta açılır.
+- **F2.1–F2.3 (düzenleme) 🟨:** PR #18 ile merge edildi; Windows'ta elle kontrol geçti. ADR-0015.
+- **F2.4–F2.9 🟨:** `claude/project-thread-yn7xg0` dalında, PR açık. ADR-0016 (oynatıcı, `vvmedia`, ayarlar, Offline Mode), ADR-0017 (JSON dışa/içe aktarma, DB yedeği), ADR-0018 (çeviri anahtarları, tema, ilk açılış, erişilebilirlik).
+  - Inspector'da "Play": oynatıcı kayıtlı konumdan devam etmeyi sorar, konumu kaydeder; HEVC'de uyarı ve "Open in another player".
+  - Settings (⚙ ya da `Ctrl+,`): tema, Offline Mode, güncelleme denetimi, medya klasörü, dışa/içe aktarma, yedek ve geri yükleme, About.
+  - Yeni kütüphanede beş adımlı ilk açılış; "Skip" varsayılanları korur.
+- **Çıkış kapıları:** Yolculuk 2 ve 5 E2E'leri `e2e/journeys.spec.ts`'te. Ağsız akışın gerçek uygulama testi `e2e-desktop/offline-flow.spec.ts`; yalnızca Windows'ta çalışır.
 
 ## Sonraki ilk adımlar
 
-1. `git checkout main && git pull`.
-2. GitHub indirmeleri düzelince CI'ı yeniden çalıştır; Windows + Linux yeşilse STATE.md F1.7 satırını ✅ yap ve CI linkini ekle.
-3. F1.8 PR'ı Windows CI'da (gerçek uygulama E2E dahil) yeşilse F1.8'i ✅ yap. Elle: Add URL ile bir bağlantı kaydet, uygulamayı kapatıp aç, aramada bul; listede odak varken `Ctrl+V` ile bağlantı yapıştır (MT-01).
-4. F2.1–F2.3 PR'ı: Windows CI (gerçek uygulama E2E'si `e2e-desktop/organize.spec.ts` dahil) yeşilse ve elle kontrol geçerse ✅. Elle: birkaç öğeyi seç, etiketle, Undo; koleksiyon oluştur ve alt koleksiyonlu silmeyi iki seçenekle dene; bir öğeyi kaldır, Recently removed'dan geri al; uygulamayı kapatıp açınca `Ctrl+Z`'nin "Nothing to undo" dediğini gör.
-5. F1 çıkış kapısı: ağ kapalıyken kaydet/import/ara/yeniden başlat akışı Windows'ta; Yolculuk 2 (eski bookmark'ı bul) için E2E. Sonra F2.4 (oynatıcı).
+1. `git checkout main && git pull` (PR merge edildikten sonra).
+2. Windows'ta `npm run verify`, sonra `npm run desktop:e2e-exe` ve `npm run e2e:desktop`. Gerçek uygulama E2E'si için önce `node scripts/fetch-tools.mjs` (import ffprobe ister).
+3. Aşağıdaki elle kontrol listesi. Geçenler STATE.md'de ✅ olur.
+4. Sonra F3 (indirme motoru).
+
+## Windows elle kontrol listesi (F1/F2 çıkış kapıları)
+
+Hepsi `npm run desktop` ile, mümkünse yeni bir kütüphaneyle (`VV_DATA_DIR` boş bir klasör) yapılır.
+
+1. **İlk açılış:** beş adım görünür; yalnızca klavyeyle (Tab, Enter, ok tuşları) sona kadar gidilir. Açık temayı seç; uygulamayı kapatıp aç: tema korunur, ilk açılış bir daha çıkmaz.
+2. **Ağsız akış (F1 kapısı):** Wi-Fi'yi kapat ya da kabloyu çıkar. Bağlantı kaydet, bir video import et, etiketle, ara, oynat. Uygulamayı kapatıp aç: hepsi duruyor, arama buluyor.
+3. **Offline Mode:** Settings'te aç. Şerit görünür; bookmark'ta "Open source page" Offline Mode hatası verir; şeritteki "Turn off" kapatır. Kapatıp açınca ayar korunur.
+4. **Oynatıcı:** bir MP4'ü yarısına kadar izle (en az 5 saniye), kapat, uygulamayı yeniden başlat, aynı öğede "Resume from …" doğru zamanı gösterir (AC-49). ←/→, J/L, M, F tuşları çalışır. Narrator oynatıcı düğmelerini okur.
+5. **HEVC:** HEVC bir dosya (ör. telefon videosu) import edip oynat: uyarı ve "yalnızca ses"/"oynatılamadı" açıklaması, "Open in another player" varsayılan oynatıcıyı açar.
+6. **Bağlı olmayan sürücü:** harici diskteki bir videoyu import et, diski çıkar, oynatmayı dene: neden söylenir; diski tak, "Locate file…" ile yeniden bağla.
+7. **JSON dışa/içe aktarma:** Settings → Export (dosya yollarıyla ve yolsuz iki kez). Boş bir kütüphanede Import: önizleme sayıları doğru; kökü kendi klasörüne eşle; etiketler, koleksiyonlar, notlar ve oynatma konumları gelir; eşlenmeyen kök "bağlı değil" görünür.
+8. **DB yedeği:** Back up now; birkaç öğeyi sil/etiketle; listeden Restore: özet doğru, geri yükleme sonrası eski durum gelir, listede "Before restore" yedeği belirir. Bozuk bir dosyayı "Restore from a file…" ile seç: reddedilir, kütüphane değişmez.
+9. **Erişilebilirlik:** Windows ayarlarında metin ölçeğini %200 yap: yatay kaydırma yok, Add URL ve arama klavyeyle çalışır. Yüksek karşıtlık temasında odak görünür.
 
 ## Bilinmesi gerekenler
 
