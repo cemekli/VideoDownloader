@@ -119,7 +119,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F1.4 | Yerel import: kısıtlı ffprobe, hash, duplicate adayı, thumbnail | IMP-01…07, §14.1 | AC-04, AC-34, AC-35, AC-59: `vv-import/tests/import.rs` (gerçek ffprobe/FFmpeg 9.0.2; thumbnail, iptal, link testleri dahil). Dosya seçici ve sürükle-bırak (IMP-01) F1.7'de. ADR-0012; Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
 | F1.5 | Depolama kökü durumu: `missing` ve `disconnected` ayrımı | DATA-09 | AC-47: `vv-import/tests/import.rs` (kök çıkarılınca `disconnected`, varlıklar `missing` olmuyor, geri gelince doğrulanıyor); Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
 | F1.6 | FTS5 arama, güvenli sorgu oluşturucu, sıralama, Türkçe arama fixture'ı | SEA-01…05, §16.1 | AC-05, AC-31, Türkçe fixture (`tests/fixtures/search-tr.json`, 21 vaka): `vv-persistence/tests/search.rs`. Filtre chip'leri (SEA-02 UI) F1.7'de; Windows + Linux CI [CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501) | ✅ |
-| F1.7 | Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları | §9.2, §9.3 | E2E + 3 görünümde ekran görüntüsü | ⬜ |
+| F1.7 | Library ekranı: grid/liste, inspector, filtreler, boş ve hata durumları | §9.2, §9.3 | Fixture E2E 3 görünümde (`e2e/library-shell.spec.ts`, 15 test × 3; ilk kullanım, yükleniyor, hata, sonuç yok, çevrimdışı, 2.000 öğe, inspector, liste ekran görüntüleri), Vitest (`App.test.tsx`, `selection.test.ts`), Rust (`library_view.rs`, `tests/ipc.rs`, `library_commands.rs`), gerçek uygulamada `list_items` (`desktop-shell.spec.ts`). ADR-0013. Bekleyen: Windows CI ve dosya diyaloğu/sürükle-bırak için elle kontrol (MT-04) | 🟨 |
 | F1.8 | Add URL ekranı ve `Ctrl+K` | §8.1, §9.4 | Yolculuk 1 E2E; NFR-01, NFR-02 ölçümü | ⬜ |
 
 **Çıkış kapısı**
@@ -294,12 +294,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). Sıradaki: F1.7 (Library ekranı).
+**F0 tamamlandı** (13/13 alt görev ✅). F1.1–F1.3 ✅ (PR #13). F1.4–F1.6 ✅ (PR #14; yerel import, kök durumu, arama; ADR-0012). F1.7 🟨 (Library ekranı, ADR-0013; CI ve Windows'ta elle kontrol bekliyor). Sıradaki: F1.8 (Add URL).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 8 Kas 2026 | F1.7 başladı: uygulama kütüphaneyi `<data>/db/library.sqlite`'ta açıyor; `list_items`, `get_item`, `import_media` komutları, Rust tarafında dosya diyaloğu ve sürükle-bırak (`tauri-plugin-dialog` 2.8.4), `vvthumb` thumbnail protokolü (CSP `img-src`), açılışta `check_storage` ve eksik küçük resimler. Library ekranı: gezinme, arama (`Ctrl+K`), filtre chip'leri, sıralama, sanallaştırılmış grid/liste, çoklu seçim, inspector, ilk kullanım/yükleniyor/hata/sonuç yok/çevrimdışı durumları. `docs/design-system.md`, ADR-0013. |
 | 7 Kas 2026 | F1.4–F1.6 başladı: `vv-import` crate'i (import, hash, duplicate adayı, thumbnail, relink, `check_storage`), ffprobe'a çözünürlük/kanal/dil, FTS sorgu oluşturucu ve Türkçe arama fixture'ı, `FILE_MISSING` ve `STORAGE_ROOT_UNAVAILABLE` hata kodları. ADR-0012. |
 | 7 Kas 2026 | F1.4, F1.5 ve F1.6 ✅: Windows ve Linux CI'da geçti ([CI #42385646501](https://github.com/cemekli/VideoDownloader/actions/runs/42385646501)), PR #14 merge edildi. |
 | 7 Kas 2026 | F1.1, F1.2 ve F1.3 ✅: Windows ve Linux CI'da geçti ([CI #42382304235](https://github.com/cemekli/VideoDownloader/actions/runs/42382304235)). SPEC v1.5 (§11.7 kenar durumu). |

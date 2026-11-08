@@ -6,20 +6,30 @@
 
 pub mod commands;
 pub mod instance;
+pub mod library;
+pub mod library_commands;
 pub mod media_protocol;
+pub mod thumb_protocol;
 
-use tauri::{Builder, Runtime};
+use tauri::{Builder, DragDropEvent, Manager, Runtime, WindowEvent};
 
 /// Registers every command on a builder. Shared by `run()` and the IPC tests so
 /// both exercise exactly the same handler.
 pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
     builder
         .manage(instance::InstanceState::default())
+        .manage(library::LibraryState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::get_status,
-            commands::get_diagnostics
+            commands::get_diagnostics,
+            library_commands::list_items,
+            library_commands::get_item,
+            library_commands::import_media
         ])
+        .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
+            thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)
+        })
 }
 
 pub fn run() {
@@ -36,7 +46,19 @@ pub fn run() {
         ));
     }
     #[allow(unused_mut)]
-    let mut builder = register(builder).setup(|app| instance::take_library_lock(app.handle()));
+    let mut builder = register(builder)
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            instance::take_library_lock(app.handle())?;
+            library::open_library(app.handle())
+        })
+        // Files dropped on the window go to import from here; the webview
+        // never handles their paths (ADR-0013).
+        .on_window_event(|window, event| {
+            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                library::import_dropped(window.app_handle(), paths.clone());
+            }
+        });
     #[cfg(feature = "e2e-cdp")]
     {
         builder = e2e::register_media_protocol(builder);

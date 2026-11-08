@@ -135,16 +135,11 @@ impl Database {
     /// A read-only connection. Readers never block the writer in WAL mode and
     /// see a consistent snapshot per transaction.
     pub fn reader(&self) -> Result<Connection> {
-        let c = Connection::open_with_flags(
-            &self.path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY
-                | OpenFlags::SQLITE_OPEN_NO_MUTEX
-                | OpenFlags::SQLITE_OPEN_URI,
-        )?;
-        c.busy_timeout(BUSY_TIMEOUT)?;
-        c.pragma_update(None, "query_only", true)?;
-        c.pragma_update(None, "trusted_schema", false)?;
-        Ok(c)
+        open_reader(&self.path)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Consistent snapshot of the whole database while it is in use (SPEC §15.3:
@@ -156,6 +151,22 @@ impl Database {
     pub fn integrity_check(&self) -> Result<()> {
         integrity_check(&self.writer)
     }
+}
+
+/// A read-only connection to the database at `path`, configured like
+/// [`Database::reader`]. Lets readers run while another thread holds the
+/// writer (for example during an import).
+pub fn open_reader(path: &Path) -> Result<Connection> {
+    let c = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI,
+    )?;
+    c.busy_timeout(BUSY_TIMEOUT)?;
+    c.pragma_update(None, "query_only", true)?;
+    c.pragma_update(None, "trusted_schema", false)?;
+    Ok(c)
 }
 
 fn configure_writer(c: &Connection) -> Result<()> {

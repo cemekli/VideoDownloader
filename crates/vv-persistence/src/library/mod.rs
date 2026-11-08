@@ -10,6 +10,7 @@ pub mod bookmark;
 pub mod renormalize;
 pub mod repo;
 pub mod search;
+pub mod view;
 
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use std::sync::atomic::{AtomicI64, Ordering};

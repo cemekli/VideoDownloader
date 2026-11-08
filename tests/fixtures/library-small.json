@@ -1,9 +1,15 @@
 {
   "fixture": "library-small",
-  "version": 1,
+  "version": 2,
   "seed": 1,
-  "spec_refs": ["§25.2", "INV-02", "§9.2"],
-  "note": "Synthetic items only. No real private URLs, cookies or personal files (SPEC §25.2).",
+  "spec_refs": [
+    "§25.2",
+    "INV-02",
+    "§9.2",
+    "§9.3",
+    "DATA-09"
+  ],
+  "note": "Synthetic items only. No real private URLs, cookies or personal files (SPEC §25.2). Fields follow LibraryItemDto plus the inspector fields of ItemDetail (tests/fixtures/ipc-contract.json). addedAt is relative to 2026-11-01T00:00:00Z so sorting is deterministic.",
   "items": [
     {
       "id": "00000000-0000-4000-8000-000000000001",
@@ -12,7 +18,18 @@
       "kind": "remote_video",
       "localState": "local_ready",
       "durationMs": 3725000,
-      "tags": ["database", "talk"]
+      "tags": [
+        "database",
+        "talk"
+      ],
+      "addedAt": 1790035200000,
+      "isFavorite": true,
+      "creator": "Data Conf",
+      "description": "Streaming replication, logical decoding and failover.",
+      "canonicalUrl": "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+      "notes": "Watch the failover part again.",
+      "fixtureThumbnail": true,
+      "fileName": "postgres-replication.mp4"
     },
     {
       "id": "00000000-0000-4000-8000-000000000002",
@@ -21,7 +38,17 @@
       "kind": "bookmark",
       "localState": "bookmark_only",
       "durationMs": null,
-      "tags": ["yemek"]
+      "tags": [
+        "yemek"
+      ],
+      "addedAt": 1793318400000,
+      "isFavorite": false,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": "https://www.instagram.com/reel/AbCdEfGhIjK/",
+      "notes": "",
+      "fixtureThumbnail": false,
+      "fileName": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000003",
@@ -30,7 +57,15 @@
       "kind": "bookmark",
       "localState": "bookmark_only",
       "durationMs": 59000,
-      "tags": []
+      "tags": [],
+      "addedAt": 1792627200000,
+      "isFavorite": false,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": "https://www.tiktok.com/@example/video/7300000000000000000",
+      "notes": "",
+      "fixtureThumbnail": true,
+      "fileName": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000004",
@@ -39,7 +74,18 @@
       "kind": "remote_video",
       "localState": "missing",
       "durationMs": 1800000,
-      "tags": ["özel", "toplantı"]
+      "tags": [
+        "özel",
+        "toplantı"
+      ],
+      "addedAt": 1788307200000,
+      "isFavorite": false,
+      "creator": "Ekip",
+      "description": null,
+      "canonicalUrl": "https://vk.com/video-1_456239017",
+      "notes": "",
+      "fixtureThumbnail": false,
+      "fileName": "toplanti.mkv"
     },
     {
       "id": "00000000-0000-4000-8000-000000000005",
@@ -48,7 +94,17 @@
       "kind": "local_video",
       "localState": "local_ready",
       "durationMs": 12000,
-      "tags": ["family"]
+      "tags": [
+        "family"
+      ],
+      "addedAt": 1793404800000,
+      "isFavorite": true,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": null,
+      "notes": "Beach, first day.",
+      "fixtureThumbnail": true,
+      "fileName": "holiday.mp4"
     },
     {
       "id": "00000000-0000-4000-8000-000000000006",
@@ -57,7 +113,32 @@
       "kind": "bookmark",
       "localState": "bookmark_only",
       "durationMs": null,
-      "tags": []
+      "tags": [],
+      "addedAt": 1793059200000,
+      "isFavorite": false,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": "https://x.com/example/status/1850000000000000000",
+      "notes": "",
+      "fixtureThumbnail": false,
+      "fileName": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "title": "Konser kaydı (harici disk)",
+      "platform": "local",
+      "kind": "local_video",
+      "localState": "disconnected",
+      "durationMs": 5400000,
+      "tags": [],
+      "addedAt": 1791763200000,
+      "isFavorite": false,
+      "creator": null,
+      "description": null,
+      "canonicalUrl": null,
+      "notes": "",
+      "fixtureThumbnail": true,
+      "fileName": "konser.mp4"
     }
   ]
 }

@@ -2,11 +2,30 @@
 // filesystem, shell or network directly; everything goes through a client.
 
 export type Platform = "youtube" | "facebook" | "instagram" | "tiktok" | "x" | "vk" | "generic" | "local";
+export const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "generic", "local"];
 
 export type ItemKind = "bookmark" | "remote_video" | "local_video";
+export const ITEM_KINDS: ItemKind[] = ["bookmark", "remote_video", "local_video"];
 
-/** Derived from MediaAsset records on the backend, never from `kind` (INV-02). */
-export type LocalState = "bookmark_only" | "local_ready" | "missing";
+/**
+ * Derived from MediaAsset records and their storage root on the backend,
+ * never from `kind` (INV-02). `disconnected`: the drive holding the file is
+ * not reachable now, which is not the same as the file being gone (DATA-09).
+ */
+export type LocalState = "bookmark_only" | "local_ready" | "disconnected" | "missing";
+
+export interface SnippetPart {
+  text: string;
+  highlight: boolean;
+}
+
+/** A real substring of one field. Rendered as text, never as HTML (SEA-03). */
+export interface Snippet {
+  field: "title" | "description" | "creator" | "notes" | "tags";
+  parts: SnippetPart[];
+  cutStart: boolean;
+  cutEnd: boolean;
+}
 
 export interface LibraryItemDto {
   id: string;
@@ -17,10 +36,91 @@ export interface LibraryItemDto {
   /** Unknown duration is null, never 0 (SPEC §11.1). */
   durationMs: number | null;
   tags: string[];
+  /** Local thumbnail protocol URL; null when there is none yet. */
+  thumbnailUrl: string | null;
+  addedAt: number;
+  isFavorite: boolean;
+  /** Only with a search text. */
+  snippet: Snippet | null;
 }
 
+export type LibraryView = "all" | "favorites" | "recent" | "archive";
+export type SortKey = "relevance" | "added" | "title" | "duration" | "published";
+
+export interface ListQuery {
+  text: string;
+  view: LibraryView;
+  platforms: Platform[];
+  kinds: ItemKind[];
+  sort: SortKey;
+  descending: boolean;
+  offset: number;
+  limit: number;
+}
+
+export interface ItemPage {
+  total: number;
+  offset: number;
+  items: LibraryItemDto[];
+  /** `no_searchable_terms`: the text had no letter or digit; the filtered library is shown (SEA-04). */
+  notice: "no_searchable_terms" | null;
+}
+
+export interface AssetDto {
+  id: string;
+  /** Last path component only; full paths stay in the backend. */
+  fileName: string;
+  rootLabel: string;
+  rootStatus: "unknown" | "available" | "disconnected" | "inaccessible";
+  integrityState: "unknown" | "verified" | "missing" | "corrupt" | "modified";
+  sizeBytes: number | null;
+  container: string | null;
+  videoCodec: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+}
+
+export interface ItemDetail {
+  item: LibraryItemDto;
+  canonicalUrl: string | null;
+  creator: string | null;
+  description: string | null;
+  notes: string;
+  publishedAt: number | null;
+  publishedDate: string | null;
+  metadataStatus: "pending" | "fetching" | "ready" | "partial" | "failed";
+  updatedAt: number;
+  archived: boolean;
+  assets: AssetDto[];
+}
+
+export type ImportSource = "files" | "folder";
+
+export interface ImportSummary {
+  /** false when the dialog was closed without a choice. */
+  picked: boolean;
+  imported: number;
+  alreadyImported: number;
+  duplicates: number;
+  rejected: number;
+  skipped: number;
+  ignored: number;
+  canceled: boolean;
+  /** SPEC §19 code of the first refused file. */
+  firstError: string | null;
+}
+
+/** Imports the UI did not start itself (files dropped on the window). */
+export type ImportStatus = { phase: "started" } | { phase: "finished"; summary: ImportSummary } | { phase: "failed"; error: DomainError };
+
+export type Unlisten = () => void;
+
 export interface LibraryClient {
-  listItems(): Promise<LibraryItemDto[]>;
+  listItems(query: ListQuery): Promise<ItemPage>;
+  getItem(id: string): Promise<ItemDetail>;
+  importMedia(source: ImportSource): Promise<ImportSummary>;
+  onImportStatus(cb: (s: ImportStatus) => void): Promise<Unlisten>;
 }
 
 // ---- IPC contract v1 (tests/fixtures/ipc-contract.json, SPEC §18) ----

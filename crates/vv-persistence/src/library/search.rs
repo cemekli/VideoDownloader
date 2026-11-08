@@ -109,6 +109,8 @@ pub struct Filters {
     pub metadata_status: Vec<MetadataStatus>,
     pub favorite_only: bool,
     pub archived: ArchiveFilter,
+    /// Only items added at or after this UTC ms ("Recently Added", §9.2).
+    pub added_since: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -258,6 +260,10 @@ fn filter_sql(f: &Filters, params: &mut Vec<Value>) -> String {
     );
     if f.favorite_only {
         w.push("i.is_favorite = 1".into());
+    }
+    if let Some(t) = f.added_since {
+        params.push(Value::Integer(t));
+        w.push("i.added_at >= ?".into());
     }
     match f.archived {
         ArchiveFilter::Exclude => w.push("i.archived_at IS NULL".into()),

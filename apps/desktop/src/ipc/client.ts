@@ -1,22 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppStatus, BackendClient, Diagnostics, DomainError, LibraryItemDto, Pong } from "./types";
-import libraryFixture from "@fixtures/library-small.json";
+import { listen } from "@tauri-apps/api/event";
+import type { AppStatus, BackendClient, Diagnostics, DomainError, ImportStatus, ImportSummary, ItemDetail, ItemPage, Pong } from "./types";
 import contract from "@fixtures/ipc-contract.json";
+import { IpcError } from "./errors";
+import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
+
+export { IpcError } from "./errors";
 
 /** Must match `CONTRACT_VERSION` in `src-tauri/src/commands.rs`. */
 export const CONTRACT_VERSION = 1;
 
-/** Error raised by every client call. `domain` is set when the backend sent a SPEC §18.3 DomainError. */
-export class IpcError extends Error {
-  readonly code: string;
-  readonly domain: DomainError | null;
-  constructor(code: string, message: string, domain: DomainError | null = null) {
-    super(message);
-    this.name = "IpcError";
-    this.code = code;
-    this.domain = domain;
-  }
-}
+/** Event the backend emits for imports started by a drop on the window (`library.rs`). */
+export const IMPORT_EVENT = "import-status";
 
 function isDomainError(v: unknown): v is DomainError {
   return typeof v === "object" && v !== null && typeof (v as DomainError).code === "string" && typeof (v as DomainError).messageKey === "string";
@@ -40,16 +35,21 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
+export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStatus">;
+
 /**
  * Deterministic client backed by the shared fixture set (SPEC §25.2).
  * Used by `vite --mode fixture`, Vitest and Playwright E2E.
  */
-export function createFixtureClient(items: LibraryItemDto[] = libraryFixture.items as LibraryItemDto[]): BackendClient {
+export function createFixtureClient(records?: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureClient {
+  const library = createFixtureLibrary(records ?? scenarioRecords(scenario), scenario);
   return {
     kind: "fixture",
-    async listItems() {
-      return structuredClone(items);
-    },
+    listItems: (q) => library.listItems(q),
+    getItem: (id) => library.getItem(id),
+    importMedia: (s) => library.importMedia(s),
+    onImportStatus: (cb) => library.onImportStatus(cb),
+    emitImportStatus: (s) => library.emitImportStatus(s),
     async ping(nonce) {
       return { nonce, contractVersion: CONTRACT_VERSION };
     },
@@ -62,14 +62,19 @@ export function createFixtureClient(items: LibraryItemDto[] = libraryFixture.ite
   };
 }
 
-/** Real Tauri IPC client (STATE.md F0.3). */
+/** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
     kind: "desktop",
-    async listItems() {
-      // There is no library storage before F1 (SQLite), so the desktop library
-      // is genuinely empty. F1 replaces this with the `list_items` command.
-      return [];
+    listItems: (query) => call<ItemPage>("list_items", { query }),
+    getItem: (id) => call<ItemDetail>("get_item", { id }),
+    importMedia: (source) => call<ImportSummary>("import_media", { source }),
+    async onImportStatus(cb) {
+      try {
+        return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));
+      } catch (reason) {
+        throw toIpcError("listen", reason);
+      }
     },
     ping: (nonce) => call<Pong>("ping", { nonce }),
     getStatus: () => call<AppStatus>("get_status"),
@@ -77,6 +82,14 @@ export function createTauriClient(): BackendClient {
   };
 }
 
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow"];
+
+/** `?fixture=empty|many|error|slow` picks a fixture data set (fixture mode only). */
+export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
+  const s = new URLSearchParams(search).get("fixture");
+  return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";
+}
+
 export function createClient(mode: string = import.meta.env.MODE): BackendClient {
-  return mode === "fixture" || mode === "test" ? createFixtureClient() : createTauriClient();
+  return mode === "fixture" || mode === "test" ? createFixtureClient(undefined, scenarioFromUrl()) : createTauriClient();
 }

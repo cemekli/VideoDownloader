@@ -1,7 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main window: only VideoVault's own commands. No core, filesystem, shell or HTTP permissions (SPEC §10.1, §20).",
+  "description": "Main window: only VideoVault's own commands, plus listening for the import event. No filesystem, dialog, shell or HTTP permissions (SPEC §10.1, §20; ADR-0013).",
   "windows": ["main"],
-  "permissions": ["allow-ping", "allow-get-status", "allow-get-diagnostics"]
+  "permissions": [
+    "allow-ping",
+    "allow-get-status",
+    "allow-get-diagnostics",
+    "allow-list-items",
+    "allow-get-item",
+    "allow-import-media",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
 }
