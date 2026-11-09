@@ -969,13 +969,14 @@ pub fn set_thumbnail(
     Ok(())
 }
 
-/// Local items whose original video has no thumbnail yet (IMP-06 backlog).
+/// Local items whose original video has no thumbnail yet (IMP-06 backlog),
+/// newest first: the grid opens on the newest items.
 pub fn items_missing_thumbnail(c: &Connection, limit: u32) -> Result<Vec<String>> {
     let mut s = c.prepare(
         "SELECT i.id FROM library_item i WHERE i.thumbnail_asset_id IS NULL AND i.removed_at IS NULL \
          AND EXISTS (SELECT 1 FROM media_asset a WHERE a.library_item_id = i.id AND a.role = 'original' \
          AND a.media_kind = 'video' AND a.integrity_state IN ('verified', 'unknown')) \
-         ORDER BY i.added_at, i.seq LIMIT ?1",
+         ORDER BY i.added_at DESC, i.seq DESC LIMIT ?1",
     )?;
     let v = s
         .query_map([limit], |r| r.get(0))?

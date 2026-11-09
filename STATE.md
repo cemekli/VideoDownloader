@@ -3,7 +3,7 @@
 | Bilgi | Değer |
 |---|---|
 | Son güncelleme | 7 Kasım 2026 |
-| Referans belge | [SPEC.md](./SPEC.md) v1.8 |
+| Referans belge | [SPEC.md](./SPEC.md) v1.9 |
 | Aktif faz | **F1 — Çevrimdışı kütüphane çekirdeği** (F0 ✅) |
 | Genel ilerleme | 19 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
@@ -36,11 +36,11 @@ Bu dosya projenin tek durum kaynağıdır. Her faz bir **çıktı** üretir ve b
 | Faz | Hedef | SPEC | Çıktı | Durum |
 |---|---|---|---|---|
 | F0 | Temel ve test altyapısı | M0 | Windows'ta açılan boş uygulama, yeşil CI, ilk ADR'ler | ✅ |
-| F1 | Çevrimdışı kütüphane çekirdeği | M1 (1/2) | Ağsız kaydet, import et, ara | ⬜ |
-| F2 | Düzenleme, oynatma, taşınabilirlik | M1 (2/2) | İndirmesiz tam Windows kütüphanesi | ⬜ |
-| F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | 🟨 |
-| F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⬜ |
-| F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | ⬜ |
+| F1 | Çevrimdışı kütüphane çekirdeği | M1 (1/2) | Ağsız kaydet, import et, ara | ✅ |
+| F2 | Düzenleme, oynatma, taşınabilirlik | M1 (2/2) | İndirmesiz tam Windows kütüphanesi | ✅ |
+| F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | ✅ |
+| F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⏸ F5'ten sonraya ertelendi |
+| F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | ⬜ sıradaki |
 | F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | ⬜ |
 | F7 | Anlamsal ve görsel arama | M5 | Hibrit ve görsel arama | ⬜ |
 | F8 | Android | M6 | Android uygulaması | ⬜ |
@@ -165,26 +165,28 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
 | F3.1 | Kalıcı iş kuyruğu: lease, generation, retry, `cancel_reason`, bağımlılıklar | §12.3, §13 | AC-10, AC-11, AC-58 + çökme testleri | ✅ Migration 0005 + `vv-persistence::jobs`, 16 Rust testi (`tests/jobs.rs`: AC-10/AC-11 kuyruk tarafı, AC-58, DB yeniden açılarak çökme kurtarma); ADR-0019; CI #42495755186 (Linux + Windows) yeşil, PR #23 |
-| F3.2 | Yönetilen araç manifesti (yt-dlp, JS runtime, FFmpeg) ve sağlık kontrolü | §14.1, §23.1 | AC-25; `TOOL_MISSING` ve `TOOL_BLOCKED` testleri | 🟨 `vv-engine::toolset` (SHA-256 + sürüm, `ok`/`missing`/`blocked`/`checksum_mismatch`), açılışta arka planda kontrol, Settings → Diagnostics (MT-11); gerçek araçlarla `tests/real_ytdlp.rs` (değişik bayt, eksik dosya, Unix'te çalıştırılamayan dosya); ADR-0021; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.3 | Ağ politikasının uygulanması (F0.9 kararına göre) | §20.2 | AC-29 tam | 🟨 Her yt-dlp çalışması kendi `vv-netguard` proxy'si arkasında; gerçek yt-dlp ile canary sunucuya, 169.254.169.254'e ve `[::ffff:127.0.0.1]`'e redirect → `URL_BLOCKED`, canary'ye 0 bağlantı (`tests/real_ytdlp.rs`, AC-29); ADR-0021; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.4 | Uzak metadata ve thumbnail (backend üzerinden) | CAP-04, CAP-07, §3 | fixture testleri + gerçek herkese açık URL | 🟨 Metadata işi (başlık, kanal, süre, tarih, formatlar, JPEG thumbnail ≤ 4 MiB), migration 0006 `remote_formats`; fixture testleri (`tests/engine.rs`) + yerel sunucudan gerçek yt-dlp ile metadata ve thumbnail; gerçek herkese açık URL Cuma'nın seçeceği URL ile bekliyor; CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.5 | Format listesi, kalite önayarları, oynatılabilir hedef container | DL-01, DL-02 | fixture testleri | 🟨 `vv-engine::formats`: `best`/`1080`/`720`/`audio`, HEVC'den kaçınma, mp4/webm/mkv hedefi, kesin/yaklaşık boyut; birim testleri + IPC testi (arayüz yalnızca önayar adı gönderir); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.6 | İndirme, birleştirme, bütünlük doğrulaması, staging'den final konuma | DL-03…07, §14.3 | AC-08, AC-09, AC-12 | 🟨 `vv-engine::download`: staging → doğrulama (ffprobe, boyut, SHA-256) → checkpoint → yerine taşıma → `succeed_with`; AC-08 (merge), AC-09 (bilinmeyen toplam), AC-12 (disk/kota), bozuk dosya, staging dışı yol, çökme sonrası benimseme (`tests/engine.rs`) + yerel sunucudan gerçek indirme (`tests/real_ytdlp.rs`); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
+| F3.2 | Yönetilen araç manifesti (yt-dlp, JS runtime, FFmpeg) ve sağlık kontrolü | §14.1, §23.1 | AC-25; `TOOL_MISSING` ve `TOOL_BLOCKED` testleri | ✅ `vv-engine::toolset` (SHA-256 + sürüm, `ok`/`missing`/`blocked`/`checksum_mismatch`), açılışta arka planda kontrol, Settings → Diagnostics (MT-11); gerçek araçlarla `tests/real_ytdlp.rs` (değişik bayt, eksik dosya, Unix'te çalıştırılamayan dosya); ADR-0021; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.3 | Ağ politikasının uygulanması (F0.9 kararına göre) | §20.2 | AC-29 tam | ✅ Her yt-dlp çalışması kendi `vv-netguard` proxy'si arkasında; gerçek yt-dlp ile canary sunucuya, 169.254.169.254'e ve `[::ffff:127.0.0.1]`'e redirect → `URL_BLOCKED`, canary'ye 0 bağlantı (`tests/real_ytdlp.rs`, AC-29); ADR-0021; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.4 | Uzak metadata ve thumbnail (backend üzerinden) | CAP-04, CAP-07, §3 | fixture testleri + gerçek herkese açık URL | ✅ Metadata işi (başlık, kanal, süre, tarih, formatlar, JPEG thumbnail ≤ 4 MiB), migration 0006 `remote_formats`; fixture testleri (`tests/engine.rs`) + yerel sunucudan gerçek yt-dlp ile metadata ve thumbnail; gerçek herkese açık URL Cuma'nın seçeceği URL ile bekliyor; CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.5 | Format listesi, kalite önayarları, oynatılabilir hedef container | DL-01, DL-02 | fixture testleri | ✅ `vv-engine::formats`: `best`/`1080`/`720`/`audio`, HEVC'den kaçınma, mp4/webm/mkv hedefi, kesin/yaklaşık boyut; birim testleri + IPC testi (arayüz yalnızca önayar adı gönderir); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.6 | İndirme, birleştirme, bütünlük doğrulaması, staging'den final konuma | DL-03…07, §14.3 | AC-08, AC-09, AC-12 | ✅ `vv-engine::download`: staging → doğrulama (ffprobe, boyut, SHA-256) → checkpoint → yerine taşıma → `succeed_with`; AC-08 (merge), AC-09 (bilinmeyen toplam), AC-12 (disk/kota), bozuk dosya, staging dışı yol, çökme sonrası benimseme (`tests/engine.rs`) + yerel sunucudan gerçek indirme (`tests/real_ytdlp.rs`); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
 | F3.7 | Hata sınıflandırması ve durum eşlemesi | §12.1, §19 | tablo bazlı birim testleri | ✅ §19'un tüm kodları (`ErrorCode`), `vv-persistence::classify` (iş davranışı + §12.1 eşlemesi), 7 tablo bazlı Rust testi (`tests/classify.rs`, kod listesi SPEC.md'den okunur) + `labels.test.ts`; ADR-0020; CI #42500414511 (Linux + Windows) yeşil, PR #24 |
-| F3.8 | Downloads ekranı | §9.3 | Yolculuk 6 E2E | 🟨 Downloads ekranı (aktif/dikkat isteyen/tamamlanan, faz, gerçek ve belirsiz ilerleme, retry/cancel/kısmi dosya silme), Download penceresi, 11 yeni komut; `Downloads.test.tsx`, Yolculuk 6 E2E (`e2e/journeys.spec.ts`, 3 ekran boyutu), axe taraması; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.9 | Depolama kotası ve kök taşıma (`storage_move`) | DATA-07, DATA-08 | AC-33, AC-43 | 🟨 Kota ve kullanım (Settings), `storage_move` adım tablosu; AC-33 (`tests/engine.rs`), AC-43 her adımda öldürülen taşıma devam ediyor ve kopya kaybolmuyor (`tests/storage_move.rs`); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.10 | Gizli veri redaksiyonu ve canary testleri | §20.3 | AC-18 | 🟨 Sahte yt-dlp'nin hata çıktısındaki ve metadata alanlarındaki canary (`VVCANARY-7f3a91`) veritabanının metin alanlarında, olaylarda, JSON dışa aktarımda ve iş listesinde yok (AC-18, `tests/engine.rs`); kaynakta yalnızca `şema://host`; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) |
-| F3.11 | Platform destek matrisi (izinli gerçek URL'lerle) | §6 | `docs/platform-support.md` tarihli manuel kanıt | ⬜ |
+| F3.8 | Downloads ekranı | §9.3 | Yolculuk 6 E2E | ✅ Downloads ekranı (aktif/dikkat isteyen/tamamlanan, faz, gerçek ve belirsiz ilerleme, retry/cancel/kısmi dosya silme), Download penceresi, 11 yeni komut; `Downloads.test.tsx`, Yolculuk 6 E2E (`e2e/journeys.spec.ts`, 3 ekran boyutu), axe taraması; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.9 | Depolama kotası ve kök taşıma (`storage_move`) | DATA-07, DATA-08 | AC-33, AC-43 | ✅ Kota ve kullanım (Settings), `storage_move` adım tablosu; AC-33 (`tests/engine.rs`), AC-43 her adımda öldürülen taşıma devam ediyor ve kopya kaybolmuyor (`tests/storage_move.rs`); Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.10 | Gizli veri redaksiyonu ve canary testleri | §20.3 | AC-18 | ✅ Sahte yt-dlp'nin hata çıktısındaki ve metadata alanlarındaki canary (`VVCANARY-7f3a91`) veritabanının metin alanlarında, olaylarda, JSON dışa aktarımda ve iş listesinde yok (AC-18, `tests/engine.rs`); kaynakta yalnızca `şema://host`; Linux `npm run verify` ✅ (9 Kas 2026); CI [#42592325796](https://github.com/cemekli/VideoDownloader/actions/runs/42592325796) Linux ve Windows yeşil (9 Kas 2026) Elle: Cuma'nın Windows 11 gerçek indirmeleri (9 Kas 2026, `docs/platform-support.md`). |
+| F3.11 | Platform destek matrisi (izinli gerçek URL'lerle) | §6 | `docs/platform-support.md` tarihli manuel kanıt | ✅ 9 Kas 2026, Cuma, Windows 11: YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch (VOD) indirildi; Dailymotion da PR #26 düzeltmesinden sonra indirildi; Reddit girişsiz engelli (F5.2'ye kaldı). |
 
 **Çıkış kapısı**
 
 - [x] En az bir izinli gerçek indirme uçtan uca `manual verified`: Cuma, Windows 11, 9 Kas 2026 09:30. YouTube videosu 720p indirildi ve uygulamada oynadı. İlk denemede medya klasörünün diski BitLocker ile kilitliydi; iş `blocked`/`storage_root` oldu, kilit açılınca Try again ile bitti.
-- [ ] Yukarıdaki AC'ler otomatik testte geçiyor.
-- [ ] Destek iddiaları yalnızca tarihli kanıtla `docs/platform-support.md` içinde.
+- [x] Yukarıdaki AC'ler otomatik testte geçiyor: Linux ve Windows CI her PR'da yeşil (son: [CI #42627721003](https://github.com/cemekli/VideoDownloader/actions/runs/42627721003), PR #30).
+- [x] Destek iddiaları yalnızca tarihli kanıtla `docs/platform-support.md` içinde (9 Kas 2026).
 
 ---
 
 ## F4 — Windows dağıtımı ve MVP sürümü (M2, 2. yarı)
+
+> **Sıra değişikliği (9 Kas 2026, Cuma'nın kararı):** F4, F5'ten sonraya ertelendi. Uygulamayı şimdilik yalnızca Cuma kullanıyor (release exe yeterli); Reddit ve oturum isteyen içerik F5'e bağlı. F5 kod olarak F4'e bağlı değil; F5.1 kendi güvenlik testlerini taşır.
 
 **Hedef:** Uygulamayı güvenli biçimde paketleyip ilk sürümü yayımlamak.
 
@@ -294,12 +296,14 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1 ve F2 tamamlandı** (30/74 alt görev ✅; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt CI yerine Windows + Linux `verify` raporları ve Windows elle kontrolü (`docs/testing.md` "CI ne zaman çalışır"). F3 başladı: F3.1 kalıcı iş kuyruğu ✅ (31/74, ADR-0019). F3.7 hata sınıflandırması ✅ (32/74, ADR-0020). F3.2–F3.6 ve F3.8–F3.10 tek PR'da yazıldı (🟨, ADR-0021): uygulama artık izinli bir videoyu indirip oynatabiliyor. ✅ için CI ve Windows'ta gerçek bir indirme gerekiyor. F3.4'ün gerçek URL testi, F3.11 ve çıkış kapısı Cuma'nın seçeceği izinli URL'leri bekliyor.
+**F0, F1, F2 ve F3 tamamlandı** (41/74 alt görev ✅; M1 ve M2'nin ilk yarısı bitti). F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **Sıradaki: F5 (yetkili oturum), F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | F3 tamamlandı: F3.2–F3.6, F3.8–F3.11 ✅, `docs/platform-support.md` ilk tarihli platform sonuçlarıyla dolduruldu. F4 ertelendi, sıradaki faz F5 (Cuma'nın kararı). Faz özetinde F1/F2 de ✅ olarak düzeltildi. |
+| 9 Kas 2026 | Windows testinden: thumbnail'ler en yeni öğeden başlar (grid'in üstü önce dolar); liste yenilemesi yüklenmiş sayfaları korur ve değişmeyen veriyi yeniden çizmez (grid zıplaması). Reddit medya bağlantıları (`packaged-media.redd.it` vb.) artık gönderi sanılmaz: SPEC v1.9, normalizasyon sürümü 5. |
 | 9 Kas 2026 | Reddit bilinen platform oldu (gönderi, `redd.it`; paylaşım bağlantısı ve `v.redd.it` çevrimiçi çözülür): SPEC v1.8, normalizasyon sürümü 4, migration 0011. |
 | 9 Kas 2026 | Thumbnail üretimi paralel: çekirdek sayısının yarısı kadar (1–4) FFmpeg aynı anda. Pencere titremesinin yalnızca `tauri dev`'de olduğu exe ile doğrulandı (Cuma). Twitch geçmiş yayın indirmesi çalıştı (Cuma). |
 | 9 Kas 2026 | Canlı yayın indirilmiyor (SPEC §6): metadata `is_live` kaydediyor (migration 0010), Download penceresi nedenini söylüyor, motor ve komut reddediyor. Yerel videoların thumbnail'leri artık arka planda üretiliyor: FFmpeg veritabanı kilidi tutulmadan çalışıyor, başarısız öğe sırayı tıkamıyor, her yeni thumbnail ekrana hemen geliyor (önceden açılışta ve import sonunda 200'lük parti kilit tutarak üretiliyordu). |

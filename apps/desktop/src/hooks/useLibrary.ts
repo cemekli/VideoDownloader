@@ -18,20 +18,45 @@ export function useLibrary(client: LibraryClient, query: Omit<ListQuery, "offset
   const [data, setData] = useState<LibraryData>({ status: "loading" });
   const generation = useRef(0);
   const key = JSON.stringify(query);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
+  const lastKey = useRef<string | null>(null);
   useEffect(() => {
     const gen = ++generation.current;
-    setData((d) => (d.status === "ready" ? d : { status: "loading" }));
-    client
-      .listItems({ ...query, offset: 0, limit: PAGE_SIZE })
-      .then((p) => gen === generation.current && setData({ status: "ready", items: p.items, total: p.total, notice: p.notice, loadingMore: false }))
+    // A reload of the same query (a thumbnail or title arrived) keeps the
+    // pages already loaded, so the grid does not shrink back to the first
+    // page and jump while the user looks at it.
+    const same = lastKey.current === key;
+    lastKey.current = key;
+    const cur = dataRef.current;
+    const want = same && cur.status === "ready" ? Math.max(PAGE_SIZE, cur.items.length) : PAGE_SIZE;
+    if (!same) setData((d) => (d.status === "ready" ? d : { status: "loading" }));
+    const load = async () => {
+      // Pages of PAGE_SIZE (the backend caps one page) up to `want` items.
+      const first = await client.listItems({ ...query, offset: 0, limit: PAGE_SIZE });
+      const items = [...first.items];
+      while (items.length < Math.min(want, first.total) && gen === generation.current) {
+        const next = await client.listItems({ ...query, offset: items.length, limit: PAGE_SIZE });
+        if (next.items.length === 0) break;
+        items.push(...next.items);
+      }
+      return { ...first, items };
+    };
+    load()
+      .then((p) => {
+        if (gen !== generation.current) return;
+        setData((d) =>
+          d.status === "ready" && d.total === p.total && d.notice === p.notice && sameItems(d.items, p.items)
+            ? d
+            : { status: "ready", items: p.items, total: p.total, notice: p.notice, loadingMore: false },
+        );
+      })
       .catch((e: unknown) => gen === generation.current && setData({ status: "error", code: errorCode(e) }));
     // `key` stands for `query`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, key, reloadKey]);
 
-  const dataRef = useRef(data);
-  dataRef.current = data;
   const queryRef = useRef(query);
   queryRef.current = query;
 
@@ -56,4 +81,9 @@ export function useLibrary(client: LibraryClient, query: Omit<ListQuery, "offset
   }, [client]);
 
   return { data, loadMore };
+}
+
+/** Same items in the same order with the same content: nothing to redraw. */
+function sameItems(a: LibraryItemDto[], b: LibraryItemDto[]): boolean {
+  return a.length === b.length && a.every((x, i) => JSON.stringify(x) === JSON.stringify(b[i]));
 }

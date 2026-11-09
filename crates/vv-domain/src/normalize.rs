@@ -20,7 +20,7 @@ use url::Url;
 /// Version of the rules below. Version 0 means "stored as entered" (no
 /// normalization), which is what a row has before its first renormalization.
 /// 2: Dailymotion is recognized (it was generic). 3: Twitch. 4: Reddit.
-pub const NORMALIZATION_VERSION: u32 = 4;
+pub const NORMALIZATION_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -399,7 +399,8 @@ fn twitch(host: &str, url: &Url) -> Option<Match> {
 
 /// A post id: base 36 (`1abc2de`).
 fn reddit_id(s: &str) -> Option<String> {
-    (valid(s, 3, 13, &[]) && s.chars().all(|c| !c.is_ascii_uppercase())).then(|| s.to_owned())
+    // Post ids are base36, today 7 characters; media ids are 13.
+    (valid(s, 3, 10, &[]) && s.chars().all(|c| !c.is_ascii_uppercase())).then(|| s.to_owned())
 }
 
 fn reddit(host: &str, url: &Url) -> Option<Match> {
@@ -411,16 +412,21 @@ fn reddit(host: &str, url: &Url) -> Option<Match> {
         )
     };
     let seg = segments(url);
-    if host_is(host, "redd.it") && !host_is(host, "v.redd.it") && host != "i.redd.it" {
+    // Only redd.it itself is a post short link. Its subdomains (v., i.,
+    // preview., packaged-media. ...) serve media whose ids are not post ids.
+    if host == "redd.it" || host == "www.redd.it" {
         return seg
             .first()
             .and_then(|s| reddit_id(s))
             .and_then(post)
             .or_else(|| other(Platform::Reddit, Shape::ShortLink));
     }
-    // v.redd.it/<media id>: the media, not the post; its id is not the
-    // post id, so the post is known only after metadata.
-    if host_is(host, "v.redd.it") {
+    // v.redd.it/<media id> and the other media hosts: the media, not the
+    // post; the post is known only after metadata.
+    if host == "i.redd.it" {
+        return None; // images
+    }
+    if host_is(host, "redd.it") {
         return other(Platform::Reddit, Shape::Unknown);
     }
     if !host_is(host, "reddit.com") {
