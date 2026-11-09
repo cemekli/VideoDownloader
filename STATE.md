@@ -5,7 +5,7 @@
 | Son güncelleme | 9 Kasım 2026 |
 | Referans belge | [SPEC.md](./SPEC.md) v1.9 |
 | Aktif faz | **F5 — Yetkili oturum** (F0–F3 ✅, F4 ertelendi) |
-| Genel ilerleme | 43 / 74 alt görev doğrulandı |
+| Genel ilerleme | 45 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
 | Son doğrulama | 9 Kasım 2026: GitHub Actions (windows-latest + ubuntu-latest) tüm kapılar geçti, [CI #42674665024](https://github.com/cemekli/VideoDownloader/actions/runs/42674665024) (PR #35). |
 
@@ -216,9 +216,9 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 |---|---|---|---|---|
 | F5.1 | `AuthProfile`, izin akışı, işletim sistemi secret store | §11.6, §20.3, DEC-08 | canary testi; secret DB'de yok | ✅ PR #32, CI run 42634841520 yeşil (Linux + Windows; DPAPI testi Windows'ta): `vv-secrets`, migration 0012, `vv_persistence::auth`, canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. |
 | F5.2 | `--cookies-from-browser` (Firefox ve Chrome) ve hata teşhisi | §21.1 | VK-01…05, VK-09 | ✅ PR #35: Firefox (Chrome Windows'ta app-bound şifreli, F5.7'ye), deneme sırası ve kanıt, `COOKIE_ACCESS_FAILED` teşhisi, Settings → Sessions ve "Connect a session"; ADR-0023. CI [#42674665024](https://github.com/cemekli/VideoDownloader/actions/runs/42674665024) Linux ve Windows yeşil. Elle: Cuma, Windows 11, release exe, Firefox oturumuyla gerçek Reddit gönderisi indirildi ve oynatıldı (9 Kas 2026). |
-| F5.3 | Çerez dosyası için iş başına çalışma kopyası | §21.1 | AC-55, VK-10 | 🟨 PR açık: dosya bir kez okunur, yalnızca platformun çerezleri DPAPI'de saklanır; her çalıştırmada yalnızca kullanıcıya açık klasörde kopya, iş sonunda (başarı/hata/iptal) ve çökmeden sonra açılışta silinir; sahipsiz secret uzlaştırması. ADR-0024. ✅ için CI yeşil ve Cuma'nın Windows'ta çerez dosyasıyla gerçek indirmesi (VK-10). |
-| F5.4 | Oturum doğrulama kanıtı kuralı ve `verify_session` | §12.1 | AC-19, AC-54 | 🟨 PR açık: `ACCESS_DENIED` de (a) kanıtına girer; profille `ACCESS_DENIED` profile dokunmaz (AC-19); `verify_session` giriş gerektirmiş öğeyle (a) kanıtı; (b) yok (yt-dlp'de platform kontrolü yok, `docs/platform-support.md`). ADR-0024. ✅ için CI yeşil ve Cuma'nın Reddit oturumunda Check now denemesi. |
-| F5.5 | Sessions ekranı | §9.3 | E2E | 🟨 PR açık: kenar çubuğunda Sessions; durum, son doğrulama, izinler, Check now, Reconnect, Clear, Remove, giriş sayfası; `e2e/sessions.spec.ts`, axe taraması. ADR-0024. ✅ için CI yeşil ve Cuma'nın ekranı Windows'ta denemesi. |
+| F5.3 | Çerez dosyası için iş başına çalışma kopyası | §21.1 | AC-55, VK-10 | 🟨 PR #36 merge edildi, CI yeşil: dosya bir kez okunur, yalnızca platformun çerezleri DPAPI'de saklanır; her çalıştırmada yalnızca kullanıcıya açık klasörde kopya, iş sonunda (başarı/hata/iptal) ve çökmeden sonra açılışta silinir; sahipsiz secret uzlaştırması. ADR-0024. ✅ için CI yeşil ve Cuma'nın Windows'ta çerez dosyasıyla gerçek indirmesi (VK-10). |
+| F5.4 | Oturum doğrulama kanıtı kuralı ve `verify_session` | §12.1 | AC-19, AC-54 | ✅ PR #36: `ACCESS_DENIED` de (a) kanıtına girer; profille `ACCESS_DENIED` profile dokunmaz (AC-19); `verify_session` giriş gerektirmiş öğeyle (a) kanıtı; (b) yok (`docs/platform-support.md`). ADR-0024. CI [#42682887513](https://github.com/cemekli/VideoDownloader/actions/runs/42682887513) Linux ve Windows yeşil. Elle: Cuma, Windows 11, release exe, Reddit Firefox oturumunda Check now geçti (9 Kas 2026, 22:52). |
+| F5.5 | Sessions ekranı | §9.3 | E2E | ✅ PR #36: kenar çubuğunda Sessions; durum, son doğrulama, izinler, Check now, Reconnect, Clear, Remove, giriş sayfası; `e2e/sessions.spec.ts`, axe taraması. ADR-0024. CI #42682887513 yeşil. Elle: Cuma ekranı Windows'ta kullandı (9 Kas 2026). F5.2'de bağlanmış oturumda doğrulama izni olmadığı için Check now gizliydi; artık izin verilene kadar pasif görünür ve ne yapılacağını söyler. |
 | F5.6 | VK canlı test matrisi | §21.2 | VK-01…10 tarihli kayıt | ⬜ |
 | F5.7 | Uygulamaya ait tarayıcı profili PoC (araştırma) | §21.3, DEC-10 | ADR | ⬜ |
 
@@ -296,12 +296,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1 ve F5.2 de ✅, toplam 43/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **Sıradaki: F5 (yetkili oturum), F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026).
+**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1, F5.2, F5.4 ve F5.5 de ✅, toplam 45/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **Sıradaki: F5 (yetkili oturum), F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | F5.4 ve F5.5 ✅: Cuma'nın Reddit oturumunda Check now geçti. Check now artık doğrulama izni yokken gizlenmiyor, pasif görünüp izni gösteriyor. |
 | 9 Kas 2026 | F5.3–F5.5 yazıldı (🟨): çerez dosyası ve iş başına çalışma kopyası, `verify_session` ve `ACCESS_DENIED` kanıtı, Sessions ekranı, 4 yeni komut. ADR-0024. |
 | 9 Kas 2026 | F5.2 ✅: Reddit Firefox oturumuyla indi ve oynadı (Cuma, release exe). Taze derlemeden sonraki ilk açılışta thumbnail'lerin ~10 s gecikmesi ve pencerenin bir kez küçülmesi uygulamadan değil, Avast Antivirus'ün yeni exe'yi ve araçları taramasından; Avast kapalıyken thumbnail'ler hemen geldi (Cuma). F4.7 bilinen kısıtlarına yazılacak. |
 | 9 Kas 2026 | F5.2: Firefox çereziyle oturum (`--cookies-from-browser firefox:<klasör>`), profilsiz `LOGIN_REQUIRED` sonrası izinli profille yeniden deneme ve §12.1 kanıtı, Settings → Sessions, indirme satırında "Connect a session"; engellenen iş kodunu saklar. ADR-0023. |
