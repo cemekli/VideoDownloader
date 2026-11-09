@@ -7,6 +7,7 @@
 pub mod capture_commands;
 pub mod commands;
 pub mod data_commands;
+pub mod diag;
 pub mod download_commands;
 pub mod engine;
 pub mod instance;
@@ -105,11 +106,12 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             library_commands::THUMB_SCHEME,
             |ctx, request, responder| {
                 let app = ctx.app_handle().clone();
+                let queued = diag::now_ms();
+                thumb_protocol::count_request();
                 tauri::async_runtime::spawn_blocking(move || {
-                    responder.respond(thumb_protocol::handle(
-                        &app.state::<library::LibraryState>(),
-                        &request,
-                    ))
+                    let r = thumb_protocol::handle(&app.state::<library::LibraryState>(), &request);
+                    thumb_protocol::count_answer(r.status().as_u16(), diag::now_ms() - queued);
+                    responder.respond(r)
                 });
             },
         )
@@ -151,6 +153,7 @@ fn e2e_media_root() -> Option<std::path::PathBuf> {
 }
 
 pub fn run() {
+    diag::start();
     #[allow(unused_mut)]
     let mut context = tauri::generate_context!();
     #[cfg(feature = "e2e-cdp")]
@@ -168,15 +171,40 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            if let Ok(dir) = instance::data_dir(app.handle()) {
+                diag::open(&dir);
+            }
+            diag::log("setup start");
             instance::take_library_lock(app.handle())?;
-            library::open_library(app.handle())
+            let r = diag::timed("open_library", 0, || library::open_library(app.handle()));
+            diag::log("setup end");
+            r
         })
         // Files dropped on the window go to import from here; the webview
         // never handles their paths (ADR-0013).
-        .on_window_event(|window, event| {
-            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+        // A second "page load Finished" means the webview reloaded.
+        .on_page_load(|_, payload| {
+            diag::log(&format!("page load {:?}", payload.event()));
+        })
+        .on_window_event(|window, event| match event {
+            WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
                 library::import_dropped(window.app_handle(), paths.clone());
             }
+            WindowEvent::Resized(s) => diag::log(&format!(
+                "window resized {}x{} maximized={:?} minimized={:?}",
+                s.width,
+                s.height,
+                window.is_maximized().ok(),
+                window.is_minimized().ok()
+            )),
+            WindowEvent::Moved(p) => diag::log(&format!("window moved {},{}", p.x, p.y)),
+            WindowEvent::Focused(f) => diag::log(&format!("window focused={f}")),
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                diag::log(&format!("window scale {scale_factor}"))
+            }
+            WindowEvent::CloseRequested { .. } => diag::log("window close requested"),
+            WindowEvent::Destroyed => diag::log("window destroyed"),
+            _ => {}
         });
     builder
         .run(context)
