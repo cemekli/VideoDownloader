@@ -107,10 +107,10 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             |ctx, request, responder| {
                 let app = ctx.app_handle().clone();
                 let queued = diag::now_ms();
-                thumb_protocol::count_request();
+                let n = thumb_protocol::count_request(request.uri());
                 tauri::async_runtime::spawn_blocking(move || {
                     let r = thumb_protocol::handle(&app.state::<library::LibraryState>(), &request);
-                    thumb_protocol::count_answer(r.status().as_u16(), diag::now_ms() - queued);
+                    thumb_protocol::count_answer(n, r.status().as_u16(), diag::now_ms() - queued);
                     responder.respond(r)
                 });
             },
