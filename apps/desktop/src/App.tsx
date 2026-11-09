@@ -153,14 +153,21 @@ export function App({ client }: { client?: BackendClient }) {
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     let live = true;
+    // Metadata for many bookmarks finishes in bursts: one reload per burst.
+    let timer: ReturnType<typeof setTimeout> | null = null;
     c.onJobChanged((e) => {
-      if (e.jobId === "" && e.itemId) setReloadKey((k) => k + 1);
+      if (e.jobId !== "" || !e.itemId || timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (live) setReloadKey((k) => k + 1);
+      }, 300);
     }).then(
       (u) => (live ? (unlisten = u) : u()),
       () => {},
     );
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
       unlisten?.();
     };
   }, [c]);

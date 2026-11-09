@@ -10,6 +10,7 @@ export const en = {
   "platform.x": "X",
   "platform.vk": "VK",
   "platform.dailymotion": "Dailymotion",
+  "platform.twitch": "Twitch",
   "platform.generic": "Web",
   "platform.local": "Local file",
   "kind.bookmark": "Bookmarks",

@@ -19,8 +19,8 @@ use url::Url;
 
 /// Version of the rules below. Version 0 means "stored as entered" (no
 /// normalization), which is what a row has before its first renormalization.
-/// 2: Dailymotion is recognized (it was generic).
-pub const NORMALIZATION_VERSION: u32 = 2;
+/// 2: Dailymotion is recognized (it was generic). 3: Twitch.
+pub const NORMALIZATION_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,6 +32,7 @@ pub enum Platform {
     X,
     Vk,
     Dailymotion,
+    Twitch,
     Generic,
 }
 
@@ -45,6 +46,7 @@ impl Platform {
             Platform::X => "x",
             Platform::Vk => "vk",
             Platform::Dailymotion => "dailymotion",
+            Platform::Twitch => "twitch",
             Platform::Generic => "generic",
         }
     }
@@ -59,6 +61,7 @@ impl Platform {
             Platform::X => "X",
             Platform::Vk => "VK",
             Platform::Dailymotion => "Dailymotion",
+            Platform::Twitch => "Twitch",
             Platform::Generic => "Web",
         }
     }
@@ -336,6 +339,61 @@ fn dailymotion(host: &str, url: &Url) -> Option<Match> {
     }
 }
 
+/// A clip slug: letters, digits, `-` and `_` (`AwkwardSalamander-Ab12_x`).
+fn twitch_clip(s: &str) -> Option<String> {
+    valid(s, 3, 100, &['-', '_']).then(|| s.to_owned())
+}
+
+fn twitch(host: &str, url: &Url) -> Option<Match> {
+    let seg = segments(url);
+    let vod = |id: String| {
+        video(
+            Platform::Twitch,
+            format!("v{id}"),
+            format!("https://www.twitch.tv/videos/{id}"),
+        )
+    };
+    let clip = |slug: String| {
+        video(
+            Platform::Twitch,
+            slug.clone(),
+            format!("https://clips.twitch.tv/{slug}"),
+        )
+    };
+    if host == "clips.twitch.tv" {
+        // clips.twitch.tv/<slug>, clips.twitch.tv/embed?clip=<slug>
+        let slug = match seg.first().map(String::as_str) {
+            Some("embed") => query(url, "clip"),
+            first => first.map(str::to_owned),
+        };
+        return slug
+            .and_then(|s| twitch_clip(&s))
+            .and_then(clip)
+            .or_else(|| other(Platform::Twitch, Shape::Unknown));
+    }
+    if host == "player.twitch.tv" {
+        if let Some(id) = query(url, "video").and_then(|v| digits(v.trim_start_matches('v'))) {
+            return vod(id);
+        }
+        return other(Platform::Twitch, Shape::Unknown);
+    }
+    if !host_is(host, "twitch.tv") {
+        return None;
+    }
+    match (
+        seg.first().map(String::as_str),
+        seg.get(1).map(String::as_str),
+        seg.get(2),
+    ) {
+        (Some("videos"), Some(id), _) => digits(id).and_then(vod),
+        (Some(_), Some("clip"), Some(slug)) => twitch_clip(slug).and_then(clip),
+        (Some(_), Some("videos" | "clips"), _) => other(Platform::Twitch, Shape::Collection),
+        _ => None,
+    }
+    // A channel page is a live stream, not one saved video.
+    .or_else(|| other(Platform::Twitch, Shape::Unknown))
+}
+
 fn tiktok(host: &str, url: &Url) -> Option<Match> {
     if host == "vm.tiktok.com" || host == "vt.tiktok.com" {
         return other(Platform::Tiktok, Shape::ShortLink);
@@ -476,6 +534,7 @@ pub fn normalize(input: &CaptureUrl) -> Result<Normalized, NormalizeError> {
     let m = youtube(&host, url)
         .or_else(|| vk(&host, url))
         .or_else(|| dailymotion(&host, url))
+        .or_else(|| twitch(&host, url))
         .or_else(|| tiktok(&host, url))
         .or_else(|| instagram(&host, url))
         .or_else(|| x(&host, url))

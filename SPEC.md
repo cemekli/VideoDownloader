@@ -2,7 +2,7 @@
 
 | Belge bilgisi | Değer |
 |---|---|
-| Sürüm | 1.6 — Dailymotion bilinen platform oldu (bkz. §31) |
+| Sürüm | 1.7 — Dailymotion ve Twitch bilinen platform oldu (bkz. §31) |
 | Tarih | 9 Kasım 2026 |
 | Kaynak | [VIDEO_LIBRARY_MASTER_PROMPT.md](./VIDEO_LIBRARY_MASTER_PROMPT.md) |
 | İlk hedef | Windows 11 üzerinde çalışan, yerel öncelikli kişisel video kütüphanesi |
@@ -110,7 +110,7 @@ MVP tek işletim sistemi kullanıcısının kişisel kütüphanesine odaklanır.
 
 ## 6. Platform tanıma ve yetenek modeli
 
-YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion ve genel URL adaptörü bulunmalıdır. Bir alan adını tanımak, metadata çekebilmek, indirmek ve yetkili özel içeriğe erişmek ayrı yeteneklerdir.
+YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion, Twitch ve genel URL adaptörü bulunmalıdır. Bir alan adını tanımak, metadata çekebilmek, indirmek ve yetkili özel içeriğe erişmek ayrı yeteneklerdir.
 
 Her adaptör aşağıdaki sözleşmeyi karşılar:
 
@@ -135,6 +135,7 @@ map_error(tool_result) -> DomainError
 | X | Video içeren paylaşım bağlantıları | Metadata/indirme ayrı doğrulanır |
 | VK | Genel ve özel grup video bağlantıları | Grup üyeliği, oturum, medya URL süresi ve çıkarıcı ayrı değerlendirilir |
 | Dailymotion | Video, gömülü oynatıcı ve `dai.ly` kısa bağlantıları (kimlik bağlantıda) | Kamusal metadata/indirme gerçek test ile belirlenir |
+| Twitch | Geçmiş yayın (VOD) ve klip bağlantıları; kanal sayfası canlı yayındır, tek bookmark olarak saklanır | Kamusal metadata/indirme gerçek test ile belirlenir; canlı yayın indirilmez |
 | Genel URL | Geçerli HTTP(S) bağlantısını bookmark olarak saklama | Güvenli ağ erişimi ve çıkarıcı desteği doğrulanırsa etkinleştirilir |
 
 **Doğrulama kapısı:** Bu tablo güncel platform desteği beyanı değildir. Gerçek sonuçlar `docs/platform-support.md` içinde araç sürümü, test tarihi ve kanıtla tutulmalıdır.
@@ -1449,3 +1450,4 @@ SPEC değişikliklerinde kapsam, etkilenen gereksinim/kabul kriteri ve ADR bağ�
 | 1.4 | 6 Kasım 2026 | `SPEC_REVIEW.md` incelendi. Raporun Y-01…D-04 bulguları `SPEC_ANALIZ_RAPORU.md` ile aynıdır ve v1.2'de işlenmişti. Yeni olan D-05 işlendi: §25.2'ye Türkçe arama fixture'ı eklendi ve §16.1 buna bağlandı. |
 | 1.5 | 7 Kasım 2026 | §11.7 normalizasyon çakışması: örnekte B'nin eski değeri yeni değerden farklı yapıldı; değeri zaten taşıyan öğenin saklı değeri yeni değere eşitse onun koruduğu istisnası eklendi (F1.3 uygulamasında bulundu, ADR-0011). |
 | 1.6 | 9 Kasım 2026 | §6: Dailymotion ayrı platform olarak eklendi (Cuma'nın isteği, F3 gerçek indirme testi sırasında). Normalizasyon sürümü 2; eski `generic` Dailymotion öğeleri yeniden normalize edilir (migration 0008). |
+| 1.7 | 9 Kasım 2026 | §6: Twitch eklendi (VOD ve klip; kanal sayfası canlı yayın olduğu için tek bookmark). Normalizasyon sürümü 3, migration 0009. |

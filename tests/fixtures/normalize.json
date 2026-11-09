@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "normalizationVersion": 2,
+  "normalizationVersion": 3,
   "note": "STATE.md F1.3 / SPEC §6, §7.1, §11.7. Synthetic ids only. 'expect' null fields mean absent; error cases carry 'error' instead of 'expect'. 'redacted' omitted means the input is returned unchanged.",
   "cases": [
     { "input": "https://www.youtube.com/watch?v=vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
@@ -25,6 +25,13 @@
     { "input": "https://geo.dailymotion.com/player.html?video=x8vvtst", "expect": { "platform": "dailymotion", "shape": "video", "sourceId": "x8vvtst", "canonical": "https://www.dailymotion.com/video/x8vvtst" } },
     { "input": "https://www.dailymotion.com/video/x8vvtst_old-title-slug", "expect": { "platform": "dailymotion", "shape": "video", "sourceId": "x8vvtst", "canonical": "https://www.dailymotion.com/video/x8vvtst" } },
     { "input": "https://www.dailymotion.com/playlist/x6vvtst", "expect": { "platform": "dailymotion", "shape": "collection", "sourceId": null, "canonical": "https://www.dailymotion.com/playlist/x6vvtst" } },
+    { "input": "https://www.twitch.tv/videos/2600000001?t=1h2m3s", "expect": { "platform": "twitch", "shape": "video", "sourceId": "v2600000001", "canonical": "https://www.twitch.tv/videos/2600000001" } },
+    { "input": "https://m.twitch.tv/videos/2600000001", "expect": { "platform": "twitch", "shape": "video", "sourceId": "v2600000001", "canonical": "https://www.twitch.tv/videos/2600000001" } },
+    { "input": "https://player.twitch.tv/?video=v2600000001&parent=example.com", "expect": { "platform": "twitch", "shape": "video", "sourceId": "v2600000001", "canonical": "https://www.twitch.tv/videos/2600000001" } },
+    { "input": "https://clips.twitch.tv/VvTestClip-Ab12_x", "expect": { "platform": "twitch", "shape": "video", "sourceId": "VvTestClip-Ab12_x", "canonical": "https://clips.twitch.tv/VvTestClip-Ab12_x" } },
+    { "input": "https://www.twitch.tv/vvtestchannel/clip/VvTestClip-Ab12_x?filter=clips", "expect": { "platform": "twitch", "shape": "video", "sourceId": "VvTestClip-Ab12_x", "canonical": "https://clips.twitch.tv/VvTestClip-Ab12_x" } },
+    { "input": "https://www.twitch.tv/vvtestchannel/videos", "expect": { "platform": "twitch", "shape": "collection", "sourceId": null, "canonical": "https://www.twitch.tv/vvtestchannel/videos" } },
+    { "input": "https://www.twitch.tv/vvtestchannel", "expect": { "platform": "twitch", "shape": "unknown", "sourceId": null, "canonical": "https://www.twitch.tv/vvtestchannel" }, "note": "a channel page is a live stream" },
 
     { "input": "https://www.tiktok.com/@vv.user/video/7000000000000000001?is_from_webapp=1&sender_device=pc", "expect": { "platform": "tiktok", "shape": "video", "sourceId": "7000000000000000001", "canonical": "https://www.tiktok.com/@vv.user/video/7000000000000000001" } },
     { "input": "https://vm.tiktok.com/ZMvvTest/", "expect": { "platform": "tiktok", "shape": "short_link", "sourceId": null, "canonical": "https://vm.tiktok.com/ZMvvTest/" }, "note": "short link not resolved offline (§6)" },
