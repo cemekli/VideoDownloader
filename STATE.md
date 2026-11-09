@@ -303,6 +303,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 | Tarih | Değişiklik |
 |---|---|
 | 9 Kas 2026 | F5 başladı. F5.1: secret store crate'i `vv-secrets` (Windows DPAPI, opak `vvsec:` referansı), `auth_profile` tablosu (migration 0012), izin kuralları `vv_persistence::auth`, canary testi; ADR-0022. |
+| 9 Kas 2026 | Windows testinden: thumbnail ve medya protokolleri pencerenin thread'i yerine arka planda cevap verir (yüzlerce thumbnail isteği pencereyi kilitliyor, Windows onu "yanıt vermiyor" sayıp hayalet pencereyle değiştiriyordu: titreme, tam ekrandan çıkma, açılışta ~20 s bekleme). Thumbnail okuyucusu iş parçacığı başına bir kez açılır. |
 | 9 Kas 2026 | F3 tamamlandı: F3.2–F3.6, F3.8–F3.11 ✅, `docs/platform-support.md` ilk tarihli platform sonuçlarıyla dolduruldu. F4 ertelendi, sıradaki faz F5 (Cuma'nın kararı). Faz özetinde F1/F2 de ✅ olarak düzeltildi. |
 | 9 Kas 2026 | Windows testinden: thumbnail'ler en yeni öğeden başlar (grid'in üstü önce dolar); liste yenilemesi yüklenmiş sayfaları korur ve değişmeyen veriyi yeniden çizmez (grid zıplaması). Reddit medya bağlantıları (`packaged-media.redd.it` vb.) artık gönderi sanılmaz: SPEC v1.9, normalizasyon sürümü 5. |
 | 9 Kas 2026 | Reddit bilinen platform oldu (gönderi, `redd.it`; paylaşım bağlantısı ve `v.redd.it` çevrimiçi çözülür): SPEC v1.8, normalizasyon sürümü 4, migration 0011. |

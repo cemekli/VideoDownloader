@@ -61,13 +61,25 @@ pub fn handle(state: &LibraryState, request: &Request<Vec<u8>>) -> Response<Body
     if !valid_id(id) {
         return status(StatusCode::NOT_FOUND);
     }
-    let Some(loc) = state
-        .get()
-        .and_then(|lib| lib.reader())
-        .ok()
-        .and_then(|c| vv_persistence::library::view::thumbnail_location(&c, id).ok())
-        .flatten()
-    else {
+    let Some(loc) = state.get().ok().and_then(|lib| {
+        // One reader per worker thread, kept between requests: a grid asks
+        // for hundreds of thumbnails at once.
+        thread_local! {
+            static READER: std::cell::RefCell<Option<vv_persistence::rusqlite::Connection>> =
+                const { std::cell::RefCell::new(None) };
+        }
+        READER.with(|r| {
+            let mut r = r.borrow_mut();
+            if r.is_none() {
+                *r = lib.reader().ok();
+            }
+            let found = vv_persistence::library::view::thumbnail_location(r.as_ref()?, id);
+            if found.is_err() {
+                *r = None; // a broken connection is opened again next time
+            }
+            found.ok().flatten()
+        })
+    }) else {
         return status(StatusCode::NOT_FOUND);
     };
     let Some(bytes) = read_inside(Path::new(&loc.0), &loc.1) else {

@@ -96,19 +96,37 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             download_commands::set_storage_quota,
             download_commands::move_media_folder
         ])
-        .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
-            thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)
-        })
+        // Both protocols answer off the UI thread. On Windows a synchronous
+        // handler runs on the window's thread: hundreds of thumbnails (each
+        // a database lookup and a file read) kept the window from answering
+        // long enough for Windows to ghost it, so it flickered and lost its
+        // maximized state.
+        .register_asynchronous_uri_scheme_protocol(
+            library_commands::THUMB_SCHEME,
+            |ctx, request, responder| {
+                let app = ctx.app_handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    responder.respond(thumb_protocol::handle(
+                        &app.state::<library::LibraryState>(),
+                        &request,
+                    ))
+                });
+            },
+        )
         // Library media by asset id (F2.4). The E2E build also serves the
         // playback matrix folder by file name (ADR-0004).
-        .register_uri_scheme_protocol(media_protocol::SCHEME, {
-            let e2e_root = e2e_media_root();
-            move |ctx, request| {
-                media_protocol::dispatch(
-                    &ctx.app_handle().state::<library::LibraryState>(),
-                    e2e_root.as_deref(),
-                    &request,
-                )
+        .register_asynchronous_uri_scheme_protocol(media_protocol::SCHEME, {
+            let e2e_root = std::sync::Arc::new(e2e_media_root());
+            move |ctx, request, responder| {
+                let app = ctx.app_handle().clone();
+                let e2e_root = e2e_root.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    responder.respond(media_protocol::dispatch(
+                        &app.state::<library::LibraryState>(),
+                        e2e_root.as_deref(),
+                        &request,
+                    ))
+                });
             }
         })
 }
