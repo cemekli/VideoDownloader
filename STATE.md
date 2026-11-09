@@ -214,7 +214,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F5.1 | `AuthProfile`, izin akışı, işletim sistemi secret store | §11.6, §20.3, DEC-08 | canary testi; secret DB'de yok | 🟨 PR açık: `vv-secrets` (DPAPI), migration 0012, `vv_persistence::auth`, canary testi (`tests/auth.rs`), ADR-0022. ✅ için CI'da Windows DPAPI testi yeşil olmalı. |
+| F5.1 | `AuthProfile`, izin akışı, işletim sistemi secret store | §11.6, §20.3, DEC-08 | canary testi; secret DB'de yok | ✅ PR #32, CI run 42634841520 yeşil (Linux + Windows; DPAPI testi Windows'ta): `vv-secrets`, migration 0012, `vv_persistence::auth`, canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. |
 | F5.2 | `--cookies-from-browser` (Firefox ve Chrome) ve hata teşhisi | §21.1 | VK-01…05, VK-09 | ⬜ |
 | F5.3 | Çerez dosyası için iş başına çalışma kopyası | §21.1 | AC-55, VK-10 | ⬜ |
 | F5.4 | Oturum doğrulama kanıtı kuralı ve `verify_session` | §12.1 | AC-19, AC-54 | ⬜ |
