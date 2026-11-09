@@ -75,6 +75,7 @@ pub fn on_second_launch<R: Runtime>(app: &AppHandle<R>, _args: Vec<String>, _cwd
     app.state::<InstanceState>()
         .second_launches
         .fetch_add(1, Ordering::SeqCst);
+    crate::diag::log("second launch handed over: window restored and focused");
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();

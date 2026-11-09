@@ -172,7 +172,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         .spawn(move || {
             let st = handle.state::<EngineState>();
             let Some(engine) = st.get() else { return };
-            recheck_tools(engine);
+            crate::diag::timed("tool check", 0, || recheck_tools(engine));
             st.checked.store(true, Ordering::SeqCst);
             let _ = handle.emit(TOOLS_EVENT, ());
             engine.reconcile();

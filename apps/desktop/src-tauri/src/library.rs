@@ -273,6 +273,7 @@ pub fn thumbnails<R: Runtime>(app: &AppHandle<R>) {
         .spawn(move || {
             let state = app.state::<LibraryState>();
             let mut failed = std::collections::HashSet::new();
+            crate::diag::log("thumbnail worker start");
             while state.thumbs_again.swap(false, Ordering::SeqCst) {
                 let Ok(lib) = state.get() else { break };
                 lib.thumbnail_pass(&mut failed, |id| {
@@ -284,6 +285,10 @@ pub fn thumbnails<R: Runtime>(app: &AppHandle<R>) {
                     );
                 });
             }
+            crate::diag::log(&format!(
+                "thumbnail worker end; {} failed this run",
+                failed.len()
+            ));
             state.thumbs_running.store(false, Ordering::SeqCst);
         });
     if spawned.is_err() {
@@ -487,12 +492,13 @@ pub(crate) fn ffmpeg_build() -> String {
 pub fn open_library<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
     let dir = crate::instance::data_dir(app)?;
     let state = app.state::<LibraryState>();
-    state.open(&dir, find_tools())?;
-    crate::engine::start(app);
+    let tools = crate::diag::timed("find_tools", 0, find_tools);
+    crate::diag::timed("database open", 0, || state.open(&dir, tools))?;
+    crate::diag::timed("engine start", 0, || crate::engine::start(app));
     let handle = app.clone();
     std::thread::spawn(move || {
         if let Ok(lib) = handle.state::<LibraryState>().get() {
-            lib.refresh_storage();
+            crate::diag::timed("refresh_storage", 0, || lib.refresh_storage());
         }
         thumbnails(&handle);
     });

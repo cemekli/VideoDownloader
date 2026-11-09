@@ -434,11 +434,22 @@ pub async fn list_items<R: Runtime>(
     app: AppHandle<R>,
     query: ListQuery,
 ) -> Result<ItemPage, DomainError> {
-    blocking(app, move |st| {
+    let t = crate::diag::now_ms();
+    let r = blocking(app, move |st| {
         let c = st.get()?.reader()?;
         list_page(&c, &query, SystemClock.now_ms())
     })
-    .await
+    .await;
+    if let Ok(p) = &r {
+        crate::diag::log(&format!(
+            "list_items offset {} -> {} of {} in {} ms",
+            p.offset,
+            p.items.len(),
+            p.total,
+            crate::diag::now_ms() - t
+        ));
+    }
+    r
 }
 
 /// Everything the inspector shows about one item.
