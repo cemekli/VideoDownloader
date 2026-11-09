@@ -500,7 +500,8 @@ fn ac50_an_older_schema_backup_is_migrated_on_restore() {
     let mut db = open(d.path(), "library.sqlite");
     assert_eq!(restore::inspect(&old_path).unwrap().schema_version, 3);
     let rep = restore::restore(&mut db, &old_path, &d.path().join("backups"), 5).unwrap();
-    assert_eq!(rep.migrated, vec![4, 5]);
+    let later: Vec<_> = (4..=MIGRATIONS.len() as u32).collect();
+    assert_eq!(rep.migrated, later);
     assert_eq!(phrase(db.writer(), "three"), 1);
     assert_eq!(count(db.writer(), "SELECT count(*) FROM playback_state"), 0);
 }

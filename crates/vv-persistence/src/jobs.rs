@@ -1046,6 +1046,21 @@ pub fn cancel_for_item(c: &mut Connection, item_id: &str, now: i64) -> Result<us
     Ok(ids.len())
 }
 
+/// [`cancel_for_item`] inside a caller's transaction (removal runs in one):
+/// waiting jobs end `canceled`, running ones are asked to stop. Reason
+/// `item_removed`; they do not come back on restore (§7.3).
+pub fn cancel_open_for_item(c: &Connection, item_id: &str, now: i64) -> Result<usize> {
+    let a = c.execute(
+        "UPDATE job SET status = 'canceling', cancel_requested = 1, cancel_reason = 'item_removed', updated_at = ?2 WHERE item_id = ?1 AND status IN ('running','pausing')",
+        params![item_id, now],
+    )?;
+    let b = c.execute(
+        "UPDATE job SET status = 'canceled', cancel_reason = 'item_removed', blocked_reason = NULL, next_retry_at = NULL, finished_at = ?2, updated_at = ?2 WHERE item_id = ?1 AND status IN ('queued','blocked','retry_wait','paused')",
+        params![item_id, now],
+    )?;
+    Ok(a + b)
+}
+
 /// What [`recover`] / [`reclaim_expired`] did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Recovery {

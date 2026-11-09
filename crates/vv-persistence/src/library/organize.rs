@@ -705,6 +705,10 @@ pub fn remove_items(c: &Connection, ids: &[String], now_ms: i64) -> Result<Vec<S
             "UPDATE library_item SET removed_at = ?1, revision = revision + 1, updated_at = ?1 WHERE id = ?2",
             params![now_ms, id],
         )?;
+        crate::jobs::cancel_open_for_item(c, id, now_ms).map_err(|e| match e {
+            crate::jobs::JobError::Sqlite(e) => LibraryError::Sqlite(e),
+            _ => LibraryError::Invalid("cancel jobs"),
+        })?;
     }
     Ok(live)
 }
