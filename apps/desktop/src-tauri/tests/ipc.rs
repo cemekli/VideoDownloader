@@ -253,6 +253,17 @@ fn main_capability_grants_only_app_commands() {
         "allow-open-externally",
         "allow-open-source",
         "allow-relink-asset",
+        "allow-get-tool-health",
+        "allow-list-jobs",
+        "allow-cancel-job",
+        "allow-retry-job",
+        "allow-remove-partial",
+        "allow-get-download-options",
+        "allow-start-download",
+        "allow-fetch-metadata",
+        "allow-get-storage-usage",
+        "allow-set-storage-quota",
+        "allow-move-media-folder",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1011,4 +1022,153 @@ fn settings_playback_and_backup_commands_match_contract_shape() {
     )
     .is_err());
     ok(&w, "cancel_pending", json!({ "token": "nope" }));
+}
+
+// ---- Downloads, jobs and storage (STATE.md F3.2–F3.10) ----
+
+/// `expected` with every key that is null in `actual` set to null, so the
+/// shape check compares the rest (optional fields).
+fn with_nulls_of(actual: &Value, expected: &Value) -> Value {
+    let mut e = expected.clone();
+    for (k, v) in actual.as_object().unwrap() {
+        if v.is_null() {
+            e[k] = Value::Null;
+        }
+    }
+    e
+}
+
+#[test]
+fn download_commands_match_contract_shape() {
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+
+    // No engine in the mock app: the tools count as not ready.
+    let t = ok(&w, "get_tool_health", json!({}));
+    assert_same_shape(
+        &t,
+        &with_nulls_of(&t, &spec("get_tool_health")),
+        "get_tool_health",
+    );
+    assert_eq!(t["ready"], false);
+
+    let o = ok(&w, "get_download_options", json!({ "itemId": id }));
+    assert_same_shape(
+        &o,
+        &with_nulls_of(&o, &spec("get_download_options")),
+        "get_download_options",
+    );
+    assert_same_shape(
+        &o["storage"],
+        &with_nulls_of(&o["storage"], &spec("get_download_options")["storage"]),
+        "get_download_options.storage",
+    );
+    assert_eq!(o["presets"].as_array().unwrap().len(), 4);
+    assert_same_shape(
+        &o["presets"][0],
+        &with_nulls_of(
+            &o["presets"][0],
+            &spec("get_download_options")["presets"][0],
+        ),
+        "get_download_options.presets[0]",
+    );
+
+    // The UI sends a preset name; anything else is refused.
+    for bad in [json!("bestvideo+bestaudio"), json!(1080)] {
+        assert!(invoke(
+            &w,
+            "start_download",
+            json!({ "itemId": id, "preset": bad }),
+            app_origin()
+        )
+        .is_err());
+    }
+    let j = ok(
+        &w,
+        "start_download",
+        json!({ "itemId": id, "preset": "720" }),
+    );
+    assert_same_shape(
+        &j,
+        &with_nulls_of(&j, &spec("start_download")),
+        "start_download",
+    );
+    assert_eq!(
+        (j["status"].clone(), j["preset"].clone()),
+        (json!("queued"), json!("720"))
+    );
+    let l = ok(&w, "list_jobs", json!({}));
+    assert_eq!(l.as_array().unwrap().len(), 1);
+    assert_eq!(l[0]["itemTitle"], "Deniz kenarında sabah");
+
+    let x = ok(&w, "cancel_job", json!({ "jobId": j["id"] }));
+    assert_eq!(x["status"], "canceled");
+    assert_eq!(x["canRetry"], true);
+    let r = ok(&w, "retry_job", json!({ "jobId": j["id"] }));
+    assert_eq!(r["status"], "queued");
+    let e = invoke(
+        &w,
+        "remove_partial",
+        json!({ "jobId": j["id"] }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        e["code"], "INPUT_REJECTED",
+        "a queued job keeps its partial file"
+    );
+    ok(&w, "cancel_job", json!({ "jobId": j["id"] }));
+    let p = ok(&w, "remove_partial", json!({ "jobId": j["id"] }));
+    assert_same_shape(&p, &spec("remove_partial"), "remove_partial");
+
+    let m = ok(&w, "fetch_metadata", json!({ "itemId": id }));
+    assert!(m.is_string());
+
+    let u = ok(
+        &w,
+        "set_storage_quota",
+        c["commands"]["set_storage_quota"]["args"].clone(),
+    );
+    assert_same_shape(
+        &u,
+        &with_nulls_of(&u, &spec("set_storage_quota")),
+        "set_storage_quota",
+    );
+    assert_eq!(u["quotaBytes"], 10_737_418_240u64);
+    let u = ok(&w, "set_storage_quota", json!({ "bytes": null }));
+    assert!(u["quotaBytes"].is_null());
+    assert!(invoke(&w, "set_storage_quota", json!({ "bytes": 0 }), app_origin()).is_err());
+    let u = ok(&w, "get_storage_usage", json!({}));
+    assert_same_shape(
+        &u,
+        &with_nulls_of(&u, &spec("get_storage_usage")),
+        "get_storage_usage",
+    );
+
+    // Offline Mode: nothing new starts.
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": true } }),
+    );
+    let e = invoke(
+        &w,
+        "start_download",
+        json!({ "itemId": id, "preset": "best" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "OFFLINE_MODE");
+    let e = invoke(&w, "fetch_metadata", json!({ "itemId": id }), app_origin()).unwrap_err();
+    assert_eq!(e["code"], "OFFLINE_MODE");
+
+    // No paths in any answer.
+    for v in [&t, &o, &j, &l, &u] {
+        let s = v.to_string();
+        let dir = d.path().to_string_lossy();
+        assert!(!s.contains(dir.as_ref()), "no paths: {s}");
+    }
 }

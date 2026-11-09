@@ -94,15 +94,15 @@ fn health_check_passes_the_pinned_tools_and_names_each_failure() {
     );
 }
 
+type Route = (u16, Vec<(String, String)>, Vec<u8>);
+
 /// A tiny HTTP/1.1 server: one request per connection.
 struct Server {
     addr: SocketAddr,
     hits: Arc<AtomicUsize>,
 }
 
-fn serve(
-    routes: impl Fn(&str) -> (u16, Vec<(String, String)>, Vec<u8>) + Send + Sync + 'static,
-) -> Server {
+fn serve(routes: impl Fn(&str) -> Route + Send + Sync + 'static) -> Server {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap();
     let hits = Arc::new(AtomicUsize::new(0));
@@ -118,7 +118,7 @@ fn serve(
     Server { addr, hits }
 }
 
-fn handle(mut c: TcpStream, routes: &dyn Fn(&str) -> (u16, Vec<(String, String)>, Vec<u8>)) {
+fn handle(mut c: TcpStream, routes: &dyn Fn(&str) -> Route) {
     let mut buf = Vec::new();
     let mut b = [0u8; 4096];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -155,8 +155,10 @@ fn remote_item(lib: &Lib, url: &str) -> String {
 }
 
 fn real_lib(paths: &ToolPaths, test_target: SocketAddr) -> Lib {
-    let mut policy = vv_netguard::Policy::default();
-    policy.test_targets = vec![test_target];
+    let policy = vv_netguard::Policy {
+        test_targets: vec![test_target],
+        ..Default::default()
+    };
     library(Setup {
         ytdlp: paths.ytdlp.clone(),
         media: media_tools(),

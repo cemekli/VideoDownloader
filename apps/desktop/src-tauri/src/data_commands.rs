@@ -62,7 +62,8 @@ pub async fn update_settings<R: Runtime>(
     app: AppHandle<R>,
     patch: SettingsPatch,
 ) -> Result<Settings, DomainError> {
-    blocking(app, move |st| {
+    let a = app.clone();
+    let s = blocking(app, move |st| {
         st.get()?.write(|c| {
             settings::update(c, &patch, now()).map_err(|e| {
                 if matches!(e, LibraryError::Invalid(_)) {
@@ -73,7 +74,12 @@ pub async fn update_settings<R: Runtime>(
             })
         })
     })
-    .await
+    .await?;
+    // Running downloads stop and waiting ones are held (DATA-05).
+    if let Some(e) = a.try_state::<crate::engine::EngineState>() {
+        e.set_offline(s.offline_mode);
+    }
+    Ok(s)
 }
 
 /// First run step 2: the legal notice was read (§9.7).

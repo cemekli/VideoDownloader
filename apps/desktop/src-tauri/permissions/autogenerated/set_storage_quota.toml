@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-storage-quota"
+description = "Enables the set_storage_quota command without any pre-configured scope."
+commands.allow = ["set_storage_quota"]
+
+[[permission]]
+identifier = "deny-set-storage-quota"
+description = "Denies the set_storage_quota command without any pre-configured scope."
+commands.deny = ["set_storage_quota"]

@@ -5,7 +5,8 @@
     "§18.1",
     "§18.2",
     "§18.3",
-    "§9.3"
+    "§9.3",
+    "§13"
   ],
   "note": "Wire shape of every IPC command and of DomainError. Rust tests check the backend serializes exactly these keys and types; UI tests use the same values as mocked responses. Change only together with CONTRACT_VERSION.",
   "contractVersion": 1,
@@ -1042,6 +1043,318 @@
         "assetId": "00000000-0000-4000-8000-00000000a001"
       },
       "response": null
+    },
+    "get_tool_health": {
+      "args": {},
+      "response": {
+        "checking": false,
+        "ready": true,
+        "code": null,
+        "tools": [
+          {
+            "id": "yt-dlp",
+            "version": "2026.10.26",
+            "reportedVersion": "2026.10.26",
+            "state": "ok",
+            "code": null,
+            "license": "Unlicense (source); the PyInstaller executables bundle GPL-3.0-or-later code, so the executable as a whole is GPL-3.0-or-later",
+            "source": "https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26",
+            "provenance": "gpg-signed-sums"
+          },
+          {
+            "id": "deno",
+            "version": "2.9.8",
+            "reportedVersion": "2.9.8",
+            "state": "ok",
+            "code": null,
+            "license": "MIT",
+            "source": "https://github.com/denoland/deno/releases/tag/v2.9.8",
+            "provenance": "published-sha256"
+          },
+          {
+            "id": "ffmpeg",
+            "version": "9.0.2",
+            "reportedVersion": "9.0.2",
+            "state": "ok",
+            "code": null,
+            "license": "LGPL-3.0-or-later: BtbN lgpl variant, configured with --enable-version3 and without --enable-gpl or --enable-nonfree (fetch-tools checks the configuration line)",
+            "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59 (FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/7adfbe40dc)",
+            "provenance": "published-sha256"
+          },
+          {
+            "id": "ffprobe",
+            "version": "9.0.2",
+            "reportedVersion": "9.0.2",
+            "state": "ok",
+            "code": null,
+            "license": "LGPL-3.0-or-later: BtbN lgpl variant, configured with --enable-version3 and without --enable-gpl or --enable-nonfree (fetch-tools checks the configuration line)",
+            "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59 (FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/7adfbe40dc)",
+            "provenance": "published-sha256"
+          }
+        ],
+        "checkedAt": 1794000000000
+      }
+    },
+    "list_jobs": {
+      "args": {},
+      "response": [
+        {
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "kind": "download",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "status": "running",
+          "phase": "download_video",
+          "bytesDone": 52428800,
+          "bytesTotal": 104857600,
+          "unitsDone": null,
+          "unitsTotal": null,
+          "preset": "720",
+          "attempts": 1,
+          "maxAttempts": 5,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 52428800,
+          "createdAt": 1794000000000,
+          "updatedAt": 1794000060000,
+          "finishedAt": null,
+          "canRetry": false,
+          "canCancel": true,
+          "canRemovePartial": false
+        }
+      ]
+    },
+    "get_download_options": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "metadataStatus": "ready",
+        "formatsKnown": true,
+        "presets": [
+          {
+            "id": "best",
+            "available": true,
+            "container": "mp4",
+            "videoCodec": "h264",
+            "audioCodec": "aac",
+            "height": 1080,
+            "sizeBytes": null,
+            "sizeEstimateBytes": 262144000,
+            "mayNotPlay": false,
+            "needsMerge": true
+          },
+          {
+            "id": "1080",
+            "available": true,
+            "container": "mp4",
+            "videoCodec": "h264",
+            "audioCodec": "aac",
+            "height": 1080,
+            "sizeBytes": null,
+            "sizeEstimateBytes": 262144000,
+            "mayNotPlay": false,
+            "needsMerge": true
+          },
+          {
+            "id": "720",
+            "available": true,
+            "container": "mp4",
+            "videoCodec": "h264",
+            "audioCodec": "aac",
+            "height": 720,
+            "sizeBytes": 104857600,
+            "sizeEstimateBytes": null,
+            "mayNotPlay": false,
+            "needsMerge": true
+          },
+          {
+            "id": "audio",
+            "available": true,
+            "container": "m4a",
+            "videoCodec": null,
+            "audioCodec": "aac",
+            "height": null,
+            "sizeBytes": 5242880,
+            "sizeEstimateBytes": null,
+            "mayNotPlay": false,
+            "needsMerge": false
+          }
+        ],
+        "offline": false,
+        "toolsReady": true,
+        "storage": {
+          "managedMediaBytes": 3221225472,
+          "derivedBytes": 10485760,
+          "stagingBytes": 52428800,
+          "quotaBytes": 10737418240,
+          "freeBytes": 214748364800,
+          "lowSpace": false,
+          "quotaExceeded": false
+        },
+        "activeJobId": null
+      }
+    },
+    "start_download": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "preset": "720"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000b001",
+        "kind": "download",
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "itemTitle": "Deniz kenarında sabah",
+        "status": "queued",
+        "phase": null,
+        "bytesDone": null,
+        "bytesTotal": null,
+        "unitsDone": null,
+        "unitsTotal": null,
+        "preset": "720",
+        "attempts": 0,
+        "maxAttempts": 5,
+        "errorCode": null,
+        "blockedReason": null,
+        "nextRetryAt": null,
+        "partialBytes": 0,
+        "createdAt": 1794000000000,
+        "updatedAt": 1794000060000,
+        "finishedAt": null,
+        "canRetry": false,
+        "canCancel": true,
+        "canRemovePartial": false
+      }
+    },
+    "fetch_metadata": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": "00000000-0000-4000-8000-00000000b002"
+    },
+    "cancel_job": {
+      "args": {
+        "jobId": "00000000-0000-4000-8000-00000000b001"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000b001",
+        "kind": "download",
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "itemTitle": "Deniz kenarında sabah",
+        "status": "canceling",
+        "phase": "download_video",
+        "bytesDone": 52428800,
+        "bytesTotal": 104857600,
+        "unitsDone": null,
+        "unitsTotal": null,
+        "preset": "720",
+        "attempts": 1,
+        "maxAttempts": 5,
+        "errorCode": null,
+        "blockedReason": null,
+        "nextRetryAt": null,
+        "partialBytes": 52428800,
+        "createdAt": 1794000000000,
+        "updatedAt": 1794000060000,
+        "finishedAt": null,
+        "canRetry": false,
+        "canCancel": false,
+        "canRemovePartial": false
+      }
+    },
+    "retry_job": {
+      "args": {
+        "jobId": "00000000-0000-4000-8000-00000000b001"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000b001",
+        "kind": "download",
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "itemTitle": "Deniz kenarında sabah",
+        "status": "queued",
+        "phase": "download_video",
+        "bytesDone": 52428800,
+        "bytesTotal": 104857600,
+        "unitsDone": null,
+        "unitsTotal": null,
+        "preset": "720",
+        "attempts": 0,
+        "maxAttempts": 5,
+        "errorCode": null,
+        "blockedReason": null,
+        "nextRetryAt": null,
+        "partialBytes": 52428800,
+        "createdAt": 1794000000000,
+        "updatedAt": 1794000060000,
+        "finishedAt": null,
+        "canRetry": false,
+        "canCancel": true,
+        "canRemovePartial": false
+      }
+    },
+    "remove_partial": {
+      "args": {
+        "jobId": "00000000-0000-4000-8000-00000000b001"
+      },
+      "response": {
+        "freedBytes": 52428800
+      }
+    },
+    "get_storage_usage": {
+      "args": {},
+      "response": {
+        "managedMediaBytes": 3221225472,
+        "derivedBytes": 10485760,
+        "stagingBytes": 52428800,
+        "quotaBytes": 10737418240,
+        "freeBytes": 214748364800,
+        "lowSpace": false,
+        "quotaExceeded": false
+      }
+    },
+    "set_storage_quota": {
+      "args": {
+        "bytes": 10737418240
+      },
+      "response": {
+        "managedMediaBytes": 3221225472,
+        "derivedBytes": 10485760,
+        "stagingBytes": 52428800,
+        "quotaBytes": 10737418240,
+        "freeBytes": 214748364800,
+        "lowSpace": false,
+        "quotaExceeded": false
+      }
+    },
+    "move_media_folder": {
+      "args": {},
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000b001",
+        "kind": "storage_move",
+        "itemId": null,
+        "itemTitle": null,
+        "status": "running",
+        "phase": "copy",
+        "bytesDone": null,
+        "bytesTotal": null,
+        "unitsDone": 1,
+        "unitsTotal": 3,
+        "preset": null,
+        "attempts": 1,
+        "maxAttempts": 3,
+        "errorCode": null,
+        "blockedReason": null,
+        "nextRetryAt": null,
+        "partialBytes": 0,
+        "createdAt": 1794000000000,
+        "updatedAt": 1794000060000,
+        "finishedAt": null,
+        "canRetry": false,
+        "canCancel": true,
+        "canRemovePartial": false
+      }
     }
   },
   "domainError": {
@@ -1071,6 +1384,41 @@
           "firstError": "INPUT_REJECTED"
         }
       }
+    },
+    "job-changed": {
+      "jobId": "00000000-0000-4000-8000-00000000b001",
+      "itemId": "00000000-0000-4000-8000-000000000001"
+    },
+    "item-changed": {
+      "itemId": "00000000-0000-4000-8000-000000000001"
+    },
+    "tools-checked": null
+  },
+  "examples": {
+    "failed_download": {
+      "id": "00000000-0000-4000-8000-00000000b001",
+      "kind": "download",
+      "itemId": "00000000-0000-4000-8000-000000000001",
+      "itemTitle": "Deniz kenarında sabah",
+      "status": "failed",
+      "phase": null,
+      "bytesDone": 52428800,
+      "bytesTotal": 104857600,
+      "unitsDone": null,
+      "unitsTotal": null,
+      "preset": "720",
+      "attempts": 5,
+      "maxAttempts": 5,
+      "errorCode": "NETWORK_UNAVAILABLE",
+      "blockedReason": null,
+      "nextRetryAt": null,
+      "partialBytes": 52428800,
+      "createdAt": 1794000000000,
+      "updatedAt": 1794000060000,
+      "finishedAt": 1794000120000,
+      "canRetry": true,
+      "canCancel": false,
+      "canRemovePartial": true
     }
   }
 }

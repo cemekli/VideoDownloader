@@ -4320,8 +4320,11 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "vv-domain",
+ "vv-engine",
  "vv-import",
+ "vv-netguard",
  "vv-persistence",
+ "vv-tools",
 ]
 
 [[package]]

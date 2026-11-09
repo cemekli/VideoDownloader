@@ -59,6 +59,17 @@ const COMMANDS: &[&str] = &[
     "open_externally",
     "open_source",
     "relink_asset",
+    "get_tool_health",
+    "list_jobs",
+    "cancel_job",
+    "retry_job",
+    "remove_partial",
+    "get_download_options",
+    "start_download",
+    "fetch_metadata",
+    "get_storage_usage",
+    "set_storage_quota",
+    "move_media_folder",
 ];
 
 fn main() {

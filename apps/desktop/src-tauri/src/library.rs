@@ -11,7 +11,7 @@
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
 use vv_import::import::{FileOutcome, ImportOptions, ImportReport};
@@ -31,7 +31,8 @@ pub const TOOLS_DIR_ENV: &str = "VV_TOOLS_DIR";
 const THUMBNAIL_BATCH: u32 = 200;
 
 pub struct Library {
-    writer: Mutex<Database>,
+    /// Shared with the download engine's store (`engine::AppStore`).
+    writer: Arc<Mutex<Database>>,
     db_path: PathBuf,
     data_dir: PathBuf,
     cache_dir: PathBuf,
@@ -70,7 +71,7 @@ impl LibraryState {
         };
         let db = Database::open(&db_path, &opts).map_err(|e| e.to_string())?;
         let lib = Library {
-            writer: Mutex::new(db),
+            writer: Arc::new(Mutex::new(db)),
             db_path,
             data_dir: data_dir.to_path_buf(),
             cache_dir: data_dir.join("cache"),
@@ -117,6 +118,20 @@ impl Library {
             .lock()
             .map_err(|_| internal("library-poisoned"))?;
         f(&mut db)
+    }
+
+    /// The writer, for the download engine (one writer at a time either way).
+    pub(crate) fn shared_writer(&self) -> Arc<Mutex<Database>> {
+        Arc::clone(&self.writer)
+    }
+
+    pub fn db_path(&self) -> &Path {
+        &self.db_path
+    }
+
+    /// `<data>/`: the app data folder (§14.2).
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     pub fn has_tools(&self) -> bool {
@@ -317,11 +332,16 @@ fn tools_build() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-/// ffprobe/FFmpeg for this process: `VV_TOOLS_DIR` (debug/E2E), then
+/// Pinned tool manifest built into this executable.
+pub fn manifest() -> Option<vv_tools::Manifest> {
+    vv_tools::Manifest::parse(include_str!("../../../../tools/manifest.json")).ok()
+}
+
+/// Folders that may hold the managed tools (`<dir>/<platform>/<id>/...`, the
+/// `scripts/fetch-tools.mjs` layout): `VV_TOOLS_DIR` (debug/E2E), then
 /// `tools/` next to the executable, then the repository's `tools/bin` in
-/// debug builds. `None` makes import answer `TOOL_MISSING`.
-pub fn find_tools() -> Option<MediaTools> {
-    let build = tools_build();
+/// debug builds.
+fn tool_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(any(debug_assertions, feature = "e2e-cdp")) {
         if let Some(d) = std::env::var_os(TOOLS_DIR_ENV) {
@@ -337,8 +357,31 @@ pub fn find_tools() -> Option<MediaTools> {
     if cfg!(debug_assertions) {
         dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tools/bin"));
     }
-    dirs.iter()
+    dirs
+}
+
+/// ffprobe/FFmpeg for this process from the first folder that has them.
+/// `None` makes import answer `TOOL_MISSING`.
+pub fn find_tools() -> Option<MediaTools> {
+    let build = tools_build();
+    tool_dirs()
+        .iter()
         .find_map(|d| MediaTools::from_tools_dir(d, build.clone()))
+}
+
+/// The folder the health check looks at: the first one with a folder for
+/// this platform, else `tools/` next to the executable (every tool then
+/// reports missing).
+pub fn tool_dir() -> Option<PathBuf> {
+    let dirs = tool_dirs();
+    dirs.iter()
+        .find(|d| d.join(vv_engine::toolset::platform()).is_dir())
+        .or_else(|| dirs.first())
+        .cloned()
+}
+
+pub(crate) fn ffmpeg_build() -> String {
+    tools_build()
 }
 
 /// Runs in `setup` after the library lock.
@@ -346,6 +389,7 @@ pub fn open_library<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::e
     let dir = crate::instance::data_dir(app)?;
     let state = app.state::<LibraryState>();
     state.open(&dir, find_tools())?;
+    crate::engine::start(app);
     let handle = app.clone();
     std::thread::spawn(move || {
         if let Ok(lib) = handle.state::<LibraryState>().get() {
