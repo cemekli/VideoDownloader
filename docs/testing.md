@@ -138,7 +138,7 @@ Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §2
 |---|---|---|---|---|
 | INV-01 | tüm aşamalar | Başarısız metadata, indirme veya AI işi kayıtlı bookmark'ı silmez. | AC-12, AC-19 | `crates/vv-engine/src/download.rs`, `crates/vv-engine/src/storage.rs`, `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/tests/auth.rs` |
 | INV-02 | tüm aşamalar | downloaded görünümü yalnızca kullanılabilir yerel medya kaydından türetilir. Kuyrukta olm… | AC-08, AC-10 | `apps/desktop/src/App.test.tsx`, `crates/vv-engine/src/download.rs`, `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/tests/library_view.rs` |
-| INV-03 | tüm aşamalar | Bir AuthProfile kaydının varlığı “erişim doğrulandı” anlamına gelmez. | AC-19, AC-54 | `crates/vv-persistence/tests/auth.rs` |
+| INV-03 | tüm aşamalar | Bir AuthProfile kaydının varlığı “erişim doğrulandı” anlamına gelmez. | AC-19, AC-54 | `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/tests/auth.rs` |
 | INV-04 | tüm aşamalar | Ağ ve uzun medya işlemleri UI iş parçacığında yürütülmez. | MT-15 | henüz yok |
 | INV-05 | tüm aşamalar | Kuyruk ve alan verisi, tutarlı SQLite işlemleriyle kalıcılaştırılır. | AC-03, AC-11 | `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/src/library/bookmark.rs`, `crates/vv-persistence/tests/bookmark.rs` |
 | INV-06 | tüm aşamalar | Yerel import kaynak dosyasını varsayılan olarak değiştirmez veya silmez. | AC-04, AC-51 | `apps/desktop/src-tauri/src/data_commands.rs`, `crates/vv-import/tests/import.rs`, `crates/vv-persistence/src/portable.rs`, `crates/vv-persistence/tests/portable.rs` |
