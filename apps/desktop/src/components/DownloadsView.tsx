@@ -12,6 +12,11 @@ const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path", "storage_roo
 
 export const statusLabel = (s: string) => t(`downloads.status.${s}` as MessageKey);
 export const presetLabel = (p: string | null) => (p ? t(`downloads.preset.${p}` as MessageKey) : "");
+/** Why a blocked job waits; a browser store that could not be read is not a missing login. */
+const blockedText = (job: JobDto) =>
+  job.blockedReason === "auth" && job.errorCode === "COOKIE_ACCESS_FAILED"
+    ? t("downloads.blocked.cookie")
+    : t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey);
 const phaseLabel = (p: string | null) => (p ? t((PHASES.has(p) ? `downloads.phase.${p}` : "downloads.phase.other") as MessageKey) : null);
 
 /** Real progress when the total is known; an indeterminate bar otherwise (AC-09). */
@@ -72,7 +77,7 @@ function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction:
       )}
       {job.status === "blocked" && (
         <p className="small" data-testid="job-blocked">
-          {t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey)}
+          {blockedText(job)}
         </p>
       )}
       {job.status === "retry_wait" && job.nextRetryAt && <p className="muted small">{t("downloads.retry_at", { time: formatDateTime(job.nextRetryAt) })}</p>}
@@ -137,7 +142,7 @@ export function ItemDownload({ job, onOpen }: { job: JobDto; onOpen: () => void 
       <ProgressBar job={job} />
       {job.errorCode && job.status === "failed" && <p className="job-error small">{errorMessage(job.errorCode)}</p>}
       {job.status === "blocked" && (
-        <p className="small">{t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey)}</p>
+        <p className="small">{blockedText(job)}</p>
       )}
       <button type="button" className="button button-quiet" onClick={onOpen} data-testid="inspector-open-downloads">
         {t("queue.open")}

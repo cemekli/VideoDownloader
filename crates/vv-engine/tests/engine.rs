@@ -219,7 +219,8 @@ fn disk_full_blocks_and_quota_blocks_before_anything_runs() {
     let j = lib.job(&download(&lib, &item, PresetId::Best));
     assert_eq!(j.status, JobStatus::Blocked, "AC-12");
     assert_eq!(j.blocked_reason.as_deref(), Some("disk"));
-    assert_eq!(j.error_code, None);
+    // The code says why it waits (F5.2); the next claim clears it.
+    assert_eq!(j.error_code.as_deref(), Some("DISK_FULL"));
     assert!(
         lib.write(|c| repo::get_item(c, &item).unwrap()).is_some(),
         "bookmark kept"
@@ -383,4 +384,156 @@ fn engine_scheduler_thread_runs_queued_jobs_and_stops() {
     lib.engine.shutdown();
     assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
     assert!(!lib.cx().offline.load(Ordering::SeqCst));
+}
+
+// STATE.md F5.2 (SPEC §12.1, §21.1; ADR-0023): a job that needs a login
+// runs again with the consented Firefox profile; success is evidence.
+
+fn reddit_login_item(lib: &Lib) -> String {
+    let item = lib.save("https://fake.test/login-auth");
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET source_platform = 'reddit' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    item
+}
+
+fn connect_firefox(lib: &Lib, folder: &str, ops: &[vv_persistence::auth::Operation]) -> String {
+    use vv_persistence::auth::*;
+    let dir = lib.dir.path().join(folder);
+    lib.write(|c| {
+        create(
+            c,
+            &NewProfile {
+                provider: vv_domain::normalize::Platform::Reddit,
+                label: "Reddit · Firefox",
+                method: Method::BrowserCookies,
+                browser_kind: Some(BrowserKind::Firefox),
+                profile_locator: Some(dir.to_str().unwrap()),
+                consent_scope: ops,
+            },
+            1,
+        )
+        .unwrap()
+        .id
+    })
+}
+
+fn profile(lib: &Lib, id: &str) -> vv_persistence::auth::AuthProfile {
+    lib.write(|c| vv_persistence::auth::get(c, id).unwrap())
+}
+
+#[test]
+fn f5_2_login_needed_waits_then_runs_with_the_consented_firefox_profile() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_login_item(&lib);
+
+    // No profile: metadata waits for the user, the item needs a login.
+    let meta = fetch_metadata(&lib, &item);
+    assert_eq!(lib.job(&meta).status, JobStatus::Blocked);
+    assert_eq!(lib.job(&meta).blocked_reason.as_deref(), Some("auth"));
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::LoginRequired);
+
+    // A profile allowed only for downloads is not used for metadata.
+    let p = connect_firefox(&lib, "x1.default-release", &[Operation::Download]);
+    lib.write(|c| {
+        vv_persistence::auth::unblock_provider(c, vv_domain::normalize::Platform::Reddit, 2)
+            .unwrap()
+    });
+    lib.run();
+    assert_eq!(lib.job(&meta).status, JobStatus::Blocked);
+    assert_eq!(
+        profile(&lib, &p).session_state,
+        ProfileState::NeedsVerification
+    );
+
+    // The download is allowed: anonymous refusal + success with the profile
+    // = evidence (§12.1 (a)).
+    let job = download(&lib, &item, PresetId::Best);
+    assert_eq!(
+        lib.job(&job).status,
+        JobStatus::Succeeded,
+        "{:?}",
+        lib.job(&job)
+    );
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::Authorized);
+    assert_eq!(it.access_profile_id.as_deref(), Some(p.as_str()));
+    let pr = profile(&lib, &p);
+    assert_eq!(pr.session_state, ProfileState::SessionAvailable);
+    assert!(pr.last_verified_at.is_some());
+    assert_eq!(originals(&lib, &item).len(), 1);
+    // The profile folder is not in any job row or event.
+    let jobs_dump = lib.write(|c| {
+        c.query_row("SELECT group_concat(coalesce(payload,'') || coalesce(redacted_error_message,''), ' ') FROM job", [], |r| r.get::<_, Option<String>>(0))
+            .unwrap()
+            .unwrap_or_default()
+    });
+    assert!(!jobs_dump.contains("default-release"), "{jobs_dump}");
+}
+
+#[test]
+fn f5_2_unreadable_browser_store_is_cookie_access_failed_not_expired() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_login_item(&lib);
+    let p = connect_firefox(&lib, "broken", &[Operation::Metadata, Operation::Download]);
+    let job = download(&lib, &item, PresetId::Best);
+    let j = lib.job(&job);
+    assert_eq!(j.status, JobStatus::Blocked);
+    assert_eq!(j.blocked_reason.as_deref(), Some("auth"));
+    assert_eq!(j.error_code.as_deref(), Some("COOKIE_ACCESS_FAILED"));
+    assert!(!j
+        .redacted_error_message
+        .unwrap_or_default()
+        .contains("someone"));
+    assert_eq!(
+        profile(&lib, &p).session_state,
+        ProfileState::NeedsVerification
+    );
+
+    // Signed out in Firefox: still a login refusal; the session is not
+    // proven expired, and nothing claims it is available.
+    let lib2 = library(Setup::fake());
+    let item2 = reddit_login_item(&lib2);
+    let p2 = connect_firefox(&lib2, "signedout", &[Operation::Download]);
+    let job2 = download(&lib2, &item2, PresetId::Best);
+    assert_eq!(lib2.job(&job2).status, JobStatus::Blocked);
+    assert_eq!(
+        lib2.job(&job2).error_code.as_deref(),
+        Some("LOGIN_REQUIRED")
+    );
+    let pr = profile(&lib2, &p2);
+    assert_eq!(pr.session_state, ProfileState::NeedsVerification);
+    assert_eq!(pr.last_verified_at, None);
+}
+
+#[test]
+fn f5_2_public_content_never_uses_the_profile() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = lib.save("https://fake.test/video");
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET source_platform = 'reddit' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    let p = connect_firefox(
+        &lib,
+        "x1.default-release",
+        &[Operation::Metadata, Operation::Download],
+    );
+    let job = download(&lib, &item, PresetId::Best);
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    // AC-54: no evidence, so the profile is untouched.
+    let pr = profile(&lib, &p);
+    assert_eq!(pr.session_state, ProfileState::NeedsVerification);
+    assert_eq!(pr.last_verified_at, None);
 }

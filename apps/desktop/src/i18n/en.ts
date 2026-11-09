@@ -323,6 +323,7 @@ export const en = {
   "downloads.blocked.disk": "Waiting for free space or the media folder.",
   "downloads.blocked.auth": "The site asks you to sign in. Connect a Firefox profile where you are signed in to this site, and the download continues.",
   "downloads.connect_session": "Connect a session",
+  "downloads.blocked.cookie": "Firefox's cookies couldn't be read for this site. Check the Firefox profile in Settings → Sessions, or close Firefox, then Try again.",
   "downloads.blocked.tool": "Waiting for the download tools to pass their check.",
   "downloads.blocked.path": "The media folder can't be written to.",
   "downloads.blocked.storage_root": "The media folder can't be found. Connect its drive, or choose another folder in Settings → Media folder, then Try again.",

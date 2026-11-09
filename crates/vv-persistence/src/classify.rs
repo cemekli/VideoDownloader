@@ -230,6 +230,13 @@ pub fn apply_to_job(
         ),
         JobHandling::Block(reason) => {
             jobs::block(c, job_id, Some(generation), reason, now)?;
+            // Why it waits, in detail: e.g. `auth` is a login the site asks
+            // for (`LOGIN_REQUIRED`) or a browser store that could not be
+            // read (`COOKIE_ACCESS_FAILED`); the user acts differently.
+            c.execute(
+                "UPDATE job SET error_code = ?2, redacted_error_message = ?3 WHERE id = ?1",
+                rusqlite::params![job_id, wire, message],
+            )?;
             Ok(JobStatus::Blocked)
         }
         JobHandling::Cancel(reason) => {
