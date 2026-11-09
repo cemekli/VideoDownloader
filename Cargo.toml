@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/vv-domain", "crates/vv-persistence", "crates/vv-ytdlp", "crates/vv-tools", "crates/vv-ffmpeg", "crates/vv-netguard", "crates/vv-process", "crates/vv-benchdata", "crates/vv-import", "crates/vv-engine", "apps/desktop/src-tauri"]
+members = ["crates/vv-domain", "crates/vv-persistence", "crates/vv-ytdlp", "crates/vv-tools", "crates/vv-ffmpeg", "crates/vv-netguard", "crates/vv-process", "crates/vv-benchdata", "crates/vv-import", "crates/vv-engine", "crates/vv-secrets", "apps/desktop/src-tauri"]
 
 [workspace.package]
 edition = "2021"
