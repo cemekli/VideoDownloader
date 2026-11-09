@@ -1384,7 +1384,8 @@
               "download"
             ],
             "consentAt": 1762700000000,
-            "lastVerifiedAt": 1762700100000
+            "lastVerifiedAt": 1762700100000,
+            "hasCookies": false
           }
         ],
         "browserProfiles": [
@@ -1405,7 +1406,8 @@
           "x",
           "dailymotion",
           "twitch"
-        ]
+        ],
+        "cookieFileSupported": true
       }
     },
     "connect_session": {
@@ -1431,7 +1433,8 @@
           "download"
         ],
         "consentAt": 1762700000000,
-        "lastVerifiedAt": null
+        "lastVerifiedAt": null,
+        "hasCookies": false
       }
     },
     "set_session_consent": {
@@ -1453,7 +1456,8 @@
           "download"
         ],
         "consentAt": 1762700000000,
-        "lastVerifiedAt": null
+        "lastVerifiedAt": null,
+        "hasCookies": false
       }
     },
     "clear_session": {
@@ -1470,12 +1474,100 @@
         "state": "not_connected",
         "consent": [],
         "consentAt": null,
-        "lastVerifiedAt": null
+        "lastVerifiedAt": null,
+        "hasCookies": false
       }
     },
     "delete_session": {
       "args": {
         "id": "00000000-0000-4000-8000-00000000c001"
+      },
+      "response": null
+    },
+    "connect_session_file": {
+      "args": {
+        "provider": "vk",
+        "scope": [
+          "metadata",
+          "download",
+          "verify"
+        ]
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c002",
+        "provider": "vk",
+        "label": "VK · cookie file",
+        "method": "cookie_file",
+        "browser": null,
+        "browserProfile": null,
+        "state": "needs_verification",
+        "consent": [
+          "metadata",
+          "download",
+          "verify"
+        ],
+        "consentAt": 1762700000000,
+        "lastVerifiedAt": null,
+        "hasCookies": true
+      }
+    },
+    "reconnect_session": {
+      "args": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "scope": [
+          "metadata",
+          "download",
+          "verify"
+        ]
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "provider": "reddit",
+        "label": "Reddit · Firefox (default-release)",
+        "method": "browser_cookies",
+        "browser": "firefox",
+        "browserProfile": "default-release",
+        "state": "needs_verification",
+        "consent": [
+          "metadata",
+          "download",
+          "verify"
+        ],
+        "consentAt": 1762700000000,
+        "lastVerifiedAt": null,
+        "hasCookies": false
+      }
+    },
+    "verify_session": {
+      "args": {
+        "id": "00000000-0000-4000-8000-00000000c001"
+      },
+      "response": {
+        "outcome": "verified",
+        "session": {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "provider": "reddit",
+          "label": "Reddit · Firefox (default-release)",
+          "method": "browser_cookies",
+          "browser": "firefox",
+          "browserProfile": "default-release",
+          "state": "session_available",
+          "consent": [
+            "metadata",
+            "download",
+            "verify"
+          ],
+          "consentAt": 1762700000000,
+          "lastVerifiedAt": 1762700100000,
+          "hasCookies": false
+        },
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "code": null
+      }
+    },
+    "open_sign_in": {
+      "args": {
+        "provider": "reddit"
       },
       "response": null
     }

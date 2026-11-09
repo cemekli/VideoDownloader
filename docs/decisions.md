@@ -965,3 +965,45 @@ STATE.md F5.2. SPEC §9.3, §12.1, §19, §20.3, §21.1; DEC-08; AC-19, AC-54.
 **Kanıt.** `crates/vv-engine/tests/engine.rs` `f5_2_*` (sahte yt-dlp: profilsiz ret → izinli profille başarı ve kanıt; yalnızca indirmeye izinli profil metadata için kullanılmaz; okunamayan depo `COOKIE_ACCESS_FAILED`; Firefox'ta oturum yoksa `expired` yazılmaz; herkese açık içerik profile dokunmaz), `vv_engine::browsers` testleri, `apps/desktop/src/Downloads.test.tsx` (giriş bekleyen indirme, izinle bağlanma, Settings'te Clear ve Remove). Gerçek Reddit indirmesi Cuma'nın Windows'ta, Firefox'la yapacağı elle testtir; sonucu `docs/platform-support.md`'ye yazılır.
 
 **Açık noktalar.** Firefox açıkken yt-dlp depo dosyasını kopyalar. WAL'daki çok yeni bir giriş kopyada henüz görünmeyebilir; giriş yeni yapıldıysa Firefox'u bir kez kapatmak yeter. VK canlı matrisi (VK-01…10) F5.6'dır.
+
+## ADR-0024: Çerez dosyası, oturum doğrulama ve Sessions ekranı
+
+STATE.md F5.3, F5.4, F5.5. SPEC §9.3, §12.1, §12.2, §20.3, §21.1; DEC-08; AC-19, AC-54, AC-55; VK-10.
+
+**Bağlam.** F5.2 Firefox profiliyle oturumu getirdi (ADR-0023). Firefox kullanmayan ya da Chrome'daki oturumunu kullanmak isteyen biri için SPEC §21.1'in ikinci yolu, kullanıcının kendi tarayıcısından dışa aktardığı Netscape `cookies.txt` dosyasıdır. yt-dlp `--cookies FILE` ile dosyayı okur ve çerez kavanozunu **aynı dosyaya geri yazar**. Ayrıca bir oturumun gerçekten çalıştığını iş beklemeden görmek (§12.1 kanıtı) ve oturumları tek yerden yönetmek (§9.3 Sessions ekranı) gerekiyordu.
+
+**Karar: dosya bir kez okunur, yalnızca platformun çerezleri saklanır.** Kullanıcı dosyayı backend'in açtığı diyalogda seçer; yol webview'a hiç gelmez. `vv_engine::cookiefile` dosyayı okur (en çok 16 MiB, yalnızca okuma, dosya hiç yazılmaz) ve yalnızca seçilen platformun alan adlarına (`reddit.com`, `redd.it`; `vk.com`, `vk.ru`, `vkvideo.ru`; …) ait, biçimi doğru ve süresi geçmemiş satırları tutar. Benzer adlı alanlar (`notreddit.com`, `reddit.com.evil.example`) eşleşmez; eşleşme tam etiket sınırındadır. Platformun hiç çerezi yoksa bağlantı reddedilir (`session-file-no-cookies`). Süzülmüş metin F5.1'in DPAPI secret store'una gider (`attach_secret`), profil `cookie_file` yöntemiyle ve `needs_verification` durumuyla oluşur. Uygulama kullanıcıya dosyayı silmesini önerir. Secret store olmayan sistemde (Windows dışı) yöntem sunulmaz: düz metne düşülmez.
+
+**Karar: iş başına çalışma kopyası.** Her yt-dlp çalıştırması için saklı çerezler `staging/cookies/<uuid>.txt` dosyasına yazılır ve yt-dlp'ye bu kopya verilir (`--cookies <kopya>`). Kopya `WorkingCopy` değeriyle tutulur ve değer bırakıldığında silinir: başarı, hata, iptal ve kapanma aynı yoldan geçer. Çökme sonrası kalan kopyalar açılış uzlaştırmasında silinir (`auth::clean_working_copies`, `Engine::reconcile`). Klasör yalnızca mevcut kullanıcının erişebileceği biçimde oluşturulur (`vv_secrets::private_fs`): Windows'ta korumalı DACL, tek giriş, kullanıcının kendi SID'ine tam yetki (dosyalar devralır); Unix'te klasör `0700`, dosya `0600`. Dosya `create_new` ile açılır, var olan bir dosya ya da bağlantı izlenmez. Kopyanın yolu ve içeriği iş satırına, payload'a, loga ve export'a girmez; iş her denemede erişim bağlamını profilden yeniden kurar (§11.6). Secret okunamazsa ya da kopya yazılamazsa sonuç `COOKIE_ACCESS_FAILED` olur ve profil `needs_verification`'da kalır.
+
+**Karar: sahipsiz secret uzlaştırması.** ADR-0022'nin açık bıraktığı nokta: açılışta store'daki referanslardan hiçbir profilin işaret etmediği secret'lar silinir (`auth::reconcile_secrets`). Yarım kalmış `.tmp` yazımları da gider.
+
+**Karar: kanıt kuralına `ACCESS_DENIED` eklendi.** §12.1 (a) "oturumsuz denemede `LOGIN_REQUIRED` veya `ACCESS_DENIED`" der. Metadata ve indirme artık ikisinde de izinli profille ikinci denemeyi yapar. Profille gelen `ACCESS_DENIED` öğeyi `access_denied` yapar, profile dokunmaz (AC-19); arayüz bunu "hesabınızın erişimi yok, yeniden giriş bunu değiştirmez" diye, "giriş gerekli" mesajından ayrı gösterir. Bookmark silinmez.
+
+**Karar: `verify_session` (F5.4).** §12.1 (b), yalnızca oturum açıkken geçen platforma özgü bir kontrol ister. Uygulamanın her isteği yt-dlp üzerinden ve ağ kapısı arkasından gider; yt-dlp desteklenen hiçbir platform için böyle bir kontrol sunmaz. Bu yüzden (b) şimdilik yoktur (`docs/platform-support.md`) ve doğrulama bilinçli yapılan (a)'dır: platformun giriş gerektirmiş en yeni öğesi (`login_required`, `authorized` ya da `access_denied`; kaldırılmamış) önce profilsiz, reddedilirse profille okunur (yalnızca metadata, küçük resim yok). Sonuçlar:
+
+| Durum | Sonuç | Profil | Öğe |
+|---|---|---|---|
+| Profilsiz ret, profille başarı | `verified` | `session_available`, `last_verified_at` | `authorized` |
+| Profilsiz başarı | `public_item` | değişmez (AC-54) | `public_ok` |
+| Profille `LOGIN_REQUIRED` | `not_signed_in` | `needs_verification` | `login_required` |
+| Profille `COOKIE_ACCESS_FAILED` | `cookie_access_failed` | `needs_verification` | – |
+| Profille `ACCESS_DENIED` | `access_denied` | değişmez (AC-19) | `access_denied` |
+| Uygun öğe yok | `no_test_item` | değişmez | – |
+| `verify` izni yok / temizlenmiş profil | `no_consent` / `not_runnable` | değişmez | – |
+| Offline Mode, araç yok, ağ hatası | `failed` + §19 kodu | değişmez | – |
+
+Doğrulama `verify` iznini ister (bağlama formunda üç işlem de varsayılan seçilidir). Başarılı doğrulama o platformda oturum bekleyen işleri kuyruğa döndürür.
+
+**Karar: Sessions ekranı (F5.5).** Kenar çubuğunda Downloads'ın altında. Bağlı siteler için: platform, yöntem (Firefox profilinin adı ya da "Cookie file"), §12.2 durumu, son doğrulama zamanı, izinler (kutucuklarla daraltılıp genişletilir; boş izin = kullanılmaz), Check now, Clear, Remove ve "Sign in to X in your browser". Temizlenmiş Firefox oturumu "Reconnect" ile yeniden izin alır (`auth::reconnect`; durum `needs_verification`). Temizlenmiş çerez dosyası oturumunun çerezleri silindiği için yeniden bağlanmaz, yeni dosya seçilir. Bağlı olmayan siteler için Connect ve giriş sayfası. Giriş sayfası (`open_sign_in`) her platform için sabit bir https adresidir, webview'dan adres gelmez, Offline Mode'da reddedilir (§9.3 "güvenli yönlendirme"). Bağlama formu yöntem seçer: Firefox profili ya da çerez dosyası; her yöntem neyin okunduğunu ve neyin saklandığını ayrı metinle anlatır, "I allow this" işaretlenmeden bağlanmaz. Settings → Sessions artık bu ekrana yönlendirir.
+
+**Komutlar.** `connect_session_file(provider, scope)` (diyalog; kapatılırsa `null`), `reconnect_session(id, scope)`, `verify_session(id)` (`VerifyDto`: `outcome`, `session`, `itemId`, `code`), `open_sign_in(provider)`. `SessionDto.hasCookies`, `SessionOverview.cookieFileSupported` eklendi. Dosya reddinin nedeni `safeDetails.reason` ile gelir.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-engine/tests/engine.rs` `f5_3_*`: kopya yalnızca iş sürerken var, başarı, hata ve iptal sonrası yok; çökme kopyası ve sahipsiz secret açılışta silinir; kopya klasörü `0700` (Linux); veritabanında ne çerez ne kopya yolu var; secret silinmişse `COOKIE_ACCESS_FAILED`. `f5_4_*`: `ACCESS_DENIED` sonrası profille başarı kanıttır; üyeliği olmayan hesapta öğe `access_denied`, profil değişmez; `verify_session` tablodaki her satır; çerez dosyasıyla doğrulamada kopya kalmaz. Sahte yt-dlp çerez dosyasını gerçek yt-dlp gibi geri yazar.
+- `vv_engine::cookiefile` birim testleri (süzme, benzer alan adları, dosyanın değişmemesi), `vv_secrets::private_fs` testi, `crates/vv-persistence/tests/auth.rs` (reconnect, doğrulama öğesi, uzlaştırma), `apps/desktop/src-tauri/src/session_commands.rs` testleri (yalnızca o sitenin çerezi saklanır, DTO'da çerez/yol/referans yok, dosya değişmez), `tests/ipc.rs` (sözleşme, reconnect, giriş sayfası Offline Mode'da reddedilir).
+- Arayüz: `apps/desktop/src/Sessions.test.tsx`, `e2e/sessions.spec.ts` (giriş bekleyen indirme → Sessions'ta bağlama → indirme biter → Check now), `e2e/a11y.spec.ts` (ekran ve bağlama penceresi, iki tema).
+- Windows DACL yolu Windows CI'da derlenir; davranışı Cuma'nın elle testinde (VK-10) görülür.
+
+**Açık noktalar.** Gerçek bir platformla dosya yöntemi (VK-10) ve VK canlı matrisi F5.6'dır. Öğe ayrıntısında erişim durumu (ör. "Login required · Session expired") henüz gösterilmiyor; ayrım şimdilik Downloads ve Sessions ekranlarındadır.

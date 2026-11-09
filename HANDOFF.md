@@ -4,6 +4,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
+- **F5.3–F5.5 (9 Kas, PR açık):** çerez dosyasıyla oturum (yalnızca platformun çerezleri DPAPI'de; her iş için kullanıcıya özel klasörde kopya, iş bitince silinir), `verify_session` ("Check now", §12.1 (a) kanıtı), `ACCESS_DENIED` de kanıt sayılır ve profile dokunmaz (AC-19), kenar çubuğunda Sessions ekranı. ADR-0024. Bekleyen: CI ve Cuma'nın elle testi.
 - **F5.2 (9 Kas, PR #35, merge edildi, ✅):** Firefox çereziyle oturum. Settings → Sessions'ta site + Firefox profili + izin; giriş bekleyen indirmede "Connect a session". Motor önce profilsiz dener, `LOGIN_REQUIRED` olursa izinli profille yeniden dener (ADR-0023). Cuma Reddit gönderisini Firefox oturumuyla indirip oynattı.
 - **İlk açılış gecikmesi çözüldü (9 Kas):** taze derlemeden sonra thumbnail'lerin geç gelmesi ve pencerenin bir kez küçülmesi Avast Antivirus'ün taramasıymış; Avast kapalıyken hemen geliyor. Kodda değişiklik gerekmiyor; F4.7 bilinen kısıtlarına not düşülecek.
 - **F5.1 (9 Kas, PR #32, merge edildi):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
@@ -14,7 +15,8 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
-1. Sıradaki: F5.3 (çerez dosyası, iş başına çalışma kopyası) ya da F5.5 (tam Sessions ekranı); VK canlı matrisi F5.6.
+1. F5.3–F5.5 elle test (Cuma, release exe): Sessions ekranında Reddit satırı "Signed in" olmalı; "Check now" → "the check passed". Bir siteyi çerez dosyasıyla bağla (tarayıcıdan cookies.txt dışa aktar, Connect → "A cookie file I export"), giriş isteyen bir videoyu indir; işten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz, STATE F5.3–F5.5 ✅.
+2. Sıradaki: VK canlı matrisi F5.6, sonra F5.7 (uygulamaya ait profil PoC).
 
 ## Bilinmesi gerekenler
 

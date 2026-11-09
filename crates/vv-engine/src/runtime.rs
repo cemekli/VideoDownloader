@@ -66,6 +66,12 @@ impl<S: Store> Engine<S> {
             let _ = metadata::enqueue_pending(c, now, 500);
         });
         self.unblock_tools();
+        // Cookie-file working copies left by a crash (§21.1), then secrets
+        // no profile points at (ADR-0022, ADR-0024).
+        crate::auth::clean_working_copies(&cx.dirs);
+        cx.store.write(|c| {
+            let _ = vv_persistence::auth::reconcile_secrets(c, cx.secrets.as_ref());
+        });
         clean_staging(cx);
     }
 

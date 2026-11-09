@@ -317,3 +317,113 @@ fn schema_has_no_column_for_a_secret_value() {
         )
         .is_err());
 }
+
+#[test]
+fn f5_5_reconnect_restores_consent_unproven_and_only_for_browser_profiles() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = open(d.path());
+    let store = MemoryStore::new();
+    let c = db.writer();
+    let p = auth::create(c, &firefox_reddit(ALL), 10).unwrap();
+    auth::clear(c, &store, &p.id, 20).unwrap();
+    assert!(
+        auth::reconnect(c, &p.id, &[], 25).is_err(),
+        "no reconnect without consent"
+    );
+    let back = auth::reconnect(c, &p.id, &[Operation::Download], 30).unwrap();
+    assert_eq!(back.session_state, ProfileState::NeedsVerification);
+    assert_eq!(back.consent_scope, vec![Operation::Download]);
+    assert_eq!(back.consent_at, Some(30));
+    assert_eq!(back.last_verified_at, None);
+    assert_eq!(
+        auth::usable_for(c, Platform::Reddit, Operation::Download)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let file = auth::create(
+        c,
+        &NewProfile {
+            provider: Platform::Vk,
+            label: "VK (cookie file)",
+            method: Method::CookieFile,
+            browser_kind: None,
+            profile_locator: None,
+            consent_scope: ALL,
+        },
+        40,
+    )
+    .unwrap();
+    auth::clear(c, &store, &file.id, 41).unwrap();
+    assert!(matches!(
+        auth::reconnect(c, &file.id, ALL, 42),
+        Err(AuthError::Invalid(_))
+    ));
+}
+
+#[test]
+fn f5_4_verification_item_is_a_live_item_that_needed_a_login() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = open(d.path());
+    let clock = FixedClock::new(1_762_500_000_000);
+    let save = |db: &mut Database, url: &str| match save_bookmark(db.writer(), &clock, url)
+        .unwrap()
+        .outcome
+    {
+        SaveOutcome::Created(it) => it.id,
+        o => panic!("{o:?}"),
+    };
+    let public = save(
+        &mut db,
+        "https://www.reddit.com/r/videos/comments/1aaa111/x/",
+    );
+    let gated = save(
+        &mut db,
+        "https://www.reddit.com/r/videos/comments/1bbb222/y/",
+    );
+    let other = save(&mut db, "https://vk.com/video-1_2");
+    let c = db.writer();
+    assert_eq!(auth::verification_item(c, Platform::Reddit).unwrap(), None);
+    c.execute(
+        "UPDATE library_item SET access_state = 'public_ok' WHERE id = ?1",
+        [&public],
+    )
+    .unwrap();
+    c.execute(
+        "UPDATE library_item SET access_state = 'login_required' WHERE id IN (?1, ?2)",
+        [&gated, &other],
+    )
+    .unwrap();
+    assert_eq!(
+        auth::verification_item(c, Platform::Reddit).unwrap(),
+        Some(gated.clone())
+    );
+    c.execute(
+        "UPDATE library_item SET removed_at = 1 WHERE id = ?1",
+        [&gated],
+    )
+    .unwrap();
+    assert_eq!(auth::verification_item(c, Platform::Reddit).unwrap(), None);
+}
+
+#[test]
+fn f5_3_reconciliation_deletes_secrets_no_profile_points_at() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = open(d.path());
+    let store = MemoryStore::new();
+    let c = db.writer();
+    let p = auth::create(c, &firefox_reddit(ALL), 10).unwrap();
+    auth::attach_secret(c, &store, &p.id, &Secret::new(b"kept".to_vec()), 11).unwrap();
+    use vv_secrets::SecretStore;
+    let orphan = store.put(&Secret::new(b"orphan".to_vec())).unwrap();
+    assert_eq!(auth::reconcile_secrets(c, &store).unwrap(), 1);
+    assert!(store.get(&orphan).is_err());
+    assert_eq!(
+        auth::read_secret(c, &store, &p.id, Operation::Download)
+            .unwrap()
+            .expose(),
+        b"kept"
+    );
+    assert_eq!(auth::reconcile_secrets(c, &store).unwrap(), 0);
+}

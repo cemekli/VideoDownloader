@@ -18,6 +18,7 @@ vv-netguard = { path = "../vv-netguard" }
 vv-process = { path = "../vv-process" }
 vv-ffmpeg = { path = "../vv-ffmpeg" }
 vv-import = { path = "../vv-import" }
+vv-secrets = { path = "../vv-secrets" }
 url = "2"
 
 [dev-dependencies]

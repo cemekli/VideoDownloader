@@ -74,6 +74,17 @@ for (const theme of ["dark", "light"] as const) {
       expect(await serious(page)).toEqual([]);
     });
 
+    test("Sessions screen and its connect dialog (F5.5)", async ({ page }, info) => {
+      await ready(page, "?fixture=login-required");
+      if (info.project.name === "narrow-800") await page.getByTestId("menu-button").click();
+      await page.getByTestId("nav-sessions").click();
+      await expect(page.getByTestId("sessions")).toBeVisible();
+      expect(await serious(page)).toEqual([]);
+      await page.locator('[data-testid="session-site"][data-provider="reddit"]').getByTestId("session-site-connect").click();
+      await expect(page.getByTestId("session-dialog")).toBeVisible();
+      expect(await serious(page, '[data-testid="session-dialog"]')).toEqual([]);
+    });
+
     test("first run, every step", async ({ page }) => {
       await page.goto("/?fixture=first-run");
       const ob = page.getByTestId("onboarding");

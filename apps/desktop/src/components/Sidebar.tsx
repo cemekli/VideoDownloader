@@ -6,7 +6,7 @@ import { MenuButton } from "./Menu";
 import { t } from "../i18n";
 
 /** What the main area shows besides the plain views (STATE.md F2.1). */
-export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" } | { kind: "downloads" };
+export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" } | { kind: "downloads" } | { kind: "sessions" };
 
 export type SidebarAction =
   | { kind: "new-collection"; parentId: string | null }
@@ -92,6 +92,7 @@ export function Sidebar({
             <li>{navButton(VIEW_LABEL[v], plain && view === v, () => onView(v), `nav-${v}`, v === "inbox" ? count(data?.counts.inbox) : null)}</li>
             {/* §9.2 order: Inbox, All Items, Favorites, Downloads, Recently Added. */}
             {v === "favorites" && <li>{navButton(t("downloads.title"), is("downloads"), () => onScope({ kind: "downloads" }), "nav-downloads")}</li>}
+            {v === "favorites" && <li>{navButton(t("sessions.title"), is("sessions"), () => onScope({ kind: "sessions" }), "nav-sessions")}</li>}
           </Fragment>
         ))}
       </ul>

@@ -537,3 +537,393 @@ fn f5_2_public_content_never_uses_the_profile() {
     assert_eq!(pr.session_state, ProfileState::NeedsVerification);
     assert_eq!(pr.last_verified_at, None);
 }
+
+// ---- F5.3: cookie file, per-job working copy (AC-55, VK-10) ----
+
+const REDDIT_COOKIES: &str = "# Netscape HTTP Cookie File\n\
+.reddit.com\tTRUE\t/\tTRUE\t0\treddit_session\tVV-CANARY-cookie-4b2e\n\
+.google.com\tTRUE\t/\tTRUE\t0\tSID\tGOOGLE-CANARY\n";
+
+fn reddit_item(lib: &Lib, scenario: &str) -> String {
+    let item = lib.save(&format!("https://fake.test/{scenario}"));
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET source_platform = 'reddit' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    item
+}
+
+/// Connects a cookie file the way the desktop command does: filter to the
+/// platform, store the result as a secret.
+fn connect_file(lib: &Lib, text: &str, ops: &[vv_persistence::auth::Operation]) -> String {
+    use vv_persistence::auth::*;
+    let f = vv_engine::cookiefile::filter(text, vv_domain::normalize::Platform::Reddit, 1).unwrap();
+    lib.write(|c| {
+        let p = create(
+            c,
+            &NewProfile {
+                provider: vv_domain::normalize::Platform::Reddit,
+                label: "Reddit · cookie file",
+                method: Method::CookieFile,
+                browser_kind: None,
+                profile_locator: None,
+                consent_scope: ops,
+            },
+            1,
+        )
+        .unwrap();
+        attach_secret(
+            c,
+            lib.secrets.as_ref(),
+            &p.id,
+            &vv_secrets::Secret::new(f.text.into_bytes()),
+            1,
+        )
+        .unwrap()
+        .id
+    })
+}
+
+fn copies(lib: &Lib) -> Vec<std::path::PathBuf> {
+    std::fs::read_dir(lib.cx().dirs.cookie_copies())
+        .map(|rd| rd.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default()
+}
+
+fn seen_copy(lib: &Lib) -> std::path::PathBuf {
+    std::path::PathBuf::from(
+        std::fs::read_to_string(lib.cx().dirs.staging.join("fake-cookie-seen"))
+            .expect("yt-dlp got a cookie file"),
+    )
+}
+
+#[test]
+fn f5_3_cookie_file_runs_from_a_private_copy_that_is_gone_afterwards() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "login-file");
+    let p = connect_file(
+        &lib,
+        REDDIT_COOKIES,
+        &[Operation::Metadata, Operation::Download],
+    );
+
+    let job = download(&lib, &item, PresetId::Best);
+    assert_eq!(
+        lib.job(&job).status,
+        JobStatus::Succeeded,
+        "{:?}",
+        lib.job(&job)
+    );
+    // §12.1 (a): refused without, fine with the cookies.
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::Authorized);
+    let pr = profile(&lib, &p);
+    assert_eq!(pr.session_state, ProfileState::SessionAvailable);
+    assert!(pr.last_verified_at.is_some());
+
+    // yt-dlp got a copy inside the private folder, which is gone now
+    // (yt-dlp wrote to it; nothing else was written).
+    let seen = seen_copy(&lib);
+    assert!(seen.starts_with(lib.cx().dirs.cookie_copies()), "{seen:?}");
+    assert!(!seen.exists(), "AC-55: copy deleted after success");
+    assert!(copies(&lib).is_empty());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(lib.cx().dirs.cookie_copies())
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+    // Only the platform's cookies were ever stored, and neither they nor
+    // the copy's path are in the database (job rows, payloads, items).
+    let stored = lib.write(|c| {
+        vv_persistence::auth::read_secret(c, lib.secrets.as_ref(), &p, Operation::Download).unwrap()
+    });
+    let stored = String::from_utf8(stored.expose().to_vec()).unwrap();
+    assert!(stored.contains("reddit_session") && !stored.contains("GOOGLE"));
+    let dump = lib.dump();
+    assert!(
+        !dump.contains("VV-CANARY-cookie"),
+        "AC-55: cookie in the database"
+    );
+    assert!(!dump.contains(seen.file_name().unwrap().to_str().unwrap()));
+    assert!(!dump.contains("cookies"), "no copy path in the database");
+}
+
+#[test]
+fn f5_3_copy_is_deleted_after_a_failure_and_after_a_cancel() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    // Failure: the site still says "sign in" with these cookies.
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "login-file");
+    let signed_out = REDDIT_COOKIES.replace("VV-CANARY-cookie-4b2e", "signedout");
+    let p = connect_file(&lib, &signed_out, &[Operation::Download]);
+    let job = download(&lib, &item, PresetId::Best);
+    assert_eq!(lib.job(&job).status, JobStatus::Blocked);
+    assert_eq!(lib.job(&job).error_code.as_deref(), Some("LOGIN_REQUIRED"));
+    assert_eq!(
+        profile(&lib, &p).session_state,
+        ProfileState::NeedsVerification
+    );
+    assert!(
+        !seen_copy(&lib).exists(),
+        "AC-55: copy deleted after a failure"
+    );
+    assert!(copies(&lib).is_empty());
+
+    // Cancel while yt-dlp runs with the copy.
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "login-file-slow");
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET access_state = 'login_required' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    connect_file(&lib, REDDIT_COOKIES, &[Operation::Download]);
+    let now = lib.clock.now_ms();
+    let job = lib.write(|c| download::enqueue(c, &item, PresetId::Best, now).unwrap().id);
+    std::thread::scope(|s| {
+        let h = s.spawn(|| lib.run());
+        for _ in 0..400 {
+            if lib.job(&job).progress.bytes_done.unwrap_or(0) > 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(copies(&lib).len(), 1, "the copy exists while yt-dlp runs");
+        let now = lib.clock.now_ms();
+        lib.write(|c| jobs::cancel(c, &job, CancelReason::User, now).unwrap());
+        h.join().unwrap();
+    });
+    assert_eq!(lib.job(&job).status, JobStatus::Canceled);
+    assert!(
+        copies(&lib).is_empty(),
+        "AC-55: copy deleted after a cancel"
+    );
+}
+
+#[test]
+fn f5_3_copies_left_by_a_crash_and_orphan_secrets_go_at_start() {
+    use vv_secrets::SecretStore;
+    let lib = library(Setup::fake());
+    let dir = lib.cx().dirs.cookie_copies();
+    vv_secrets::private_fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("left-by-crash.txt"), REDDIT_COOKIES).unwrap();
+    let orphan = lib
+        .secrets
+        .put(&vv_secrets::Secret::new(b"nobody points here".to_vec()))
+        .unwrap();
+    lib.engine.reconcile();
+    assert!(
+        copies(&lib).is_empty(),
+        "AC-55: crash copies deleted at start"
+    );
+    assert!(lib.secrets.get(&orphan).is_err());
+}
+
+#[test]
+fn f5_3_unreadable_stored_cookies_are_cookie_access_failed() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "login-file");
+    let p = connect_file(&lib, REDDIT_COOKIES, &[Operation::Download]);
+    // The secret vanished from the store (e.g. another Windows user).
+    lib.write(|c| {
+        let r: String = c
+            .query_row(
+                "SELECT secure_local_ref FROM auth_profile WHERE id = ?1",
+                [&p],
+                |r| r.get(0),
+            )
+            .unwrap();
+        use vv_secrets::SecretStore;
+        lib.secrets
+            .delete(&vv_secrets::SecretRef::parse(&r).unwrap())
+            .unwrap();
+    });
+    let job = download(&lib, &item, PresetId::Best);
+    assert_eq!(
+        lib.job(&job).error_code.as_deref(),
+        Some("COOKIE_ACCESS_FAILED")
+    );
+    assert_eq!(
+        profile(&lib, &p).session_state,
+        ProfileState::NeedsVerification
+    );
+    assert!(copies(&lib).is_empty());
+}
+
+// ---- F5.4: evidence rule and verify_session (§12.1, AC-19, AC-54) ----
+
+#[test]
+fn f5_4_access_denied_then_profile_success_is_evidence_and_denied_with_profile_keeps_the_session() {
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "denied-auth");
+    let p = connect_firefox(&lib, "x1.default-release", &[Operation::Metadata]);
+    let job = fetch_metadata(&lib, &item);
+    assert_eq!(
+        lib.job(&job).status,
+        JobStatus::Succeeded,
+        "{:?}",
+        lib.job(&job)
+    );
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::Authorized);
+    assert_eq!(
+        profile(&lib, &p).session_state,
+        ProfileState::SessionAvailable
+    );
+
+    // AC-19: signed in, but this account may not see it. The item says
+    // access denied; the session stays as it was; the bookmark stays.
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "denied-auth");
+    let p = connect_firefox(&lib, "x1.nomember", &[Operation::Metadata]);
+    let job = fetch_metadata(&lib, &item);
+    let j = lib.job(&job);
+    assert_eq!(j.status, JobStatus::Failed);
+    assert_eq!(j.error_code.as_deref(), Some("ACCESS_DENIED"));
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::AccessDenied);
+    assert!(it.removed_at.is_none(), "AC-19: the bookmark is kept");
+    let pr = profile(&lib, &p);
+    assert_eq!(pr.session_state, ProfileState::NeedsVerification);
+    assert_eq!(pr.last_verified_at, None);
+}
+
+#[test]
+fn f5_4_verify_session_proves_the_session_with_a_login_item() {
+    use vv_engine::verify::{verify_session, VerifyOutcome};
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let all = [Operation::Metadata, Operation::Download, Operation::Verify];
+
+    // Nothing has needed a login yet: nothing to test with.
+    let p = connect_firefox(&lib, "x1.default-release", &all);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::NoTestItem);
+    assert_eq!(r.profile.session_state, ProfileState::NeedsVerification);
+
+    // No consent for verify.
+    let p2 = connect_firefox(&lib, "x2.default-release", &[Operation::Download]);
+    assert_eq!(
+        verify_session(lib.cx(), &p2).unwrap().outcome,
+        VerifyOutcome::NoConsent
+    );
+
+    // A login item: refused anonymously, read with the profile.
+    let item = reddit_item(&lib, "login-auth");
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET access_state = 'login_required' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::Verified);
+    assert_eq!(r.item_id.as_deref(), Some(item.as_str()));
+    assert_eq!(r.profile.session_state, ProfileState::SessionAvailable);
+    assert!(r.profile.last_verified_at.is_some());
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::Authorized);
+    assert_eq!(it.access_profile_id.as_deref(), Some(p.as_str()));
+}
+
+#[test]
+fn f5_4_verify_session_failures_follow_the_table() {
+    use vv_engine::verify::{verify_session, VerifyOutcome};
+    use vv_persistence::auth::{Operation, ProfileState};
+    let all = [Operation::Metadata, Operation::Download, Operation::Verify];
+    let gated = |lib: &Lib, scenario: &str| {
+        let item = reddit_item(lib, scenario);
+        lib.write(|c| {
+            c.execute(
+                "UPDATE library_item SET access_state = 'login_required' WHERE id = ?1",
+                [&item],
+            )
+            .unwrap()
+        });
+        item
+    };
+
+    // Signed out in Firefox: not signed in, not expired.
+    let lib = library(Setup::fake());
+    gated(&lib, "login-auth");
+    let p = connect_firefox(&lib, "signedout", &all);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::NotSignedIn);
+    assert_eq!(r.profile.session_state, ProfileState::NeedsVerification);
+    assert_eq!(r.profile.last_verified_at, None);
+
+    // Store unreadable.
+    let lib = library(Setup::fake());
+    gated(&lib, "login-auth");
+    let p = connect_firefox(&lib, "broken", &all);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::CookieAccessFailed);
+    assert_eq!(r.profile.session_state, ProfileState::NeedsVerification);
+
+    // AC-54: the test item opens without a login: no evidence, the
+    // session is not touched.
+    let lib = library(Setup::fake());
+    let item = gated(&lib, "video");
+    let p = connect_firefox(&lib, "x1.default-release", &all);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::PublicItem);
+    assert_eq!(r.profile.session_state, ProfileState::NeedsVerification);
+    assert_eq!(r.profile.last_verified_at, None);
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::PublicOk);
+
+    // AC-19: signed in, membership missing: the item says so, the session
+    // is not called expired.
+    let lib = library(Setup::fake());
+    let item = gated(&lib, "denied-auth");
+    let p = connect_firefox(&lib, "x1.nomember", &all);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::AccessDenied);
+    assert_eq!(r.profile.session_state, ProfileState::NeedsVerification);
+    let it = lib.write(|c| repo::get_item(c, &item).unwrap().unwrap());
+    assert_eq!(it.access_state, AccessState::AccessDenied);
+
+    // Offline Mode: nothing runs.
+    let lib = library(Setup::fake());
+    gated(&lib, "login-auth");
+    let p = connect_firefox(&lib, "x1.default-release", &all);
+    lib.cx()
+        .offline
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::Failed);
+    assert_eq!(r.code, Some(vv_domain::error::ErrorCode::OfflineMode));
+}
+
+#[test]
+fn f5_4_verify_session_with_a_cookie_file_leaves_no_copy() {
+    use vv_engine::verify::{verify_session, VerifyOutcome};
+    use vv_persistence::auth::{Operation, ProfileState};
+    let lib = library(Setup::fake());
+    let item = reddit_item(&lib, "login-file");
+    lib.write(|c| {
+        c.execute(
+            "UPDATE library_item SET access_state = 'login_required' WHERE id = ?1",
+            [&item],
+        )
+        .unwrap()
+    });
+    let p = connect_file(&lib, REDDIT_COOKIES, &[Operation::Verify]);
+    let r = verify_session(lib.cx(), &p).unwrap();
+    assert_eq!(r.outcome, VerifyOutcome::Verified);
+    assert_eq!(r.profile.session_state, ProfileState::SessionAvailable);
+    assert!(copies(&lib).is_empty());
+}

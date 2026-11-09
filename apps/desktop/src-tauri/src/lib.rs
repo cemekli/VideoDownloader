@@ -101,7 +101,11 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             session_commands::connect_session,
             session_commands::set_session_consent,
             session_commands::clear_session,
-            session_commands::delete_session
+            session_commands::delete_session,
+            session_commands::connect_session_file,
+            session_commands::reconnect_session,
+            session_commands::verify_session,
+            session_commands::open_sign_in
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous
         // handler runs on the window's thread: hundreds of thumbnails (each

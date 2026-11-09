@@ -43,6 +43,7 @@ import type {
   SessionClient,
   SessionDto,
   SessionOverview,
+  VerifyDto,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -222,6 +223,10 @@ const downloadCommands: DownloadClient = {
 const sessionCommands: SessionClient = {
   listSessions: () => call<SessionOverview>("list_sessions"),
   connectSession: (provider, browser, browserProfile, scope) => call<SessionDto>("connect_session", { provider, browser, browserProfile, scope }),
+  connectSessionFile: (provider, scope) => call<SessionDto | null>("connect_session_file", { provider, scope }),
+  reconnectSession: (id, scope) => call<SessionDto>("reconnect_session", { id, scope }),
+  verifySession: (id) => call<VerifyDto>("verify_session", { id }),
+  openSignIn: (provider) => call<void>("open_sign_in", { provider }),
   setSessionConsent: (id, scope) => call<SessionDto>("set_session_consent", { id, scope }),
   clearSession: (id) => call<SessionDto>("clear_session", { id }),
   deleteSession: (id) => call<void>("delete_session", { id }),

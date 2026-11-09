@@ -79,6 +79,10 @@
     "allow-set-session-consent",
     "allow-clear-session",
     "allow-delete-session",
+    "allow-connect-session-file",
+    "allow-reconnect-session",
+    "allow-verify-session",
+    "allow-open-sign-in",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

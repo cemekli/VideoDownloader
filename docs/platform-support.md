@@ -53,6 +53,10 @@ Ayrıntılı sonuç her CI çalışmasında `test-artifacts/playback-matrix/` al
 
 VK-01…VK-10 canlı test matrisi SPEC §21.2'de tanımlıdır. Hiçbiri çalıştırılmadı. Sonuçlar F5.6'da buraya tarihli yazılır.
 
+**Oturum doğrulama (§12.1, ADR-0024).** Platforma özgü, yalnızca oturum açıkken geçen bir kontrol (kanıt (b)) hiçbir platform için yok: uygulamanın istekleri yalnızca yt-dlp üzerinden gider ve yt-dlp böyle bir kontrol sunmaz. Bu yüzden her platformda oturum yalnızca (a) ile doğrulanır: giriş gerektirmiş bir öğe profilsiz reddedilir, profille açılır. Sessions ekranındaki "Check now" bunu kaydedilmiş en yeni böyle öğeyle yapar; öyle bir öğe yoksa doğrulama yapılamaz.
+
+**Yöntemler.** Firefox profili (F5.2, Reddit'te 9 Kas 2026'da çalıştı) ve dışa aktarılmış çerez dosyası (F5.3, yalnızca Windows; gerçek platformla henüz denenmedi, VK-10). Chrome ve Edge Windows'ta doğrudan okunamaz (app-bound şifreleme); bunlardaki oturum çerez dosyası olarak dışa aktarılarak kullanılabilir.
+
 ## Kayıt kuralı
 
 Yeni bir satır ya da durum değişikliği için: tarih, uygulama commit'i, araç sürümleri, işletim sistemi, kullanılan izinli URL'nin türü (gerçek URL ve çerezler yazılmaz), adımlar ve kanıt yolu (`test-artifacts/...` ya da CI linki). Başarısız sonuçlar da yazılır (SPEC §25.4).

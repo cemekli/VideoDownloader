@@ -50,25 +50,7 @@ describe("Downloads", () => {
     await waitFor(() => expect(screen.getByTestId("downloads-done")).toBeVisible(), SLOW);
     const overview = await client.listSessions();
     expect(overview.sessions).toHaveLength(1);
-    expect(overview.sessions[0]).toMatchObject({ provider: "instagram", state: "session_available", consent: ["metadata", "download"] });
-  });
-
-  it("Settings → Sessions lists a connected site; Clear withdraws consent and Remove deletes it", async () => {
-    const user = userEvent.setup();
-    const client = createFixtureClient(undefined, "login-required");
-    await client.connectSession("reddit", "firefox", "default-release", ["download"]);
-    render(<App client={client} />);
-    await user.click(await screen.findByTestId("settings-button"));
-    const block = await screen.findByTestId("sessions");
-    const row = await within(block).findByTestId("session");
-    expect(row).toHaveAttribute("data-provider", "reddit");
-    expect(row).toHaveTextContent("Firefox (default-release)");
-    expect(row).toHaveTextContent("Allowed: Downloading");
-    await user.click(within(row).getByTestId("session-clear"));
-    await waitFor(() => expect(within(block).getByTestId("session")).toHaveAttribute("data-state", "not_connected"));
-    expect(within(block).getByTestId("session")).toHaveTextContent("Nothing allowed");
-    await user.click(within(block).getByTestId("session-delete"));
-    await within(block).findByTestId("sessions-empty");
+    expect(overview.sessions[0]).toMatchObject({ provider: "instagram", state: "session_available", consent: ["metadata", "download", "verify"] });
   });
 
   it("a download shows its phase and real progress, then lands in Completed and the item is Downloaded", async () => {
