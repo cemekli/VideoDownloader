@@ -156,7 +156,7 @@ macro_rules! text_enum {
 text_enum!(ItemKind { Bookmark = "bookmark", RemoteVideo = "remote_video", LocalVideo = "local_video" });
 text_enum!(SourcePlatform {
     Youtube = "youtube", Facebook = "facebook", Instagram = "instagram", Tiktok = "tiktok",
-    X = "x", Vk = "vk", Dailymotion = "dailymotion", Generic = "generic", Local = "local",
+    X = "x", Vk = "vk", Dailymotion = "dailymotion", Twitch = "twitch", Generic = "generic", Local = "local",
 });
 text_enum!(Visibility { Unknown = "unknown", Public = "public", Unlisted = "unlisted", Private = "private" });
 text_enum!(RemoteAvailability {

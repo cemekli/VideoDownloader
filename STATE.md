@@ -3,7 +3,7 @@
 | Bilgi | Değer |
 |---|---|
 | Son güncelleme | 7 Kasım 2026 |
-| Referans belge | [SPEC.md](./SPEC.md) v1.6 |
+| Referans belge | [SPEC.md](./SPEC.md) v1.7 |
 | Aktif faz | **F1 — Çevrimdışı kütüphane çekirdeği** (F0 ✅) |
 | Genel ilerleme | 19 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
@@ -300,6 +300,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | Twitch bilinen platform oldu (VOD, klip; kanal sayfası canlı yayın): SPEC v1.7, normalizasyon sürümü 3, migration 0009. Geliştirme derlemesinde araç özeti hızlandı (`sha2` opt-level 3); liste art arda gelen metadata için tek seferde yenileniyor. |
 | 9 Kas 2026 | Altı platformda gerçek indirme denendi (Cuma). Düzeltmeler: codec'i bildirilmeyen biçimler artık "ses/görüntü yok" sayılmıyor (X'te sessiz inen video, Dailymotion doğrudan dosya bağlantısında hiçbir önayarın sunulmaması); birleştirme MKV yerine önce MP4/WebM'e; yeniden ulaşılan depolama kökü "Drive disconnected" olarak kalmıyor. Dailymotion bilinen platform oldu: SPEC v1.6, normalizasyon sürümü 2, migration 0008. |
 | 9 Kas 2026 | İlk gerçek indirme (Windows, YouTube 720p) elle doğrulandı. Elle denemeden düzeltmeler: üst çubukta indirme göstergesi, inspector'da öğenin indirme durumu, `storage_root` ve `model` engellerinin metni, YouTube'un yalnızca tahmin verdiği toplam boyutun "about" olarak gösterilmesi (migration 0007 `job.bytes_estimate`). |
 | 9 Kas 2026 | F3.2–F3.6, F3.8–F3.10 yazıldı (🟨): `vv-engine` crate'i (araç kontrolü, yt-dlp çalıştırma ağ kapısı arkasında, metadata ve thumbnail, önayarlar, indirme/doğrulama/yerleştirme, kota, `storage_move`, zamanlayıcı), migration 0006 (`remote_formats`, `storage_move_step`), sahte yt-dlp ve gerçek yt-dlp testleri, uygulamada motor ve 11 yeni komut, Downloads ekranı, Download penceresi, Settings'te depolama ve Diagnostics, Yolculuk 6 E2E. Öğe kaldırılınca açık işleri iptal ediliyor. ADR-0021. |

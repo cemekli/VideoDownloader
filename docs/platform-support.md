@@ -28,6 +28,7 @@ Durum değerleri: `supported` (tarihli kanıt var), `conditional` (koşul yazıl
 | X | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
 | VK | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
 | Dailymotion | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
+| Twitch | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
 | Genel URL (bookmark) | untested | — | — | — | — | — | Sözdizimsel URL politikası test edildi (F0.7), kayıt akışı F1.2'de |
 
 Bugüne kadar gerçek yt-dlp yalnızca yerel test sunucusuna karşı çalıştırıldı (fixture yakalama, ADR-0003; ağ denetimi, ADR-0007). Bunlar platform desteği kanıtı değildir.

@@ -5,7 +5,7 @@ import { t, tn, type MessageKey } from "./i18n";
 import { en } from "./i18n/en";
 import type { ItemKind, LibraryView, LocalState, OpResult, Platform } from "./ipc/types";
 
-const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "dailymotion", "generic", "local"];
+const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "dailymotion", "twitch", "generic", "local"];
 const KINDS: ItemKind[] = ["bookmark", "remote_video", "local_video"];
 const STATES: LocalState[] = ["bookmark_only", "local_ready", "disconnected", "missing"];
 const VIEWS: LibraryView[] = ["all", "inbox", "removed", "favorites", "recent", "archive"];

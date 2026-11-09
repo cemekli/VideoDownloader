@@ -200,3 +200,17 @@ fn a_dailymotion_bookmark_saved_as_web_becomes_dailymotion() {
         (SourcePlatform::Dailymotion, Some("x8vvtst"))
     );
 }
+
+#[test]
+fn a_twitch_bookmark_saved_as_web_becomes_twitch() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = Database::open(&d.path().join("library.sqlite"), &OpenOptions::default()).unwrap();
+    let c = db.writer();
+    let id = raw_v0(c, "https://www.twitch.tv/videos/2600000001", 1);
+    renormalize(c, &FixedClock::new(2)).unwrap();
+    let row = repo::get_item(c, &id).unwrap().unwrap();
+    assert_eq!(
+        (row.source_platform, row.source_id.as_deref()),
+        (SourcePlatform::Twitch, Some("v2600000001"))
+    );
+}
