@@ -1,8 +1,8 @@
 // Frontend view of backend DTOs (SPEC §18). The UI never talks to the
 // filesystem, shell or network directly; everything goes through a client.
 
-export type Platform = "youtube" | "facebook" | "instagram" | "tiktok" | "x" | "vk" | "generic" | "local";
-export const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "generic", "local"];
+export type Platform = "youtube" | "facebook" | "instagram" | "tiktok" | "x" | "vk" | "dailymotion" | "generic" | "local";
+export const PLATFORMS: Platform[] = ["youtube", "facebook", "instagram", "tiktok", "x", "vk", "dailymotion", "generic", "local"];
 
 export type ItemKind = "bookmark" | "remote_video" | "local_video";
 export const ITEM_KINDS: ItemKind[] = ["bookmark", "remote_video", "local_video"];
@@ -575,6 +575,8 @@ export interface JobDto {
   bytesDone: number | null;
   /** null: unknown total, progress is indeterminate (AC-09). */
   bytesTotal: number | null;
+  /** yt-dlp's estimate while the total is unknown; shown as "about". */
+  bytesEstimate: number | null;
   unitsDone: number | null;
   unitsTotal: number | null;
   preset: PresetId | null;

@@ -43,9 +43,14 @@ pub struct Format {
     pub format_id: String,
     pub ext: Option<String>,
     pub protocol: Option<String>,
-    /// `None` when the format has no video (yt-dlp's `"none"`).
+    /// The codec name; `None` when it is `"none"` or not reported.
     pub vcodec: Option<String>,
     pub acodec: Option<String>,
+    /// False only when yt-dlp says there is none (a `"none"` codec, or
+    /// `resolution: "audio only"`). A codec yt-dlp does not know (X's plain MP4
+    /// links report none) may still be there, as yt-dlp itself assumes.
+    pub has_video: bool,
+    pub has_audio: bool,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub fps: Option<f64>,
@@ -144,7 +149,13 @@ fn video(o: &Map<String, Value>) -> Result<VideoMetadata, MetadataError> {
 
 fn format(f: &Map<String, Value>) -> Option<Format> {
     let codec = |k| short(f, k).filter(|c| c != "none");
+    // Only `"none"` means absent. `audio_ext` is not a presence flag:
+    // yt-dlp writes `"none"` there for muxed formats too.
+    let present = |codec: &str| short(f, codec).as_deref() != Some("none");
+    let audio_only = short(f, "resolution").as_deref() == Some("audio only");
     Some(Format {
+        has_video: present("vcodec") && !audio_only,
+        has_audio: present("acodec"),
         format_id: short(f, "format_id")?,
         ext: short(f, "ext"),
         protocol: short(f, "protocol"),
@@ -221,5 +232,27 @@ mod tests {
         };
         assert!(v.title.starts_with("ab"));
         assert_eq!(v.title.chars().count(), MAX_TITLE_CHARS);
+    }
+
+    #[test]
+    fn an_unreported_codec_is_not_taken_as_none() {
+        let doc = br#"{"id":"a","title":"t","formats":[
+            {"format_id":"v","vcodec":"avc1","acodec":"none"},
+            {"format_id":"a","vcodec":"none","resolution":"audio only"},
+            {"format_id":"http-832","ext":"mp4"},
+            {"format_id":"sb0","ext":"mhtml","vcodec":"none","acodec":"none"}]}"#;
+        let Extracted::Video(v) = parse(doc).unwrap() else {
+            panic!()
+        };
+        let flags: Vec<_> = v
+            .formats
+            .iter()
+            .map(|f| (f.has_video, f.has_audio))
+            .collect();
+        assert_eq!(
+            flags,
+            [(true, false), (false, true), (true, true), (false, false)]
+        );
+        assert_eq!(v.formats[2].vcodec, None);
     }
 }

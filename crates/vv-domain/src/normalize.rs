@@ -19,7 +19,8 @@ use url::Url;
 
 /// Version of the rules below. Version 0 means "stored as entered" (no
 /// normalization), which is what a row has before its first renormalization.
-pub const NORMALIZATION_VERSION: u32 = 1;
+/// 2: Dailymotion is recognized (it was generic).
+pub const NORMALIZATION_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -30,6 +31,7 @@ pub enum Platform {
     Tiktok,
     X,
     Vk,
+    Dailymotion,
     Generic,
 }
 
@@ -42,6 +44,7 @@ impl Platform {
             Platform::Tiktok => "tiktok",
             Platform::X => "x",
             Platform::Vk => "vk",
+            Platform::Dailymotion => "dailymotion",
             Platform::Generic => "generic",
         }
     }
@@ -55,6 +58,7 @@ impl Platform {
             Platform::Tiktok => "TikTok",
             Platform::X => "X",
             Platform::Vk => "VK",
+            Platform::Dailymotion => "Dailymotion",
             Platform::Generic => "Web",
         }
     }
@@ -288,6 +292,50 @@ fn vk(host: &str, url: &Url) -> Option<Match> {
     }
 }
 
+/// `x8abc12`, also in the old `x8abc12_title-slug` form.
+fn dailymotion_id(s: &str) -> Option<String> {
+    let id = s.split('_').next().unwrap_or("");
+    valid(id, 3, 20, &[]).then(|| id.to_owned())
+}
+
+fn dailymotion(host: &str, url: &Url) -> Option<Match> {
+    let seg = segments(url);
+    let canon = |id: String| {
+        video(
+            Platform::Dailymotion,
+            id.clone(),
+            format!("https://www.dailymotion.com/video/{id}"),
+        )
+    };
+    if host_is(host, "dai.ly") {
+        return seg
+            .first()
+            .and_then(|s| dailymotion_id(s))
+            .and_then(canon)
+            .or_else(|| other(Platform::Dailymotion, Shape::Unknown));
+    }
+    if !host_is(host, "dailymotion.com") {
+        return None;
+    }
+    let first = seg.first().map(String::as_str);
+    let id = match first {
+        Some("video") => seg.get(1).and_then(|s| dailymotion_id(s)),
+        Some("embed") if seg.get(1).map(String::as_str) == Some("video") => {
+            seg.get(2).and_then(|s| dailymotion_id(s))
+        }
+        // geo.dailymotion.com/player[/<id>].html?video=<id>
+        Some(p) if p.starts_with("player") => query(url, "video").and_then(|v| dailymotion_id(&v)),
+        _ => None,
+    };
+    match id {
+        Some(id) => canon(id),
+        None if matches!(first, Some("playlist")) => {
+            other(Platform::Dailymotion, Shape::Collection)
+        }
+        None => other(Platform::Dailymotion, Shape::Unknown),
+    }
+}
+
 fn tiktok(host: &str, url: &Url) -> Option<Match> {
     if host == "vm.tiktok.com" || host == "vt.tiktok.com" {
         return other(Platform::Tiktok, Shape::ShortLink);
@@ -427,6 +475,7 @@ pub fn normalize(input: &CaptureUrl) -> Result<Normalized, NormalizeError> {
     let host = host_of(url);
     let m = youtube(&host, url)
         .or_else(|| vk(&host, url))
+        .or_else(|| dailymotion(&host, url))
         .or_else(|| tiktok(&host, url))
         .or_else(|| instagram(&host, url))
         .or_else(|| x(&host, url))

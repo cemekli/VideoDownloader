@@ -9,8 +9,14 @@
 //!   (H.264, VP9, AV1, VP8) are preferred; HEVC played without a picture, so
 //!   it is used only when nothing else exists, and then the preset says
 //!   "may not play in the app". Nothing is transcoded.
-//! - **Merge target.** H.264 with AAC goes to MP4; VP9/AV1 with Opus to
-//!   WebM; any other pair to MKV (Matroska played in the matrix too).
+//! - **Merge target.** VP8/VP9/AV1 with Opus (or VP8/VP9 with Vorbis) go
+//!   to WebM; H.264, HEVC, VP9 or AV1 with AAC, Opus or MP3 go to MP4. Only
+//!   a pair neither holds goes to MKV: Chromium's Matroska reader does not
+//!   take every pair the matrix files had, so MKV is the last resort.
+//! - **Sound.** A codec yt-dlp does not report is not taken as "no audio"
+//!   (X's plain MP4 links report none). A picture-only format is chosen
+//!   only when a separate audio track can be merged with it, or nothing
+//!   with sound exists.
 //! - **Honest size.** A size is given only when every chosen format reports
 //!   one; `filesize_approx` is shown as "about"; otherwise unknown (DL-02).
 //! - The selector names the chosen format ids first and falls back to a
@@ -35,6 +41,33 @@ pub struct StoredFormat {
     pub filesize: Option<u64>,
     pub filesize_approx: Option<u64>,
     pub has_drm: bool,
+    /// Whether the format may carry video / audio although its codec is not
+    /// known. Absent in formats stored before this field: then the codec
+    /// alone decides, as it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<bool>,
+}
+
+impl StoredFormat {
+    /// Formats stored before the flags: a codec named means it is there;
+    /// a format with neither codec named (a direct file link) may have both,
+    /// unless it is a storyboard.
+    fn legacy_unknown(&self) -> bool {
+        self.vcodec.is_none()
+            && self.acodec.is_none()
+            && self.ext.as_deref() != Some("mhtml")
+            && self.protocol.as_deref() != Some("mhtml")
+    }
+    fn has_video(&self) -> bool {
+        self.video
+            .unwrap_or(self.vcodec.is_some() || self.legacy_unknown())
+    }
+    fn has_audio(&self) -> bool {
+        self.audio
+            .unwrap_or(self.acodec.is_some() || self.legacy_unknown())
+    }
 }
 
 impl From<&vv_ytdlp::metadata::Format> for StoredFormat {
@@ -52,6 +85,8 @@ impl From<&vv_ytdlp::metadata::Format> for StoredFormat {
             filesize: f.filesize,
             filesize_approx: f.filesize_approx,
             has_drm: f.has_drm,
+            video: Some(f.has_video),
+            audio: Some(f.has_audio),
         }
     }
 }
@@ -135,10 +170,18 @@ fn norm(c: &str) -> String {
 enum VideoFamily {
     Hevc,
     Other,
+    /// Video is there but its codec is not reported.
+    Unknown,
     Vp8,
     Av1,
     Vp9,
     H264,
+}
+
+fn family_of(f: &StoredFormat) -> VideoFamily {
+    f.vcodec
+        .as_deref()
+        .map_or(VideoFamily::Unknown, video_family)
 }
 
 fn video_family(c: &str) -> VideoFamily {
@@ -188,10 +231,11 @@ fn audio_family(c: &str) -> AudioFamily {
 
 /// Where separate streams are merged to.
 fn merge_target(v: VideoFamily, a: AudioFamily) -> &'static str {
+    use AudioFamily as A;
+    use VideoFamily as V;
     match (v, a) {
-        (VideoFamily::H264, AudioFamily::Aac) => "mp4",
-        (VideoFamily::Vp9 | VideoFamily::Av1 | VideoFamily::Vp8, AudioFamily::Opus)
-        | (VideoFamily::Vp8 | VideoFamily::Vp9, AudioFamily::Vorbis) => "webm",
+        (V::Vp9 | V::Av1 | V::Vp8, A::Opus) | (V::Vp8 | V::Vp9, A::Vorbis) => "webm",
+        (V::H264 | V::Hevc | V::Vp9 | V::Av1 | V::Unknown, A::Aac | A::Opus | A::Mp3) => "mp4",
         _ => "mkv",
     }
 }
@@ -226,12 +270,13 @@ struct Choice<'a> {
 fn best_audio(formats: &[StoredFormat], prefer: Option<AudioFamily>) -> Option<&StoredFormat> {
     let mut audio: Vec<&StoredFormat> = formats
         .iter()
-        .filter(|f| usable(f) && f.vcodec.is_none() && f.acodec.is_some())
+        .filter(|f| usable(f) && !f.has_video() && f.has_audio())
         .collect();
     audio.sort_by_key(|f| {
         let fam = f.acodec.as_deref().map(audio_family);
         (
             prefer.is_some() && fam == prefer,
+            fam.is_some(),
             f.tbr.map_or(0, |t| (t * 1000.0) as u64),
         )
     });
@@ -251,26 +296,31 @@ fn choose(formats: &[StoredFormat], preset: PresetId) -> Option<Choice<'_>> {
         (Some(_), None) => false,
         (None, _) => true,
     };
-    let videos: Vec<&StoredFormat> = formats
+    let mut videos: Vec<&StoredFormat> = formats
         .iter()
-        .filter(|f| usable(f) && f.vcodec.is_some())
+        .filter(|f| usable(f) && f.has_video())
         .filter(fits)
         .collect();
+    // Without a separate audio track, a picture-only format would download
+    // silent: keep the formats with sound when there are any.
+    if best_audio(formats, None).is_none() && videos.iter().any(|f| f.has_audio()) {
+        videos.retain(|f| f.has_audio());
+    }
     // Playable codecs first; within them the highest picture, then the
     // family the matrix and the merge targets like best, then bitrate.
     let pick = videos.iter().copied().max_by_key(|f| {
-        let fam = video_family(f.vcodec.as_deref().unwrap_or(""));
-        (plays(fam), score(f).0, fam, f.acodec.is_some(), score(f).1)
+        let fam = family_of(f);
+        (plays(fam), score(f).0, fam, f.has_audio(), score(f).1)
     })?;
-    if pick.acodec.is_some() {
+    if pick.has_audio() {
         return Some(Choice {
             video: Some(pick),
             audio: None,
         });
     }
-    let fam = video_family(pick.vcodec.as_deref().unwrap_or(""));
+    let fam = family_of(pick);
     let prefer = match fam {
-        VideoFamily::H264 => AudioFamily::Aac,
+        VideoFamily::H264 | VideoFamily::Hevc | VideoFamily::Unknown => AudioFamily::Aac,
         _ => AudioFamily::Opus,
     };
     Some(Choice {
@@ -335,10 +385,7 @@ pub fn preset(formats: &[StoredFormat], id: PresetId) -> (Preset, Option<Plan>) 
         .copied()
         .collect();
     let (exact, approx) = size(&chosen);
-    let vfam = choice
-        .video
-        .and_then(|v| v.vcodec.as_deref())
-        .map(video_family);
+    let vfam = choice.video.map(family_of);
     let afam = choice
         .audio
         .or(choice.video)
@@ -400,7 +447,89 @@ mod tests {
             filesize: size,
             filesize_approx: None,
             has_drm: false,
+            video: None,
+            audio: None,
         }
+    }
+
+    /// A format as yt-dlp reports it now, with presence flags.
+    fn g(
+        id: &str,
+        ext: &str,
+        v: (bool, Option<&str>),
+        a: (bool, Option<&str>),
+        h: Option<u32>,
+    ) -> StoredFormat {
+        StoredFormat {
+            ext: Some(ext.into()),
+            vcodec: v.1.map(Into::into),
+            acodec: a.1.map(Into::into),
+            video: Some(v.0),
+            audio: Some(a.0),
+            ..f(id, None, None, h, None)
+        }
+    }
+
+    #[test]
+    fn audio_with_an_unreported_codec_is_not_dropped() {
+        // X: HLS video without sound, an HLS audio track whose codec is not
+        // reported, and plain MP4 links that report no codec at all.
+        let x = vec![
+            g(
+                "hls-2176",
+                "mp4",
+                (true, Some("avc1.640020")),
+                (false, None),
+                Some(720),
+            ),
+            g(
+                "hls-audio-128000-Audio",
+                "mp4",
+                (false, None),
+                (true, None),
+                None,
+            ),
+            g("http-2176", "mp4", (true, None), (true, None), Some(720)),
+        ];
+        let (best, plan) = preset(&x, PresetId::Best);
+        assert!(best.needs_merge, "{best:?}");
+        assert_eq!(best.container.as_deref(), Some("mp4"));
+        assert_eq!(
+            plan.unwrap().selector,
+            "hls-2176+hls-audio-128000-Audio/bv*+ba/b"
+        );
+        // Without the audio track, the link with sound wins over a silent
+        // picture of the same height.
+        let no_track = vec![x[0].clone(), x[2].clone()];
+        let (best, plan) = preset(&no_track, PresetId::Best);
+        assert!(!best.needs_merge);
+        assert!(!best.may_not_play);
+        assert_eq!(plan.unwrap().selector, "http-2176/bv*+ba/b");
+        // Stored before the flags: a direct file link with no codec named
+        // (Dailymotion's `..._mp4_h264_aac_hq`) is offered, a storyboard not.
+        let mut old = x[2].clone();
+        old.video = None;
+        old.audio = None;
+        assert!(preset(&[old.clone()], PresetId::Best).0.available);
+        old.ext = Some("mhtml".into());
+        assert!(!preset(&[old], PresetId::Best).0.available);
+    }
+
+    #[test]
+    fn mkv_only_when_neither_mp4_nor_webm_holds_the_pair() {
+        let pair = |v: &str, a: &str| {
+            let fs = vec![
+                f("v", Some(v), None, Some(720), None),
+                f("a", None, Some(a), None, None),
+            ];
+            preset(&fs, PresetId::Best).0.container.unwrap()
+        };
+        assert_eq!(pair("vp09.00.31.08", "mp4a.40.2"), "mp4");
+        assert_eq!(pair("av01.0.05M.08", "mp4a.40.5"), "mp4");
+        assert_eq!(pair("avc1.64001f", "opus"), "mp4");
+        assert_eq!(pair("vp9", "opus"), "webm");
+        assert_eq!(pair("vp8", "vorbis"), "webm");
+        assert_eq!(pair("avc1.64001f", "vorbis"), "mkv");
     }
 
     fn youtube_like() -> Vec<StoredFormat> {

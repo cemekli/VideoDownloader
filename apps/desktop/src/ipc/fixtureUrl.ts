@@ -15,6 +15,7 @@ const HOSTS: Array<[RegExp, Platform, string]> = [
   [/(^|\.)tiktok\.com$/, "tiktok", "TikTok"],
   [/(^|\.)(x\.com|twitter\.com)$/, "x", "X"],
   [/(^|\.)(vk\.com|vkvideo\.ru)$/, "vk", "VK"],
+  [/(^|\.)(dailymotion\.com|dai\.ly)$/, "dailymotion", "Dailymotion"],
 ];
 
 const BLOCKED = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|\[::1\])/;

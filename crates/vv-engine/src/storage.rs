@@ -182,10 +182,18 @@ pub fn active_media_root(
         if let Some(r) = repo::get_storage_root(c, &id).map_err(|_| ErrorCode::InternalError)? {
             let p = Path::new(&r.path);
             if !p.is_dir() {
+                if r.status == StorageRootStatus::Available {
+                    let _ = repo::set_storage_root_status(
+                        c,
+                        &r.id,
+                        StorageRootStatus::Disconnected,
+                        None,
+                    );
+                }
                 return Err(ErrorCode::StorageRootUnavailable);
             }
             writable(p)?;
-            return Ok(r);
+            return reachable(c, clock, r);
         }
     }
     std::fs::create_dir_all(&dirs.default_media).map_err(|e| io_code(&e))?;
@@ -197,6 +205,24 @@ pub fn active_media_root(
         StorageRootKind::ManagedMedia,
         "media",
     )
+}
+
+/// The root was just reached: a status left from a check while its drive
+/// was locked or unplugged (DATA-09) is set back to `available`, so its
+/// files stop showing "Drive disconnected" without a restart.
+fn reachable(
+    c: &Connection,
+    clock: &dyn Clock,
+    mut r: StorageRoot,
+) -> Result<StorageRoot, ErrorCode> {
+    if r.status != StorageRootStatus::Available {
+        let now = clock.now_ms();
+        repo::set_storage_root_status(c, &r.id, StorageRootStatus::Available, Some(now))
+            .map_err(|_| ErrorCode::InternalError)?;
+        r.status = StorageRootStatus::Available;
+        r.last_verified_at = Some(now);
+    }
+    Ok(r)
 }
 
 /// A probe file proves the folder takes writes now (§14.3 step 1).
@@ -222,7 +248,7 @@ pub fn ensure_root(
         .to_owned();
     let roots = repo::list_storage_roots(c).map_err(|_| ErrorCode::InternalError)?;
     if let Some(r) = roots.into_iter().find(|r| r.kind == kind && r.path == path) {
-        return Ok(r);
+        return reachable(c, clock, r);
     }
     let now = clock.now_ms();
     let r = StorageRoot {
@@ -272,5 +298,21 @@ mod tests {
         let u = usage(c, &dirs, d.path());
         assert_eq!(u.quota_bytes, None);
         assert!(!u.quota_exceeded);
+    }
+
+    #[test]
+    fn a_root_that_is_reached_again_is_available_again() {
+        let d = tempfile::tempdir().unwrap();
+        let mut db = Database::open(&d.path().join("r.sqlite"), &OpenOptions::default()).unwrap();
+        let c = db.writer();
+        let dirs = Dirs::under(d.path());
+        let r = active_media_root(c, &SystemClock, &dirs).unwrap();
+        // A start-up check ran while the drive was locked (BitLocker).
+        repo::set_storage_root_status(c, &r.id, StorageRootStatus::Disconnected, None).unwrap();
+        let again = active_media_root(c, &SystemClock, &dirs).unwrap();
+        assert_eq!(again.id, r.id);
+        assert_eq!(again.status, StorageRootStatus::Available);
+        let stored = repo::get_storage_root(c, &r.id).unwrap().unwrap();
+        assert_eq!(stored.status, StorageRootStatus::Available);
     }
 }

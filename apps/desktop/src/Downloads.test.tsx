@@ -46,6 +46,16 @@ describe("Downloads", () => {
     await waitFor(() => expect(card).toHaveTextContent("Downloaded"), SLOW);
   });
 
+  it("an estimated total is shown as about, with an approximate bar", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient()} />);
+    await startDownload(user, "best");
+    const bar = await screen.findByTestId("job-progress", undefined, SLOW);
+    await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "50"), SLOW);
+    expect(bar).toHaveAttribute("aria-valuetext", "50 MB of about 100 MB");
+    expect(bar).not.toHaveAttribute("data-indeterminate");
+  });
+
   it("an unknown total shows an indeterminate bar, not a made-up percentage (AC-09)", async () => {
     const user = userEvent.setup();
     render(<App client={createFixtureClient()} />);
@@ -74,6 +84,22 @@ describe("Downloads", () => {
     const canceled = await screen.findByTestId("downloads-failed");
     await user.click(await within(canceled).findByTestId("job-remove-partial"));
     expect(await screen.findByText(/Deleted the partial file/)).toBeVisible();
+  });
+
+  it("shows the download where it was started: top bar indicator and the item's details", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient()} />);
+    const inspector = await openInspector("0002");
+    await user.click(await within(inspector).findByTestId("inspector-download"));
+    await user.click(await screen.findByTestId("download-start"));
+    const queue = await screen.findByTestId("queue-indicator", undefined, SLOW);
+    expect(queue).toHaveTextContent("1 downloading");
+    const status = await within(inspector).findByTestId("inspector-download-status", undefined, SLOW);
+    expect(within(inspector).queryByTestId("inspector-download")).toBeNull();
+    await waitFor(() => expect(status).toHaveAttribute("data-status", "running"), SLOW);
+    await user.click(within(status).getByTestId("inspector-open-downloads"));
+    expect(await screen.findByTestId("downloads")).toBeVisible();
+    await waitFor(() => expect(screen.queryByTestId("queue-indicator")).toBeNull(), SLOW);
   });
 
   it("is empty with a hint before the first download", async () => {

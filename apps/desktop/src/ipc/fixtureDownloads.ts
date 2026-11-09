@@ -63,13 +63,15 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
     const attempt = (tries.get(j.id) ?? 0) + 1;
     tries.set(j.id, attempt);
     const live = () => runs.get(j.id) === n && j.status !== "canceled";
-    // Audio has no known total: the bar is indeterminate (AC-09).
-    const total = j.kind === "download" && j.preset !== "audio" ? 100 * MB : null;
+    // Audio has no known total: the bar is indeterminate (AC-09). "best"
+    // reports only an estimate, as YouTube's chunked downloads do.
+    const total = j.kind === "download" && j.preset !== "audio" && j.preset !== "best" ? 100 * MB : null;
+    const estimate = j.kind === "download" && j.preset === "best" ? 100 * MB : null;
     const step = (k: number, f: () => void) =>
       setTimeout(() => {
         if (live()) f();
       }, stepMs * k);
-    step(1, () => set(j, { status: "running", attempts: j.attempts + 1, phase: j.kind === "download" ? "download_video" : "copy", bytesDone: 0, bytesTotal: total }));
+    step(1, () => set(j, { status: "running", attempts: j.attempts + 1, phase: j.kind === "download" ? "download_video" : "copy", bytesDone: 0, bytesTotal: total, bytesEstimate: estimate }));
     step(2, () => set(j, { bytesDone: 50 * MB, partialBytes: j.kind === "download" ? Math.max(j.partialBytes, 50 * MB) : 0, unitsDone: j.kind === "storage_move" ? 1 : null }));
     if (scenario === "download-error" && j.kind === "download" && attempt === 1) {
       step(3, () => set(j, { status: "failed", phase: null, errorCode: "NETWORK_UNAVAILABLE", finishedAt: clock }));
@@ -127,7 +129,7 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       if (storage.quotaBytes !== null && storage.managedMediaBytes >= storage.quotaBytes) throw err("QUOTA_EXCEEDED", "start_download");
       const open = jobs.find((j) => j.itemId === r.id && j.preset === preset && !["succeeded", "failed", "canceled"].includes(j.status));
       if (open) return { ...open };
-      return { ...newJob({ kind: "download", itemId: r.id, itemTitle: r.title, preset, status: "queued", phase: null, bytesDone: null, bytesTotal: null }) };
+      return { ...newJob({ kind: "download", itemId: r.id, itemTitle: r.title, preset, status: "queued", phase: null, bytesDone: null, bytesTotal: null, bytesEstimate: null }) };
     },
     async fetchMetadata(itemId) {
       record(itemId, "fetch_metadata");

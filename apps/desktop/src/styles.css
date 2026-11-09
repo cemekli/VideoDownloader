@@ -323,3 +323,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .preset { width: 100%; }
 .tool-list { list-style: none; margin: 0; padding: 0; }
 .tool-list li { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s1) 0; }
+.queue { white-space: nowrap; }
+.queue-failed { color: var(--danger); }
+.item-download { margin: var(--s2) 0; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--radius); }
+.item-download p { margin: var(--s1) 0; }
