@@ -11,6 +11,7 @@ export const en = {
   "platform.vk": "VK",
   "platform.dailymotion": "Dailymotion",
   "platform.twitch": "Twitch",
+  "platform.reddit": "Reddit",
   "platform.generic": "Web",
   "platform.local": "Local file",
   "kind.bookmark": "Bookmarks",

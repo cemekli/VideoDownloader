@@ -28,7 +28,15 @@ pub const IMPORT_EVENT: &str = "import-status";
 pub const TOOLS_DIR_ENV: &str = "VV_TOOLS_DIR";
 
 /// Items looked up per round of the thumbnail worker.
-const THUMBNAIL_BATCH: u32 = 20;
+const THUMBNAIL_BATCH: u32 = 32;
+
+/// FFmpeg runs at once for thumbnails: half the cores, 1 to 4.
+fn thumbnail_workers() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get() / 2)
+        .unwrap_or(1)
+        .clamp(1, 4)
+}
 
 pub struct Library {
     /// Shared with the download engine's store (`engine::AppStore`).
@@ -286,7 +294,11 @@ pub fn thumbnails<R: Runtime>(app: &AppHandle<R>) {
 impl Library {
     /// Rounds of [`THUMBNAIL_BATCH`] until no item without a thumbnail is
     /// left except those that failed in this run.
-    fn thumbnail_pass(&self, failed: &mut std::collections::HashSet<String>, done: impl Fn(&str)) {
+    fn thumbnail_pass(
+        &self,
+        failed: &mut std::collections::HashSet<String>,
+        done: impl Fn(&str) + Sync,
+    ) {
         use vv_import::thumbnail::{prepare, record, render};
         let Some(tools) = &self.tools else { return };
         loop {
@@ -308,27 +320,40 @@ impl Library {
             if todo.is_empty() {
                 return;
             }
-            for id in todo {
-                let prepared = {
-                    let Ok(mut db) = self.writer.lock() else {
-                        return;
-                    };
-                    prepare(db.writer(), &SystemClock, &cache, &id)
-                };
-                let result = prepared.and_then(|p| {
-                    let size = render(tools, &p)?;
-                    let Ok(mut db) = self.writer.lock() else {
-                        return Err(vv_import::thumbnail::ThumbnailError::NoOutput);
-                    };
-                    record(db.writer(), &SystemClock, tools, p, size)
-                });
-                match result {
-                    Ok(_) => done(&id),
-                    Err(_) => {
-                        failed.insert(id);
-                    }
+            // A few FFmpeg runs at once: each decodes one frame, mostly
+            // waiting on the disk, so the first pass over a large import
+            // goes several times faster without taking the machine.
+            let queue = Mutex::new(todo.into_iter());
+            let lost = Mutex::new(Vec::new());
+            std::thread::scope(|s| {
+                for _ in 0..thumbnail_workers() {
+                    s.spawn(|| loop {
+                        let Some(id) = queue.lock().ok().and_then(|mut q| q.next()) else {
+                            return;
+                        };
+                        let prepared = match self.writer.lock() {
+                            Ok(mut db) => prepare(db.writer(), &SystemClock, &cache, &id),
+                            Err(_) => return,
+                        };
+                        let result = prepared.and_then(|p| {
+                            let size = render(tools, &p)?;
+                            let Ok(mut db) = self.writer.lock() else {
+                                return Err(vv_import::thumbnail::ThumbnailError::NoOutput);
+                            };
+                            record(db.writer(), &SystemClock, tools, p, size)
+                        });
+                        match result {
+                            Ok(_) => done(&id),
+                            Err(_) => {
+                                if let Ok(mut l) = lost.lock() {
+                                    l.push(id);
+                                }
+                            }
+                        }
+                    });
                 }
-            }
+            });
+            failed.extend(lost.into_inner().unwrap_or_default());
         }
     }
 }
@@ -581,5 +606,41 @@ mod tests {
             .unwrap();
         assert_eq!(n, 0);
         assert!(st.open(d.path(), None).is_err(), "opens once");
+    }
+
+    /// Real FFmpeg from `tools/bin` (skipped when the tools were not fetched).
+    #[test]
+    fn thumbnails_are_made_in_parallel_and_failures_do_not_block_the_rest() {
+        let Some(tools) = find_tools() else {
+            eprintln!("skipped: no tools in tools/bin");
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let videos = d.path().join("videos");
+        std::fs::create_dir_all(&videos).unwrap();
+        let media = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures/media");
+        let good = std::fs::read(media.join("mp4-h264-aac.mp4")).unwrap();
+        for i in 0..6 {
+            // Distinct bytes, so none is a duplicate of another.
+            let mut b = good.clone();
+            b.extend_from_slice(&[i as u8; 16]);
+            std::fs::write(videos.join(format!("clip{i}.mp4")), b).unwrap();
+        }
+        let st = LibraryState::default();
+        st.open(&d.path().join("data"), Some(tools)).unwrap();
+        let lib = st.get().unwrap();
+        let s = lib
+            .import(std::slice::from_ref(&videos), true, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(s.imported, 6, "{s:?}");
+        // One original vanishes after the import: its thumbnail fails.
+        std::fs::remove_file(videos.join("clip0.mp4")).unwrap();
+        let made = Mutex::new(Vec::new());
+        let mut failed = std::collections::HashSet::new();
+        lib.thumbnail_pass(&mut failed, |id| made.lock().unwrap().push(id.to_owned()));
+        assert_eq!(made.lock().unwrap().len(), 5);
+        assert_eq!(failed.len(), 1);
+        // A second pass tries nothing again.
+        lib.thumbnail_pass(&mut failed, |_| panic!("nothing left to make"));
     }
 }

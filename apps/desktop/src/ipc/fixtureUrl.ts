@@ -17,6 +17,7 @@ const HOSTS: Array<[RegExp, Platform, string]> = [
   [/(^|\.)(vk\.com|vkvideo\.ru)$/, "vk", "VK"],
   [/(^|\.)(dailymotion\.com|dai\.ly)$/, "dailymotion", "Dailymotion"],
   [/(^|\.)twitch\.tv$/, "twitch", "Twitch"],
+  [/(^|\.)(reddit\.com|redd\.it)$/, "reddit", "Reddit"],
 ];
 
 const BLOCKED = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|\[::1\])/;

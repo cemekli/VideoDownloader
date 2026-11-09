@@ -214,3 +214,21 @@ fn a_twitch_bookmark_saved_as_web_becomes_twitch() {
         (SourcePlatform::Twitch, Some("v2600000001"))
     );
 }
+
+#[test]
+fn a_reddit_post_saved_as_web_becomes_reddit() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = Database::open(&d.path().join("library.sqlite"), &OpenOptions::default()).unwrap();
+    let c = db.writer();
+    let id = raw_v0(
+        c,
+        "https://www.reddit.com/r/vvtestsub/comments/1vvtst0/slug/",
+        1,
+    );
+    renormalize(c, &FixedClock::new(2)).unwrap();
+    let row = repo::get_item(c, &id).unwrap().unwrap();
+    assert_eq!(
+        (row.source_platform, row.source_id.as_deref()),
+        (SourcePlatform::Reddit, Some("1vvtst0"))
+    );
+}

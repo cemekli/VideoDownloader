@@ -19,8 +19,8 @@ use url::Url;
 
 /// Version of the rules below. Version 0 means "stored as entered" (no
 /// normalization), which is what a row has before its first renormalization.
-/// 2: Dailymotion is recognized (it was generic). 3: Twitch.
-pub const NORMALIZATION_VERSION: u32 = 3;
+/// 2: Dailymotion is recognized (it was generic). 3: Twitch. 4: Reddit.
+pub const NORMALIZATION_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -33,6 +33,7 @@ pub enum Platform {
     Vk,
     Dailymotion,
     Twitch,
+    Reddit,
     Generic,
 }
 
@@ -47,6 +48,7 @@ impl Platform {
             Platform::Vk => "vk",
             Platform::Dailymotion => "dailymotion",
             Platform::Twitch => "twitch",
+            Platform::Reddit => "reddit",
             Platform::Generic => "generic",
         }
     }
@@ -62,6 +64,7 @@ impl Platform {
             Platform::Vk => "VK",
             Platform::Dailymotion => "Dailymotion",
             Platform::Twitch => "Twitch",
+            Platform::Reddit => "Reddit",
             Platform::Generic => "Web",
         }
     }
@@ -394,6 +397,48 @@ fn twitch(host: &str, url: &Url) -> Option<Match> {
     .or_else(|| other(Platform::Twitch, Shape::Unknown))
 }
 
+/// A post id: base 36 (`1abc2de`).
+fn reddit_id(s: &str) -> Option<String> {
+    (valid(s, 3, 13, &[]) && s.chars().all(|c| !c.is_ascii_uppercase())).then(|| s.to_owned())
+}
+
+fn reddit(host: &str, url: &Url) -> Option<Match> {
+    let post = |id: String| {
+        video(
+            Platform::Reddit,
+            id.clone(),
+            format!("https://www.reddit.com/comments/{id}/"),
+        )
+    };
+    let seg = segments(url);
+    if host_is(host, "redd.it") && !host_is(host, "v.redd.it") && host != "i.redd.it" {
+        return seg
+            .first()
+            .and_then(|s| reddit_id(s))
+            .and_then(post)
+            .or_else(|| other(Platform::Reddit, Shape::ShortLink));
+    }
+    // v.redd.it/<media id>: the media, not the post; its id is not the
+    // post id, so the post is known only after metadata.
+    if host_is(host, "v.redd.it") {
+        return other(Platform::Reddit, Shape::Unknown);
+    }
+    if !host_is(host, "reddit.com") {
+        return None;
+    }
+    let s: Vec<&str> = seg.iter().map(String::as_str).collect();
+    match s.as_slice() {
+        ["comments", id, ..] | ["r" | "u" | "user", _, "comments", id, ..] => {
+            reddit_id(id).and_then(post)
+        }
+        // r/<sub>/s/<code>: a share link, resolved online.
+        ["r", _, "s", _, ..] => other(Platform::Reddit, Shape::ShortLink),
+        ["r" | "u" | "user", _, ..] => other(Platform::Reddit, Shape::Collection),
+        _ => None,
+    }
+    .or_else(|| other(Platform::Reddit, Shape::Unknown))
+}
+
 fn tiktok(host: &str, url: &Url) -> Option<Match> {
     if host == "vm.tiktok.com" || host == "vt.tiktok.com" {
         return other(Platform::Tiktok, Shape::ShortLink);
@@ -535,6 +580,7 @@ pub fn normalize(input: &CaptureUrl) -> Result<Normalized, NormalizeError> {
         .or_else(|| vk(&host, url))
         .or_else(|| dailymotion(&host, url))
         .or_else(|| twitch(&host, url))
+        .or_else(|| reddit(&host, url))
         .or_else(|| tiktok(&host, url))
         .or_else(|| instagram(&host, url))
         .or_else(|| x(&host, url))
