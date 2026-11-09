@@ -1,8 +1,8 @@
 # Platform desteği
 
-SPEC §6 ve §25.4'ün istediği tarihli destek matrisi. **Bu belgede "destekleniyor" yazan bir satır yalnızca tarihli, gerçek bir testin sonucudur.** Fixture ile geçen bir test canlı platform başarısı sayılmaz (INV-10, SPEC §25.1). Henüz gerçek platform testi yapılmadı; ilk kayıtlar F3.11'de (izinli gerçek URL'lerle) ve F5.6'da (VK) eklenecek.
+SPEC §6 ve §25.4'ün istediği tarihli destek matrisi. **Bu belgede "destekleniyor" yazan bir satır yalnızca tarihli, gerçek bir testin sonucudur.** Fixture ile geçen bir test canlı platform başarısı sayılmaz (INV-10, SPEC §25.1). İlk gerçek platform testleri F3.11'de yapıldı (9 Kasım 2026, izinli gerçek URL'ler); oturumlu erişim F5.6'da eklenecek.
 
-Son güncelleme: 7 Kasım 2026, F0.11.
+Son güncelleme: 9 Kasım 2026, F3.11.
 
 Durum değerleri: `supported` (tarihli kanıt var), `conditional` (koşul yazılı), `unsupported` (denendi, çalışmıyor), `untested` (denenmedi).
 
@@ -21,18 +21,18 @@ Durum değerleri: `supported` (tarihli kanıt var), `conditional` (koşul yazıl
 
 | Platform | Tanıma | Public metadata | İndirme | Oturumlu erişim | Son test | Araç sürümü | Kanıt |
 |---|---|---|---|---|---|---|---|
-| YouTube | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
-| Facebook | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
-| Instagram | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
-| TikTok | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
-| X | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
-| VK | untested | untested | untested | untested | — | yt-dlp 2026.10.26 | — |
-| Dailymotion | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
-| Twitch | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
-| Reddit | untested | untested | untested | — | — | yt-dlp 2026.10.26 | — |
+| YouTube | supported | supported | supported | — | 9 Kas 2026 | yt-dlp 2026.10.26 + Deno | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. 720p indirildi ve uygulamada oynadı (F3 çıkış kapısı). |
+| Facebook | supported | supported | supported (herkese açık video) | untested | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. |
+| Instagram | supported | supported | supported (herkese açık video) | untested | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. |
+| TikTok | supported | supported | supported | — | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. |
+| X | supported | supported | supported (herkese açık video) | untested | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Bir video sessiz indi: ses kodeği bildirilmeyen format atılıyordu, PR #26'da düzeltildi; düzeltmeden sonra yeniden denenmedi. |
+| VK | supported | supported | supported (herkese açık video) | untested | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Oturumlu erişim F5.6. |
+| Dailymotion | supported | untested | untested | — | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Önce genel URL sayılıyordu ve format listesi gelmiyordu; PR #26 ile ayrı platform oldu. Düzeltmeden sonraki indirme henüz kayıtlı değil. |
+| Twitch | supported | supported | conditional: VOD ve klip indirilir; canlı yayın reddedilir (SPEC §6) | — | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Eski bir VOD indirildi. Canlı kanal önce sonsuz bekliyordu; PR #28'den beri `INPUT_REJECTED` (`live-stream`). |
+| Reddit | supported | unsupported (girişsiz) | unsupported (girişsiz) | untested (F5.2) | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Paylaşım linki (`/r/<sub>/s/<kod>`) doğru gönderiye yönlendi; Reddit gönderi JSON'unu girişsiz vermedi: yt-dlp `Account authentication is required`. Aynı sonuç yt-dlp proxy'siz, tek başına çalıştırıldığında da alındı, yani engel uygulamada değil. Video dosyasının sağ tıkla kopyalanan adresi (`packaged-media.redd.it`) geçici, imzalı bir medya adresidir, gönderi değildir (PR #30). |
 | Genel URL (bookmark) | untested | — | — | — | — | — | Sözdizimsel URL politikası test edildi (F0.7), kayıt akışı F1.2'de |
 
-Bugüne kadar gerçek yt-dlp yalnızca yerel test sunucusuna karşı çalıştırıldı (fixture yakalama, ADR-0003; ağ denetimi, ADR-0007). Bunlar platform desteği kanıtı değildir.
+Yukarıdaki satırlar elle yapılmış tek seferlik testlerdir; platformlar değiştikçe yeniden denenmelidir. Otomatik testler gerçek yt-dlp'yi yalnızca yerel test sunucusuna karşı çalıştırır (ADR-0003, ADR-0007); onlar platform desteği kanıtı değildir.
 
 ## Medya biçimi (WebView2 oynatma)
 
