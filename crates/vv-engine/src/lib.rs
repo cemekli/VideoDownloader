@@ -12,6 +12,8 @@
 //! Process handling is `vv-process`, queue state is
 //! `vv-persistence::jobs`, error handling `vv-persistence::classify`.
 
+pub mod auth;
+pub mod browsers;
 pub mod context;
 pub mod download;
 pub mod formats;

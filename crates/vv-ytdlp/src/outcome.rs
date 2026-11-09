@@ -157,6 +157,22 @@ const JS_RUNTIME: &[&str] = &["no supported javascript runtime"];
 /// Rules in priority order: the first group whose phrase appears wins.
 const RULES: &[(ErrorCode, &[&str])] = &[
     (ErrorCode::Canceled, &["interrupted by user"]),
+    // `--cookies-from-browser` could not read the browser's store (missing
+    // profile, locked or app-bound encrypted database). Before the path
+    // rules: a locked database also says "permission denied". Not a proof
+    // that the session is invalid (§12.1).
+    (
+        ErrorCode::CookieAccessFailed,
+        &[
+            "failed to load cookies",
+            "cookies database",
+            "cookie database",
+            "failed to decrypt",
+            "dpapi",
+            "unsupported browser specified for cookies",
+            "unsupported keyring",
+        ],
+    ),
     (
         ErrorCode::DiskFull,
         &[
@@ -285,6 +301,22 @@ mod tests {
         assert_eq!(
             o.finish(Exit::Code(0), false).code(),
             Some(ErrorCode::ExtractorUnsupported)
+        );
+    }
+
+    #[test]
+    fn browser_cookie_errors_are_cookie_access_not_login_or_path() {
+        for m in [
+            "could not find firefox cookies database in C:\\Users\\x\\AppData",
+            "Could not copy Chrome cookie database. See https://github.com/yt-dlp/yt-dlp/issues/7271 for more info",
+            "Failed to decrypt with DPAPI. See  https://github.com/yt-dlp/yt-dlp/issues/10927 for more info",
+            "failed to load cookies",
+        ] {
+            assert_eq!(classify(m), ErrorCode::CookieAccessFailed, "{m}");
+        }
+        assert_eq!(
+            classify("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ"),
+            ErrorCode::LoginRequired
         );
     }
 

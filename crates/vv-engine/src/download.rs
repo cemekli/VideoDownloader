@@ -32,6 +32,7 @@ use std::path::{Path, PathBuf};
 use std::result::Result;
 use std::sync::atomic::AtomicBool;
 use vv_domain::error::ErrorCode;
+use vv_persistence::auth::Operation;
 use vv_persistence::jobs::{self, JobKind, Lease, NewJob, Progress};
 use vv_persistence::library::repo::{self, MediaAsset};
 use vv_persistence::library::*;
@@ -254,22 +255,43 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         part: 0,
         finished_parts: 0,
     };
-    let run = ytdlp::run(
-        &yt,
-        cx.run_policy(),
-        &url,
-        &Mode::Download {
-            dir: dir.clone(),
-            selector: plan.selector.clone(),
-            merge_format: plan.merge_format.clone(),
-        },
-        None,
-        |ev| {
-            let (p, force) = tracker.map(ev);
-            w.progress(&p, force);
-        },
-        || w.should_stop(),
-    );
+    let exec = |attempt: &crate::auth::Attempt, tracker: &mut Tracker| {
+        let cookies = attempt.cookies();
+        ytdlp::run_as(
+            &yt,
+            cx.run_policy(),
+            &url,
+            &Mode::Download {
+                dir: dir.clone(),
+                selector: plan.selector.clone(),
+                merge_format: plan.merge_format.clone(),
+            },
+            cookies.as_deref(),
+            None,
+            |ev| {
+                let (p, force) = tracker.map(ev);
+                w.progress(&p, force);
+            },
+            || w.should_stop(),
+        )
+    };
+    let op = Operation::Download;
+    let mut attempt = crate::auth::first(cx, &item, op);
+    let mut run = exec(&attempt, &mut tracker);
+    if attempt.profile.is_none()
+        && matches!(
+            run.result,
+            RunResult::Failed {
+                code: ErrorCode::LoginRequired,
+                ..
+            }
+        )
+    {
+        if let Some(a) = crate::auth::after_login_required(cx, &item, op) {
+            attempt = a;
+            run = exec(&attempt, &mut tracker);
+        }
+    }
     match run.result {
         RunResult::Succeeded => {}
         RunResult::Canceled => {
@@ -277,6 +299,9 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
             return;
         }
         RunResult::Failed { code, message } => {
+            let now = cx.now();
+            cx.store
+                .write(|c| crate::auth::after_failure(c, &item.id, &attempt, code, now));
             w.end_error(code, message.as_deref());
             return;
         }
@@ -316,7 +341,7 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         w.end_error(code, None);
         return;
     }
-    if publish(&w, &asset) {
+    if publish(&w, &asset, &attempt) {
         let _ = std::fs::remove_dir_all(&dir);
         thumbnail_after(cx, &media);
     } else {
@@ -409,7 +434,7 @@ pub fn place(from: &Path, to: &Path, hash: Option<&str>) -> Result<(), ErrorCode
     Ok(())
 }
 
-fn publish<S: Store>(w: &Work<'_, S>, asset: &MediaAsset) -> bool {
+fn publish<S: Store>(w: &Work<'_, S>, asset: &MediaAsset, attempt: &crate::auth::Attempt) -> bool {
     let cx = w.cx;
     let now = cx.now();
     let mut a = asset.clone();
@@ -428,6 +453,7 @@ fn publish<S: Store>(w: &Work<'_, S>, asset: &MediaAsset) -> bool {
                 "UPDATE job SET checkpoint_ref = NULL WHERE id = ?1",
                 params![id],
             )?;
+            crate::auth::on_success(tx, &item_id, attempt, now);
             Ok(())
         })
     });
@@ -466,7 +492,7 @@ fn adopt_placed<S: Store>(
         asset.id = id.to_owned();
     }
     asset.storage_ref = storage_ref.to_owned();
-    if publish(w, &asset) {
+    if publish(w, &asset, &crate::auth::Attempt::anonymous()) {
         let _ = std::fs::remove_dir_all(staging_dir(&cx.dirs.staging, w.id()));
         Some(true)
     } else {
