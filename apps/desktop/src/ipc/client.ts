@@ -15,6 +15,12 @@ import type {
   Settings,
   StorageOverview,
   BackendClient,
+  DownloadClient,
+  DownloadOptions,
+  JobChanged,
+  JobDto,
+  StorageUsage,
+  ToolStatus,
   DeleteResult,
   Diagnostics,
   DomainError,
@@ -39,6 +45,7 @@ import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
 import { createFixtureData } from "./fixtureData";
+import { createFixtureDownloads } from "./fixtureDownloads";
 
 export { IpcError } from "./errors";
 
@@ -47,6 +54,11 @@ export const CONTRACT_VERSION = 1;
 
 /** Event the backend emits for imports started by a drop on the window (`library.rs`). */
 export const IMPORT_EVENT = "import-status";
+
+/** Jobs and items changed (`engine.rs`); ids only, details come from commands. */
+export const JOB_EVENT = "job-changed";
+export const ITEM_EVENT = "item-changed";
+export const TOOLS_EVENT = "tools-checked";
 
 function isDomainError(v: unknown): v is DomainError {
   return typeof v === "object" && v !== null && typeof (v as DomainError).code === "string" && typeof (v as DomainError).messageKey === "string";
@@ -70,7 +82,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
-export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStatus">;
+export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStatus"> & { downloads: ReturnType<typeof createFixtureDownloads> };
 
 /**
  * Deterministic client backed by the shared fixture set (SPEC §25.2).
@@ -79,8 +91,11 @@ export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStat
 export function createFixtureClient(records?: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureClient {
   const recs = records ?? scenarioRecords(scenario);
   const library = createFixtureLibrary(recs, scenario);
+  const downloads = createFixtureDownloads(recs, scenario);
   return {
     ...createFixtureData(recs, scenario, library),
+    ...downloads.client,
+    downloads,
     kind: "fixture",
     listItems: (q) => library.listItems(q),
     getItem: (id) => library.getItem(id),
@@ -170,6 +185,35 @@ const dataCommands: DataClient = {
   relinkAsset: (assetId) => call<ItemDetail | null>("relink_asset", { assetId }),
 };
 
+/** Downloads, jobs and storage (F3). The UI names a preset, never a format. */
+const downloadCommands: DownloadClient = {
+  getToolHealth: () => call<ToolStatus>("get_tool_health"),
+  listJobs: () => call<JobDto[]>("list_jobs"),
+  getDownloadOptions: (itemId) => call<DownloadOptions>("get_download_options", { itemId }),
+  startDownload: (itemId, preset) => call<JobDto>("start_download", { itemId, preset }),
+  fetchMetadata: (itemId) => call<string>("fetch_metadata", { itemId }),
+  cancelJob: (jobId) => call<JobDto>("cancel_job", { jobId }),
+  retryJob: (jobId) => call<JobDto>("retry_job", { jobId }),
+  removePartial: (jobId) => call<{ freedBytes: number }>("remove_partial", { jobId }),
+  getStorageUsage: () => call<StorageUsage>("get_storage_usage"),
+  setStorageQuota: (bytes) => call<StorageUsage>("set_storage_quota", { bytes }),
+  moveMediaFolder: () => call<JobDto | null>("move_media_folder"),
+  async onJobChanged(cb) {
+    try {
+      const a = await listen<JobChanged>(JOB_EVENT, (e) => cb(e.payload));
+      const b = await listen<{ itemId: string }>(ITEM_EVENT, (e) => cb({ jobId: "", itemId: e.payload.itemId }));
+      const c = await listen(TOOLS_EVENT, () => cb({ jobId: "", itemId: null }));
+      return () => {
+        a();
+        b();
+        c();
+      };
+    } catch (reason) {
+      throw toIpcError("listen", reason);
+    }
+  },
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -182,6 +226,7 @@ export function createTauriClient(): BackendClient {
     restoreItem: (id) => call<LibraryItemDto>("restore_item", { id }),
     ...organizeCommands,
     ...dataCommands,
+    ...downloadCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));
@@ -195,9 +240,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error"];
 
-/** `?fixture=empty|many|error|slow|first-run` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run|download-error` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

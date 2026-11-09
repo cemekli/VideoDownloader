@@ -58,6 +58,22 @@ for (const theme of ["dark", "light"] as const) {
       expect(await serious(page, '[data-testid="add-url-dialog"]')).toEqual([]);
     });
 
+    test("download dialog and the Downloads screen", async ({ page }, info) => {
+      await ready(page, "?fixture=download-error");
+      await page.locator('[data-testid="library-card"][data-id$="0002"]').dblclick();
+      await page.getByTestId("inspector-download").click();
+      await expect(page.getByTestId("download-dialog")).toBeVisible();
+      expect(await serious(page, '[data-testid="download-dialog"]')).toEqual([]);
+      await page.getByTestId("download-start").click();
+      if (info.project.name === "narrow-800") {
+        await page.keyboard.press("Escape");
+        await page.getByTestId("menu-button").click();
+      }
+      await page.getByTestId("nav-downloads").click();
+      await expect(page.getByTestId("downloads-failed")).toBeVisible();
+      expect(await serious(page)).toEqual([]);
+    });
+
     test("first run, every step", async ({ page }) => {
       await page.goto("/?fixture=first-run");
       const ob = page.getByTestId("onboarding");

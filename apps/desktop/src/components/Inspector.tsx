@@ -38,6 +38,8 @@ export interface InspectorActions {
   play?(id: string): void;
   /** Opens the source page in the browser (PLAY-03). */
   openSource?(id: string): void;
+  /** Opens the Download dialog (F3.8). */
+  download?(id: string, title: string): void;
 }
 
 /**
@@ -162,6 +164,11 @@ function Details({
           {actions.play && detail.assets.length > 0 && (
             <button type="button" className="button button-primary" onClick={() => actions.play!(item.id)} data-testid="inspector-play">
               ▶ {t("player.play")}
+            </button>
+          )}
+          {actions.download && detail.canonicalUrl && detail.assets.length === 0 && (
+            <button type="button" className="button button-primary" onClick={() => actions.download!(item.id, item.title)} data-testid="inspector-download">
+              {t("download.open")}
             </button>
           )}
           {actions.openSource && detail.canonicalUrl && detail.assets.length === 0 && (

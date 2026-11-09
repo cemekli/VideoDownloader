@@ -2,8 +2,10 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 // SPEC §25 critical journeys against `vite --mode fixture`. Journey 1 (save
 // in five seconds) is in add-url.spec.ts. Here: Journey 2, find an old
-// bookmark (F1 exit gate), and Journey 5, organize a large Inbox (F2 exit
-// gate). The same steps against the real app and database are in
+// bookmark (F1 exit gate), Journey 5, organize a large Inbox (F2 exit
+// gate), and Journey 6, recover after an error (F3.8). Restart recovery of
+// Journey 6 (leases, checkpoints, a move killed at every step) needs the
+// real engine and database and is tested in Rust (crates/vv-engine/tests). The same steps against the real app and database are in
 // e2e-desktop (add-url, organize, offline-flow).
 
 const shot = (page: Page, name: string, info: TestInfo) => page.screenshot({ path: `../../test-artifacts/screenshots/journey-${name}-${info.project.name}.png` });
@@ -82,5 +84,50 @@ test.describe("Journey 5: organize a large Inbox", () => {
     await page.keyboard.press("Control+z");
     await expect(lastToast(page)).toContainText("Archive change undone.");
     await expect(count).toHaveText(before);
+  });
+});
+
+test.describe("Journey 6: recover after an error", () => {
+  test("a download fails on the network, keeps its partial file, and Try again finishes it; the file plays", async ({ page }, info) => {
+    const narrow = info.project.name === "narrow-800";
+    const nav = async (id: string) => {
+      if (narrow) await page.getByTestId("menu-button").click();
+      await page.getByTestId(id).click();
+    };
+    await page.goto("/?fixture=download-error");
+    await expect(cards(page).first()).toBeVisible();
+    await page.locator('[data-testid="library-card"][data-id$="0002"]').dblclick();
+    const inspector = page.getByTestId("inspector");
+    await inspector.getByTestId("inspector-download").click();
+    const dialog = page.getByTestId("download-dialog");
+    await dialog.getByTestId("preset-720").check();
+    await dialog.getByTestId("download-start").click();
+    await expect(lastToast(page)).toContainText("Download started.");
+    if (narrow) await page.keyboard.press("Escape");
+    await nav("nav-downloads");
+
+    // The error is a state the user can act on, with the partial file kept.
+    const failed = page.getByTestId("downloads-failed");
+    await expect(failed.getByTestId("job-error")).toContainText("Can't reach the internet");
+    await expect(failed.getByTestId("job-partial")).toContainText("50 MB");
+    await expect(failed.getByTestId("job-status")).toHaveText("Failed");
+    await shot(page, "6-failed", info);
+
+    await failed.getByTestId("job-retry").click();
+    const active = page.getByTestId("downloads-active");
+    await expect(active.getByTestId("job-progress")).toHaveAttribute("aria-valuenow", "50");
+    await shot(page, "6-progress", info);
+    const done = page.getByTestId("downloads-done");
+    await expect(done.getByTestId("job-status")).toHaveText("Done");
+    await expect(page.getByTestId("downloads-failed")).toHaveCount(0);
+
+    // The item is Downloaded and its file opens in the player.
+    await nav("nav-all");
+    const card = page.locator('[data-testid="library-card"][data-id$="0002"]');
+    await expect(card).toContainText("Downloaded");
+    await card.dblclick();
+    await page.getByTestId("inspector").getByTestId("inspector-play").click();
+    await expect(page.getByTestId("player")).toBeVisible();
+    await shot(page, "6-playing", info);
   });
 });

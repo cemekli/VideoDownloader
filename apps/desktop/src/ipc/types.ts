@@ -536,4 +536,115 @@ export interface DataClient {
   relinkAsset(assetId: string): Promise<ItemDetail | null>;
 }
 
-export type BackendClient = LibraryClient & StatusClient & DataClient;
+// ---- Downloads, jobs and storage (F3.2–F3.10) ----
+
+export type PresetId = "best" | "1080" | "720" | "audio";
+export type ToolState = "ok" | "missing" | "blocked" | "checksum_mismatch";
+
+export interface ToolHealth {
+  id: string;
+  /** Pinned version from the tool manifest. */
+  version: string;
+  reportedVersion: string | null;
+  state: ToolState;
+  code: string | null;
+  license: string;
+  source: string;
+  provenance: string;
+}
+
+export interface ToolStatus {
+  /** The first check is still running. */
+  checking: boolean;
+  ready: boolean;
+  code: string | null;
+  tools: ToolHealth[];
+  checkedAt: number | null;
+}
+
+export type JobKind = "download" | "metadata" | "storage_move";
+export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
+
+export interface JobDto {
+  id: string;
+  kind: JobKind;
+  itemId: string | null;
+  itemTitle: string | null;
+  status: JobStatus;
+  phase: string | null;
+  bytesDone: number | null;
+  /** null: unknown total, progress is indeterminate (AC-09). */
+  bytesTotal: number | null;
+  unitsDone: number | null;
+  unitsTotal: number | null;
+  preset: PresetId | null;
+  attempts: number;
+  maxAttempts: number;
+  errorCode: string | null;
+  blockedReason: string | null;
+  nextRetryAt: number | null;
+  partialBytes: number;
+  createdAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  canRetry: boolean;
+  canCancel: boolean;
+  canRemovePartial: boolean;
+}
+
+export interface Preset {
+  id: PresetId;
+  available: boolean;
+  container: string | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  height: number | null;
+  sizeBytes: number | null;
+  sizeEstimateBytes: number | null;
+  mayNotPlay: boolean;
+  needsMerge: boolean;
+}
+
+export interface StorageUsage {
+  managedMediaBytes: number;
+  derivedBytes: number;
+  stagingBytes: number;
+  quotaBytes: number | null;
+  freeBytes: number | null;
+  lowSpace: boolean;
+  quotaExceeded: boolean;
+}
+
+export interface DownloadOptions {
+  itemId: string;
+  metadataStatus: string;
+  formatsKnown: boolean;
+  presets: Preset[];
+  offline: boolean;
+  toolsReady: boolean;
+  storage: StorageUsage;
+  activeJobId: string | null;
+}
+
+export interface JobChanged {
+  jobId: string;
+  itemId: string | null;
+}
+
+export interface DownloadClient {
+  getToolHealth(): Promise<ToolStatus>;
+  listJobs(): Promise<JobDto[]>;
+  getDownloadOptions(itemId: string): Promise<DownloadOptions>;
+  startDownload(itemId: string, preset: PresetId): Promise<JobDto>;
+  fetchMetadata(itemId: string): Promise<string>;
+  cancelJob(jobId: string): Promise<JobDto>;
+  retryJob(jobId: string): Promise<JobDto>;
+  removePartial(jobId: string): Promise<{ freedBytes: number }>;
+  getStorageUsage(): Promise<StorageUsage>;
+  setStorageQuota(bytes: number | null): Promise<StorageUsage>;
+  moveMediaFolder(): Promise<JobDto | null>;
+  /** Job and item changes from the backend; ids only. */
+  onJobChanged(cb: (e: JobChanged) => void): Promise<() => void>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient;
