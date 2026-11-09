@@ -205,6 +205,10 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         w.end_error(code, None);
         return;
     }
+    if cx.store.read(|c| crate::metadata::is_live(c, &item.id)) {
+        w.end_error(ErrorCode::InputRejected, None);
+        return;
+    }
     let stored = cx
         .store
         .read(|c| crate::metadata::stored_formats(c, &item.id));

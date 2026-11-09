@@ -1195,7 +1195,8 @@
           "lowSpace": false,
           "quotaExceeded": false
         },
-        "activeJobId": null
+        "activeJobId": null,
+        "live": false
       }
     },
     "start_download": {

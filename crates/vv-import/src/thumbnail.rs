@@ -72,13 +72,26 @@ pub fn frame_time_ms(duration_ms: Option<i64>) -> u64 {
     duration_ms.map_or(0, |d| (d.max(0) as u64 / 10).min(5_000))
 }
 
-pub fn generate_thumbnail(
+/// What [`prepare`] found for one item: everything the FFmpeg run and the
+/// record need, so the run itself can happen without the database.
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub item_id: String,
+    input: PathBuf,
+    output: PathBuf,
+    at: u64,
+    thumb: MediaAsset,
+    source_hash: Option<String>,
+    source_id: String,
+}
+
+/// Step 1 (database): the item's original video and a fresh output path.
+pub fn prepare(
     c: &Connection,
     clock: &dyn Clock,
-    tools: &MediaTools,
     cache: &StorageRoot,
     item_id: &str,
-) -> Result<String, ThumbnailError> {
+) -> Result<Prepared, ThumbnailError> {
     let original = repo::assets_for_item(c, item_id)?
         .into_iter()
         .find(|a| a.role == AssetRole::Original && a.media_kind == MediaKind::Video)
@@ -92,7 +105,6 @@ pub fn generate_thumbnail(
     if !input.is_file() {
         return Err(ThumbnailError::NoSource(ErrorCode::FileMissing));
     }
-    let now = clock.now_ms();
     let mut thumb = MediaAsset::new(
         item_id,
         AssetRole::Thumbnail,
@@ -100,16 +112,28 @@ pub fn generate_thumbnail(
         StorageKind::Managed,
         &cache.id,
         "",
-        now,
+        clock.now_ms(),
     );
-    let storage_ref = format!("thumbnails/{item_id}/{}.jpg", thumb.id);
-    let output: PathBuf = fsutil::resolve_ref(Path::new(&cache.path), &storage_ref);
-    if let Some(dir) = output.parent() {
+    thumb.storage_ref = format!("thumbnails/{item_id}/{}.jpg", thumb.id);
+    let output: PathBuf = fsutil::resolve_ref(Path::new(&cache.path), &thumb.storage_ref);
+    Ok(Prepared {
+        item_id: item_id.to_owned(),
+        input,
+        output,
+        at: frame_time_ms(original.duration_ms),
+        thumb,
+        source_hash: original.content_hash.clone(),
+        source_id: original.id,
+    })
+}
+
+/// Step 2 (no database): FFmpeg writes the frame. Returns its size.
+pub fn render(tools: &MediaTools, p: &Prepared) -> Result<u64, ThumbnailError> {
+    if let Some(dir) = p.output.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|_| ThumbnailError::Tool(ErrorCode::PathNotWritable))?;
     }
-    let at = frame_time_ms(original.duration_ms);
-    let args = vv_ffmpeg::args::thumbnail_args(&input, &output, at)
+    let args = vv_ffmpeg::args::thumbnail_args(&p.input, &p.output, p.at)
         .map_err(|_| ThumbnailError::Tool(ErrorCode::InternalError))?;
     let out = run(&tools.ffmpeg, args, tools.thumbnail_timeout).map_err(|e| {
         ThumbnailError::Tool(match e {
@@ -117,31 +141,56 @@ pub fn generate_thumbnail(
             RunError::TimedOut => ErrorCode::Timeout,
         })
     })?;
-    let size = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
+    let size = std::fs::metadata(&p.output).map(|m| m.len()).unwrap_or(0);
     if !out.success || size == 0 {
-        let _ = std::fs::remove_file(&output);
+        let _ = std::fs::remove_file(&p.output);
         return Err(ThumbnailError::NoOutput);
     }
-    thumb.storage_ref = storage_ref;
+    Ok(size)
+}
+
+/// Step 3 (database): the frame becomes the item's thumbnail asset.
+pub fn record(
+    c: &Connection,
+    clock: &dyn Clock,
+    tools: &MediaTools,
+    p: Prepared,
+    size: u64,
+) -> Result<String, ThumbnailError> {
+    let now = clock.now_ms();
+    let mut thumb = p.thumb;
     thumb.mime_type = Some("image/jpeg".into());
     thumb.size_bytes = Some(size as i64);
     thumb.acquired_at = Some(now);
     thumb.acquisition_status = AcquisitionStatus::Ready;
     thumb.integrity_state = IntegrityState::Verified;
-    thumb.source_asset_id = Some(original.id.clone());
-    thumb.source_fingerprint = original.content_hash.clone();
+    thumb.source_asset_id = Some(p.source_id);
+    thumb.source_fingerprint = p.source_hash;
     thumb.derivation = Some(
         serde_json::json!({
             "generator": "ffmpeg",
             "generator_version": tools.build,
-            "config": { "v": THUMBNAIL_CONFIG_VERSION, "width": THUMBNAIL_WIDTH, "at_ms": at },
+            "config": { "v": THUMBNAIL_CONFIG_VERSION, "width": THUMBNAIL_WIDTH, "at_ms": p.at },
             "created_at": now,
         })
         .to_string(),
     );
     repo::insert_media_asset(c, &thumb)?;
-    repo::set_thumbnail(c, item_id, Some(&thumb.id), now)?;
+    repo::set_thumbnail(c, &p.item_id, Some(&thumb.id), now)?;
     Ok(thumb.id)
+}
+
+/// The three steps in one go, holding `c` throughout (tests, small runs).
+pub fn generate_thumbnail(
+    c: &Connection,
+    clock: &dyn Clock,
+    tools: &MediaTools,
+    cache: &StorageRoot,
+    item_id: &str,
+) -> Result<String, ThumbnailError> {
+    let p = prepare(c, clock, cache, item_id)?;
+    let size = render(tools, &p)?;
+    record(c, clock, tools, p, size)
 }
 
 /// An item id and its thumbnail asset id or why there is none.

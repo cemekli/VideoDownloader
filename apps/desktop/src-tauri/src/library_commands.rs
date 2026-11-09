@@ -472,7 +472,8 @@ pub async fn import_media<R: Runtime>(
     if !lib_ready {
         return Err(DomainError::new(ErrorCode::ToolMissing, "import-no-tools"));
     }
-    blocking(app.clone(), move |st| {
+    let a = app.clone();
+    let r = blocking(app.clone(), move |st| {
         if let Some(picked) = crate::e2e_picked() {
             return st
                 .get()?
@@ -502,7 +503,11 @@ pub async fn import_media<R: Runtime>(
         st.get()?
             .import(&picked, true, crate::library::cancel_flag(st))
     })
-    .await
+    .await;
+    if r.as_ref().is_ok_and(|s| s.imported > 0) {
+        crate::library::thumbnails(&a);
+    }
+    r
 }
 
 #[cfg(test)]

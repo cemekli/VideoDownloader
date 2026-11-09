@@ -123,15 +123,16 @@ fn write_metadata(
     )?;
     let formats: Vec<StoredFormat> = m.formats.iter().map(StoredFormat::from).collect();
     c.execute(
-        "INSERT INTO remote_formats (item_id, fetched_at, extractor_key, tool_version, formats) VALUES (?1, ?2, ?3, ?4, ?5) \
+        "INSERT INTO remote_formats (item_id, fetched_at, extractor_key, tool_version, formats, is_live) VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
          ON CONFLICT (item_id) DO UPDATE SET fetched_at = excluded.fetched_at, extractor_key = excluded.extractor_key, \
-         tool_version = excluded.tool_version, formats = excluded.formats",
+         tool_version = excluded.tool_version, formats = excluded.formats, is_live = excluded.is_live",
         params![
             item.id,
             now,
             m.extractor_key,
             tool_version,
-            serde_json::to_string(&formats).unwrap_or_else(|_| "[]".into())
+            serde_json::to_string(&formats).unwrap_or_else(|_| "[]".into()),
+            m.is_live.unwrap_or(false)
         ],
     )?;
     Ok(())
@@ -147,6 +148,16 @@ pub fn stored_formats(c: &Connection, item_id: &str) -> Option<Vec<StoredFormat>
         )
         .ok()?;
     serde_json::from_str(&json).ok()
+}
+
+/// The last metadata run saw a live stream: it is not downloaded (§6).
+pub fn is_live(c: &Connection, item_id: &str) -> bool {
+    c.query_row(
+        "SELECT is_live FROM remote_formats WHERE item_id = ?1",
+        [item_id],
+        |r| r.get::<_, bool>(0),
+    )
+    .unwrap_or(false)
 }
 
 /// A JPEG we are willing to keep: right magic, not empty, not huge.

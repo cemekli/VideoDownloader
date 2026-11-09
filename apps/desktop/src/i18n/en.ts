@@ -333,6 +333,7 @@ export const en = {
   "download.unavailable": "not available",
   "download.may_not_play": "Only HEVC video is offered; the file is kept, but the built-in player may show no picture.",
   "download.offline": "Offline Mode is on. Turn it off in Settings to download.",
+  "download.live": "This is a live stream. Live streams are not downloaded; save the past broadcast or a clip once the stream has ended.",
   "download.tools": "The download tools are not ready (see Settings → Diagnostics).",
   "download.space": "{free} free in the media folder",
   "download.quota": "The storage limit is reached. Raise it in Settings → Storage.",

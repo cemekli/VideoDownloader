@@ -626,6 +626,8 @@ export interface DownloadOptions {
   toolsReady: boolean;
   storage: StorageUsage;
   activeJobId: string | null;
+  /** A live stream at the last metadata fetch: not downloaded (SPEC §6). */
+  live: boolean;
 }
 
 export interface JobChanged {
