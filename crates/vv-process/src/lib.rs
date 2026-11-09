@@ -155,6 +155,22 @@ impl Managed {
         Ok(())
     }
 
+    /// Non-blocking check. Once the child has exited, whatever it started is
+    /// killed too, as in [`Managed::wait_timeout`].
+    pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        let Some(status) = self.child.try_wait()? else {
+            return Ok(None);
+        };
+        #[cfg(windows)]
+        let _ = self.job.terminate();
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-(self.child.id() as libc::pid_t), libc::SIGKILL)
+        };
+        self.done = true;
+        Ok(Some(status))
+    }
+
     /// Waits until the child exits or `timeout` passes (then kills the tree).
     pub fn wait_timeout(&mut self, timeout: Duration) -> io::Result<Outcome> {
         let deadline = Instant::now() + timeout;

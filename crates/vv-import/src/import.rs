@@ -231,7 +231,7 @@ fn rejected(e: &ProbeFailure) -> FileOutcome {
 }
 
 /// Container name, MIME type and stream facts from the probe (IMP-03).
-fn describe(a: &mut MediaAsset, p: &Probed, path: &Path) {
+pub fn describe(a: &mut MediaAsset, p: &Probed, path: &Path) {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
