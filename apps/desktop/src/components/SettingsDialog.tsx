@@ -5,6 +5,7 @@ import { formatBytes } from "../format";
 import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
 import { Modal } from "./Modal";
+import { SessionsBlock } from "./Sessions";
 
 type Notify = (text: string, tone?: "info" | "error") => void;
 
@@ -216,6 +217,11 @@ export function SettingsDialog({
             ))}
           </fieldset>
           <p className="muted small">{t("settings.updates.help")}</p>
+        </section>
+
+        <section aria-labelledby="set-sessions">
+          <h3 id="set-sessions">{t("settings.sessions")}</h3>
+          <SessionsBlock client={client} notify={notify} />
         </section>
 
         <section aria-labelledby="set-storage">

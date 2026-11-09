@@ -7,7 +7,7 @@
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import type { FixtureRecord, FixtureScenario } from "./fixture";
-import type { DownloadClient, DownloadOptions, JobChanged, JobDto, PresetId, StorageUsage, ToolStatus } from "./types";
+import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, JobDto, Platform, PresetId, SessionClient, SessionDto, StorageUsage, ToolStatus } from "./types";
 
 const MB = 1024 * 1024;
 const PRESETS: PresetId[] = ["best", "1080", "720", "audio"];
@@ -17,6 +17,8 @@ const err = (code: string, cmd: string) =>
 
 export interface FixtureDownloads {
   client: DownloadClient;
+  /** Sessions (F5.2). In the `login-required` scenario Instagram, VK and Reddit downloads wait for one. */
+  sessions: SessionClient;
   /** Jobs as they are now (tests). */
   jobs(): JobDto[];
 }
@@ -32,6 +34,14 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
   let seq = 0;
   const now = () => (clock += 1_000);
 
+  const sessions: SessionDto[] = [];
+  const browserProfiles: BrowserProfileDto[] = [
+    { browser: "firefox", name: "default-release", isDefault: true, hasCookies: true },
+    { browser: "firefox", name: "work", isDefault: false, hasCookies: false },
+  ];
+  const NEEDS_LOGIN = new Set<string>(scenario === "login-required" ? ["instagram", "vk", "reddit"] : []);
+  const sessionFor = (platform: string | null) =>
+    sessions.find((x) => x.provider === platform && x.consent.includes("download") && x.state !== "not_connected" && x.state !== "unsupported");
   const emit = (j: JobDto) => listeners.forEach((cb) => cb({ jobId: j.id, itemId: j.itemId }));
   const find = (id: string, cmd: string) => {
     const j = jobs.find((x) => x.id === id);
@@ -71,6 +81,12 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       setTimeout(() => {
         if (live()) f();
       }, stepMs * k);
+    const login = j.kind === "download" && NEEDS_LOGIN.has(j.itemPlatform ?? "");
+    const session = login ? sessionFor(j.itemPlatform) : undefined;
+    if (login && !session) {
+      step(1, () => set(j, { status: "blocked", blockedReason: "auth", phase: null }));
+      return;
+    }
     step(1, () => set(j, { status: "running", attempts: j.attempts + 1, phase: j.kind === "download" ? "download_video" : "copy", bytesDone: 0, bytesTotal: total, bytesEstimate: estimate }));
     step(2, () => set(j, { bytesDone: 50 * MB, partialBytes: j.kind === "download" ? Math.max(j.partialBytes, 50 * MB) : 0, unitsDone: j.kind === "storage_move" ? 1 : null }));
     if (scenario === "download-error" && j.kind === "download" && attempt === 1) {
@@ -80,6 +96,7 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
     step(3, () => set(j, { phase: j.kind === "download" ? (j.preset === "audio" ? "postprocess" : "merge") : "verify", bytesDone: total }));
     step(4, () => {
       set(j, { status: "succeeded", phase: null, partialBytes: 0, errorCode: null, finishedAt: clock, unitsDone: j.unitsTotal });
+      if (session) Object.assign(session, { state: "session_available", lastVerifiedAt: clock });
       const r = j.itemId ? records.find((x) => x.id === j.itemId) : undefined;
       if (r) {
         r.localState = "local_ready";
@@ -129,7 +146,7 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       if (storage.quotaBytes !== null && storage.managedMediaBytes >= storage.quotaBytes) throw err("QUOTA_EXCEEDED", "start_download");
       const open = jobs.find((j) => j.itemId === r.id && j.preset === preset && !["succeeded", "failed", "canceled"].includes(j.status));
       if (open) return { ...open };
-      return { ...newJob({ kind: "download", itemId: r.id, itemTitle: r.title, preset, status: "queued", phase: null, bytesDone: null, bytesTotal: null, bytesEstimate: null }) };
+      return { ...newJob({ kind: "download", itemId: r.id, itemTitle: r.title, itemPlatform: r.platform as Platform, preset, status: "queued", phase: null, bytesDone: null, bytesTotal: null, bytesEstimate: null }) };
     },
     async fetchMetadata(itemId) {
       record(itemId, "fetch_metadata");
@@ -172,5 +189,59 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       return () => listeners.delete(cb);
     },
   };
-  return { client, jobs: () => jobs.map((j) => ({ ...j })) };
+  const findSession = (id: string, cmd: string) => {
+    const x = sessions.find((y) => y.id === id);
+    if (!x) throw err("INPUT_REJECTED", cmd);
+    return x;
+  };
+  const resume = (platform: string) => {
+    for (const j of jobs) if (j.status === "blocked" && j.blockedReason === "auth" && j.itemPlatform === platform) {
+      set(j, { status: "queued", blockedReason: null });
+      run(j);
+    }
+  };
+  const sessionClient: SessionClient = {
+    async listSessions() {
+      return structuredClone({ sessions, browserProfiles, providers: (contract.commands.list_sessions.response.providers as Platform[]) });
+    },
+    async connectSession(provider, browser, browserProfile, scope) {
+      if (browser !== "firefox" || provider === "generic" || provider === "local") throw err("INPUT_REJECTED", "connect_session");
+      if (!browserProfiles.some((b) => b.name === browserProfile)) throw err("COOKIE_ACCESS_FAILED", "connect_session");
+      if (scope.length === 0) throw err("INPUT_REJECTED", "connect_session");
+      const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+      const x: SessionDto = {
+        id: `00000000-0000-4000-8000-${String(0xd000 + ++seq).padStart(12, "0")}`,
+        provider,
+        label: `${name} · Firefox (${browserProfile})`,
+        method: "browser_cookies",
+        browser: "firefox",
+        browserProfile,
+        state: "needs_verification",
+        consent: [...scope],
+        consentAt: now(),
+        lastVerifiedAt: null,
+      };
+      sessions.push(x);
+      resume(provider);
+      return structuredClone(x);
+    },
+    async setSessionConsent(id, scope) {
+      const x = findSession(id, "set_session_consent");
+      x.consent = [...scope];
+      x.consentAt = scope.length ? now() : null;
+      if (scope.length) resume(x.provider);
+      return structuredClone(x);
+    },
+    async clearSession(id) {
+      const x = findSession(id, "clear_session");
+      Object.assign(x, { consent: [], consentAt: null, state: "not_connected", lastVerifiedAt: null });
+      return structuredClone(x);
+    },
+    async deleteSession(id) {
+      findSession(id, "delete_session");
+      sessions.splice(sessions.findIndex((y) => y.id === id), 1);
+    },
+  };
+
+  return { client, sessions: sessionClient, jobs: () => jobs.map((j) => ({ ...j })) };
 }

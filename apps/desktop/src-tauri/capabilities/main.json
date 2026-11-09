@@ -74,6 +74,11 @@
     "allow-get-storage-usage",
     "allow-set-storage-quota",
     "allow-move-media-folder",
+    "allow-list-sessions",
+    "allow-connect-session",
+    "allow-set-session-consent",
+    "allow-clear-session",
+    "allow-delete-session",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

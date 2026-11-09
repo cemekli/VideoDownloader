@@ -36,7 +36,7 @@ export const RECENT_DAYS = 30;
 export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${itemId.slice(25)}`;
 
 /** `download-error`: the first try of every download fails on the network; a retry succeeds (Journey 6). */
-export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error";
+export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required";
 
 export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt"> {
   creator: string | null;

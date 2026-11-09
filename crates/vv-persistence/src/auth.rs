@@ -164,6 +164,11 @@ const COLUMNS: &str =
     "id, provider, label, method, browser_kind, profile_locator, secure_local_ref, \
     session_state, consent_scope, consent_at, last_verified_at, created_at, updated_at";
 
+/// The platform a profile can be for (`generic` is never one).
+pub fn provider(s: &str) -> Option<Platform> {
+    platform(s)
+}
+
 fn platform(s: &str) -> Option<Platform> {
     use Platform::*;
     [
@@ -429,4 +434,33 @@ pub fn apply_state_change(
         params![id, state.as_str(), change.session_verified, now],
     )?;
     Ok(n > 0)
+}
+
+/// Jobs waiting for a login (`blocked`/`auth`) on `provider`'s items go
+/// back to the queue, e.g. after the user connected a profile. Returns how
+/// many.
+pub fn unblock_provider(c: &Connection, provider: Platform, now: i64) -> Result<usize> {
+    Ok(c.execute(
+        "UPDATE job SET status = 'queued', blocked_reason = NULL, updated_at = ?2 \
+         WHERE status = 'blocked' AND blocked_reason = 'auth' \
+           AND item_id IN (SELECT id FROM library_item WHERE source_platform = ?1)",
+        params![provider.as_str(), now],
+    )?)
+}
+
+/// Records on the item that `profile_id` reached it with proof of
+/// authenticated access (§12.1 `authorized`, `access_profile_id`,
+/// `access_checked_at`).
+pub fn mark_item_authorized(
+    c: &Connection,
+    item_id: &str,
+    profile_id: &str,
+    now: i64,
+) -> Result<()> {
+    c.execute(
+        "UPDATE library_item SET access_state = 'authorized', remote_availability = 'available', \
+           access_profile_id = ?2, access_checked_at = ?3, updated_at = ?3 WHERE id = ?1",
+        params![item_id, profile_id, now],
+    )?;
+    Ok(())
 }

@@ -54,7 +54,21 @@ fn main() {
         "notfound" => fail("[generic] Unable to download webpage: HTTP Error 404: Not Found"),
         "diskfull" => fail("unable to write data: [Errno 28] No space left on device"),
         "login" => fail("[vk] This video is only available for registered users"),
+        // F5.2: needs `--cookies-from-browser firefox:<folder>`. The folder's
+        // name says how the browser store behaves.
+        "login-auth" => match arg_after(&args, "--cookies-from-browser") {
+            None => fail("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication."),
+            Some(src) if !src.starts_with("firefox:") => fail("usage: bad browser"),
+            Some(src) if src.ends_with("broken") => {
+                fail("could not find firefox cookies database in /home/someone/.mozilla/firefox/broken")
+            }
+            Some(src) if src.ends_with("signedout") => fail("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication."),
+            Some(_) => {}
+        },
         _ => {}
+    }
+    if args.iter().any(|a| a == "--cookies") {
+        fail("usage: a cookie file must never be passed");
     }
     if metadata {
         if scenario == "playlist" {

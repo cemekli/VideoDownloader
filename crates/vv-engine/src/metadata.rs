@@ -18,6 +18,7 @@ use crate::worker::Work;
 use crate::ytdlp::{self, Mode, RunResult};
 use std::path::{Path, PathBuf};
 use vv_domain::error::ErrorCode;
+use vv_persistence::auth::Operation;
 use vv_persistence::classify::{self, Gone};
 use vv_persistence::jobs::{self, JobKind, JobStatus, Lease, NewJob};
 use vv_persistence::library::repo::{self, MediaAsset};
@@ -221,20 +222,41 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         end(&w, &item_id, ErrorCode::PathNotWritable, None);
         return;
     }
-    let run = ytdlp::run(
-        &yt,
-        cx.run_policy(),
-        &url,
-        &Mode::Metadata {
-            thumbnail_dir: Some(dir.clone()),
-        },
-        Some(ytdlp::METADATA_TIMEOUT),
-        |_| {},
-        || w.should_stop(),
-    );
+    let exec = |attempt: &crate::auth::Attempt| {
+        let cookies = attempt.cookies();
+        ytdlp::run_as(
+            &yt,
+            cx.run_policy(),
+            &url,
+            &Mode::Metadata {
+                thumbnail_dir: Some(dir.clone()),
+            },
+            cookies.as_deref(),
+            Some(ytdlp::METADATA_TIMEOUT),
+            |_| {},
+            || w.should_stop(),
+        )
+    };
+    let op = Operation::Metadata;
+    let mut attempt = crate::auth::first(cx, &item, op);
+    let mut run = exec(&attempt);
+    if attempt.profile.is_none()
+        && matches!(
+            run.result,
+            RunResult::Failed {
+                code: ErrorCode::LoginRequired,
+                ..
+            }
+        )
+    {
+        if let Some(a) = crate::auth::after_login_required(cx, &item, op) {
+            attempt = a;
+            run = exec(&attempt);
+        }
+    }
     match run.result {
         RunResult::Succeeded => match vv_ytdlp::metadata::parse(&run.stdout) {
-            Ok(Extracted::Video(m)) => publish(&w, &item, &m, &dir, &tools.ytdlp_version),
+            Ok(Extracted::Video(m)) => publish(&w, &item, &m, &dir, &tools.ytdlp_version, &attempt),
             Ok(Extracted::Playlist { .. }) => {
                 finish_failed(&w, &item_id, ErrorCode::PlaylistUnsupported, None)
             }
@@ -246,7 +268,12 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
             cx.store
                 .write(|c| set_status(c, &item_id, MetadataStatus::Pending, cx.now()));
         }
-        RunResult::Failed { code, message } => end(&w, &item_id, code, message.as_deref()),
+        RunResult::Failed { code, message } => {
+            let now = cx.now();
+            cx.store
+                .write(|c| crate::auth::after_failure(c, &item_id, &attempt, code, now));
+            end(&w, &item_id, code, message.as_deref())
+        }
     }
     let _ = std::fs::remove_dir_all(&dir);
     cx.events.item_changed(&item_id);
@@ -299,6 +326,7 @@ fn publish<S: Store>(
     m: &VideoMetadata,
     dir: &Path,
     tool_version: &str,
+    attempt: &crate::auth::Attempt,
 ) {
     if m.has_drm {
         finish_failed(w, &item.id, ErrorCode::DrmUnsupported, None);
@@ -366,8 +394,10 @@ fn publish<S: Store>(
     let r = cx.store.write(|c| {
         jobs::succeed_with(c, &id, g, now, |tx| {
             write_metadata(tx, item, m, tool_version, now)?;
-            let change = classify::success_state_change(false);
-            classify::apply_to_item(tx, &item.id, &change, now)?;
+            if !crate::auth::on_success(tx, &item.id, attempt, now) {
+                let change = classify::success_state_change(false);
+                classify::apply_to_item(tx, &item.id, &change, now)?;
+            }
             if let Some(a) = &thumb_asset {
                 repo::insert_media_asset(tx, a).map_err(lib)?;
                 repo::set_thumbnail(tx, &item.id, Some(&a.id), now).map_err(lib)?;

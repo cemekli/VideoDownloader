@@ -264,6 +264,11 @@ fn main_capability_grants_only_app_commands() {
         "allow-get-storage-usage",
         "allow-set-storage-quota",
         "allow-move-media-folder",
+        "allow-list-sessions",
+        "allow-connect-session",
+        "allow-set-session-consent",
+        "allow-clear-session",
+        "allow-delete-session",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1171,4 +1176,104 @@ fn download_commands_match_contract_shape() {
         let dir = d.path().to_string_lossy();
         assert!(!s.contains(dir.as_ref()), "no paths: {s}");
     }
+}
+
+#[test]
+fn session_commands_match_contract_and_never_show_the_folder() {
+    // STATE.md F5.2, ADR-0023: the UI sees the browser profile's name,
+    // never its folder or a secret reference.
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+    let folder = d
+        .path()
+        .join("ffuser-SECRETNAME")
+        .join("Profiles")
+        .join("x1y2.default-release");
+    let id = {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        vv_persistence::auth::create(
+            db.writer(),
+            &vv_persistence::auth::NewProfile {
+                provider: vv_domain::normalize::Platform::Reddit,
+                label: "Reddit · Firefox (default-release)",
+                method: vv_persistence::auth::Method::BrowserCookies,
+                browser_kind: Some(vv_persistence::auth::BrowserKind::Firefox),
+                profile_locator: Some(folder.to_str().unwrap()),
+                consent_scope: &[
+                    vv_persistence::auth::Operation::Metadata,
+                    vv_persistence::auth::Operation::Download,
+                ],
+            },
+            1,
+        )
+        .unwrap()
+        .id
+    };
+
+    let l = ok(&w, "list_sessions", json!({}));
+    assert_same_shape(&l, &spec("list_sessions"), "list_sessions");
+    let s0 = &l["sessions"][0];
+    assert_same_shape(
+        s0,
+        &with_nulls_of(s0, &spec("list_sessions")["sessions"][0]),
+        "list_sessions.sessions[0]",
+    );
+    assert_eq!(s0["browserProfile"], "default-release");
+    assert_eq!(s0["state"], "needs_verification");
+    let text = l.to_string();
+    assert!(
+        !text.contains("SECRETNAME") && !text.contains("vvsec:"),
+        "{text}"
+    );
+    assert!(!l["providers"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("generic")));
+
+    let n = ok(
+        &w,
+        "set_session_consent",
+        json!({ "id": id, "scope": ["download"] }),
+    );
+    assert_same_shape(
+        &n,
+        &with_nulls_of(&n, &spec("set_session_consent")),
+        "set_session_consent",
+    );
+    assert_eq!(n["consent"], json!(["download"]));
+    assert!(invoke(
+        &w,
+        "set_session_consent",
+        json!({ "id": id, "scope": ["upload"] }),
+        app_origin()
+    )
+    .is_err());
+
+    let cl = ok(&w, "clear_session", json!({ "id": id }));
+    assert_same_shape(
+        &cl,
+        &with_nulls_of(&cl, &spec("clear_session")),
+        "clear_session",
+    );
+    assert_eq!(cl["state"], "not_connected");
+    assert_eq!(cl["consent"], json!([]));
+
+    // Only Firefox, only known platforms, only a profile that exists.
+    for args in [
+        json!({ "provider": "reddit", "browser": "chrome", "browserProfile": "Default", "scope": ["download"] }),
+        json!({ "provider": "generic", "browser": "firefox", "browserProfile": "default-release", "scope": ["download"] }),
+        json!({ "provider": "reddit", "browser": "firefox", "browserProfile": "no-such-profile-vv", "scope": ["download"] }),
+    ] {
+        assert!(
+            invoke(&w, "connect_session", args.clone(), app_origin()).is_err(),
+            "{args}"
+        );
+    }
+
+    assert_eq!(ok(&w, "delete_session", json!({ "id": id })), Value::Null);
+    assert_eq!(ok(&w, "list_sessions", json!({}))["sessions"], json!([]));
 }

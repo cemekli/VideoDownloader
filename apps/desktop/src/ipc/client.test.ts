@@ -156,7 +156,40 @@ describe("Tauri client: download commands", () => {
   });
 });
 
+// Session commands (F5.2): a Firefox profile is named, never a folder.
+const SESSION_CALLS: Array<[string, (c: ReturnType<typeof createTauriClient>, a: Record<string, unknown>) => Promise<unknown>]> = [
+  ["list_sessions", (c) => c.listSessions()],
+  ["connect_session", (c, a) => c.connectSession(a.provider as "reddit", "firefox", a.browserProfile as string, a.scope as ["download"])],
+  ["set_session_consent", (c, a) => c.setSessionConsent(a.id as string, a.scope as ["download"])],
+  ["clear_session", (c, a) => c.clearSession(a.id as string)],
+  ["delete_session", (c, a) => c.deleteSession(a.id as string)],
+];
+
+describe("Tauri client: session commands", () => {
+  it.each(SESSION_CALLS)("%s sends the contract arguments", async (cmd, callIt) => {
+    const spec = (contract.commands as Record<string, { args: Record<string, unknown>; response: unknown }>)[cmd]!;
+    const calls: Array<[string, unknown]> = [];
+    mockIPC((name, args) => {
+      calls.push([name, args]);
+      return spec.response;
+    });
+    await expect(callIt(createTauriClient(), spec.args)).resolves.toEqual(spec.response);
+    expect(calls).toEqual([[cmd, spec.args]]);
+  });
+});
+
 describe("fixture client", () => {
+  it("answers the session commands with the contract shapes", async () => {
+    const c = createFixtureClient();
+    const keys = (o: object) => Object.keys(o).sort();
+    const o = await c.listSessions();
+    expect(keys(o)).toEqual(keys(contract.commands.list_sessions.response));
+    const s = await c.connectSession("reddit", "firefox", "default-release", ["download"]);
+    expect(keys(s)).toEqual(keys(contract.commands.connect_session.response));
+    expect(keys((await c.listSessions()).browserProfiles[0]!)).toEqual(keys(contract.commands.list_sessions.response.browserProfiles[0]!));
+    await expect(c.connectSession("reddit", "firefox", "nope", ["download"])).rejects.toMatchObject({ code: "COOKIE_ACCESS_FAILED" });
+  });
+
   it("answers the download reads with the contract shapes", async () => {
     const c = createFixtureClient();
     const keys = (o: object) => Object.keys(o).sort();

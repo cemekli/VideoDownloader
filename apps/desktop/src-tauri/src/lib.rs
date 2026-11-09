@@ -16,6 +16,7 @@ pub mod library_commands;
 pub mod media_protocol;
 pub mod organize_commands;
 pub mod player_commands;
+mod session_commands;
 pub mod thumb_protocol;
 
 use tauri::{Builder, DragDropEvent, Manager, Runtime, WindowEvent};
@@ -95,7 +96,12 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             download_commands::fetch_metadata,
             download_commands::get_storage_usage,
             download_commands::set_storage_quota,
-            download_commands::move_media_folder
+            download_commands::move_media_folder,
+            session_commands::list_sessions,
+            session_commands::connect_session,
+            session_commands::set_session_consent,
+            session_commands::clear_session,
+            session_commands::delete_session
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous
         // handler runs on the window's thread: hundreds of thumbnails (each

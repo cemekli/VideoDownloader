@@ -570,6 +570,8 @@ export interface JobDto {
   kind: JobKind;
   itemId: string | null;
   itemTitle: string | null;
+  /** The item's platform; a job blocked for a login offers to connect a session for it. */
+  itemPlatform: Platform | null;
   status: JobStatus;
   phase: string | null;
   bytesDone: number | null;
@@ -651,4 +653,45 @@ export interface DownloadClient {
   onJobChanged(cb: (e: JobChanged) => void): Promise<() => void>;
 }
 
-export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient;
+/** §12.2 session states. */
+export type SessionState = "not_connected" | "needs_verification" | "session_available" | "expired" | "unsupported";
+export type SessionOperation = "metadata" | "download" | "verify";
+
+/** An authorized session (F5). The browser profile's folder never reaches the UI. */
+export interface SessionDto {
+  id: string;
+  provider: Platform;
+  label: string;
+  method: "browser_cookies" | "cookie_file" | "app_profile";
+  browser: string | null;
+  /** The browser profile's name, e.g. `default-release`. */
+  browserProfile: string | null;
+  state: SessionState;
+  consent: SessionOperation[];
+  consentAt: number | null;
+  lastVerifiedAt: number | null;
+}
+
+export interface BrowserProfileDto {
+  browser: "firefox";
+  name: string;
+  isDefault: boolean;
+  hasCookies: boolean;
+}
+
+export interface SessionOverview {
+  sessions: SessionDto[];
+  browserProfiles: BrowserProfileDto[];
+  providers: Platform[];
+}
+
+/** Sessions (F5.2): connect a Firefox profile to a platform with explicit consent. */
+export interface SessionClient {
+  listSessions(): Promise<SessionOverview>;
+  connectSession(provider: Platform, browser: "firefox", browserProfile: string, scope: SessionOperation[]): Promise<SessionDto>;
+  setSessionConsent(id: string, scope: SessionOperation[]): Promise<SessionDto>;
+  clearSession(id: string): Promise<SessionDto>;
+  deleteSession(id: string): Promise<void>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient;

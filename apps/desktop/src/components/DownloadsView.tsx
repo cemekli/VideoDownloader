@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
-import type { DownloadClient, JobDto } from "../ipc/types";
+import type { DownloadClient, JobDto, Platform, SessionClient } from "../ipc/types";
+import { ConnectSessionDialog } from "./Sessions";
 import { formatBytes } from "../format";
 import { errorMessage } from "../labels";
 import { formatDateTime, t, type MessageKey } from "../i18n";
@@ -11,6 +12,11 @@ const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path", "storage_roo
 
 export const statusLabel = (s: string) => t(`downloads.status.${s}` as MessageKey);
 export const presetLabel = (p: string | null) => (p ? t(`downloads.preset.${p}` as MessageKey) : "");
+/** Why a blocked job waits; a browser store that could not be read is not a missing login. */
+const blockedText = (job: JobDto) =>
+  job.blockedReason === "auth" && job.errorCode === "COOKIE_ACCESS_FAILED"
+    ? t("downloads.blocked.cookie")
+    : t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey);
 const phaseLabel = (p: string | null) => (p ? t((PHASES.has(p) ? `downloads.phase.${p}` : "downloads.phase.other") as MessageKey) : null);
 
 /** Real progress when the total is known; an indeterminate bar otherwise (AC-09). */
@@ -49,7 +55,7 @@ export function ProgressBar({ job }: { job: JobDto }) {
   );
 }
 
-function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction: (a: "retry" | "cancel" | "remove", j: JobDto) => void }) {
+function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction: (a: "retry" | "cancel" | "remove" | "connect", j: JobDto) => void }) {
   const title = job.kind === "storage_move" ? t("downloads.move") : (job.itemTitle ?? t("downloads.kind.download"));
   const phase = job.status === "running" ? phaseLabel(job.phase) : null;
   return (
@@ -71,7 +77,7 @@ function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction:
       )}
       {job.status === "blocked" && (
         <p className="small" data-testid="job-blocked">
-          {t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey)}
+          {blockedText(job)}
         </p>
       )}
       {job.status === "retry_wait" && job.nextRetryAt && <p className="muted small">{t("downloads.retry_at", { time: formatDateTime(job.nextRetryAt) })}</p>}
@@ -81,6 +87,11 @@ function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction:
         </p>
       )}
       <div className="actions">
+        {job.status === "blocked" && job.blockedReason === "auth" && (
+          <button type="button" className="button button-primary" disabled={busy} onClick={() => onAction("connect", job)} data-testid="job-connect-session">
+            {t("downloads.connect_session")}
+          </button>
+        )}
         {job.canRetry && (
           <button type="button" className="button button-primary" disabled={busy} onClick={() => onAction("retry", job)} data-testid="job-retry">
             {t("downloads.retry")}
@@ -131,7 +142,7 @@ export function ItemDownload({ job, onOpen }: { job: JobDto; onOpen: () => void 
       <ProgressBar job={job} />
       {job.errorCode && job.status === "failed" && <p className="job-error small">{errorMessage(job.errorCode)}</p>}
       {job.status === "blocked" && (
-        <p className="small">{t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey)}</p>
+        <p className="small">{blockedText(job)}</p>
       )}
       <button type="button" className="button button-quiet" onClick={onOpen} data-testid="inspector-open-downloads">
         {t("queue.open")}
@@ -141,7 +152,8 @@ export function ItemDownload({ job, onOpen }: { job: JobDto; onOpen: () => void 
 }
 
 /** The Downloads screen (SPEC §9.3): active, failed and completed jobs. */
-export function DownloadsView({ client, notify }: { client: DownloadClient; notify: (text: string, tone?: "info" | "error") => void }) {
+export function DownloadsView({ client, notify }: { client: DownloadClient & SessionClient; notify: (text: string, tone?: "info" | "error") => void }) {
+  const [connecting, setConnecting] = useState<{ provider: Platform | null } | null>(null);
   const [state, setState] = useState<{ status: "loading" } | { status: "error"; code: string } | { status: "ready"; jobs: JobDto[] }>({ status: "loading" });
   const [busy, setBusy] = useState(false);
   const load = useCallback(
@@ -166,7 +178,11 @@ export function DownloadsView({ client, notify }: { client: DownloadClient; noti
     };
   }, [client, load]);
 
-  const act = async (a: "retry" | "cancel" | "remove", j: JobDto) => {
+  const act = async (a: "retry" | "cancel" | "remove" | "connect", j: JobDto) => {
+    if (a === "connect") {
+      setConnecting({ provider: j.itemPlatform });
+      return;
+    }
     setBusy(true);
     try {
       if (a === "retry") await client.retryJob(j.id);
@@ -196,6 +212,17 @@ export function DownloadsView({ client, notify }: { client: DownloadClient; noti
   ];
   return (
     <div className="downloads" data-testid="downloads">
+      {connecting && (
+        <ConnectSessionDialog
+          client={client}
+          provider={connecting.provider}
+          notify={notify}
+          onClose={() => {
+            setConnecting(null);
+            void load();
+          }}
+        />
+      )}
       {groups.map(([key, title, list]) =>
         list.length === 0 ? null : (
           <section key={key} aria-labelledby={`dl-${key}`} data-testid={`downloads-${key}`}>
