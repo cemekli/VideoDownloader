@@ -2,7 +2,7 @@
 
 | Belge bilgisi | Değer |
 |---|---|
-| Sürüm | 1.8 — Dailymotion, Twitch ve Reddit bilinen platform oldu (bkz. §31) |
+| Sürüm | 1.9 — Dailymotion, Twitch ve Reddit bilinen platform oldu; Reddit medya bağlantıları düzeltildi (bkz. §31) |
 | Tarih | 9 Kasım 2026 |
 | Kaynak | [VIDEO_LIBRARY_MASTER_PROMPT.md](./VIDEO_LIBRARY_MASTER_PROMPT.md) |
 | İlk hedef | Windows 11 üzerinde çalışan, yerel öncelikli kişisel video kütüphanesi |
@@ -1453,3 +1453,4 @@ SPEC değişikliklerinde kapsam, etkilenen gereksinim/kabul kriteri ve ADR bağ�
 | 1.6 | 9 Kasım 2026 | §6: Dailymotion ayrı platform olarak eklendi (Cuma'nın isteği, F3 gerçek indirme testi sırasında). Normalizasyon sürümü 2; eski `generic` Dailymotion öğeleri yeniden normalize edilir (migration 0008). |
 | 1.7 | 9 Kasım 2026 | §6: Twitch eklendi (VOD ve klip; kanal sayfası canlı yayın olduğu için tek bookmark). Normalizasyon sürümü 3, migration 0009. |
 | 1.8 | 9 Kasım 2026 | §6: Reddit eklendi (Cuma'nın isteği). Normalizasyon sürümü 4, migration 0011. Vimeo, Bluesky, Kick vb. şimdilik genel URL olarak kalır. |
+| 1.9 | 9 Kasım 2026 | §6 Reddit: yalnız `redd.it` gönderi kısa bağlantısıdır; alt alan adları (`v.`, `packaged-media.`, `preview.`) medyadır ve gönderi kimliği taşımaz. 13 karakterlik medya kimliği gönderi kimliği sayılmaz. Normalizasyon sürümü 5. |

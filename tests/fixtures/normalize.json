@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "normalizationVersion": 4,
+  "normalizationVersion": 5,
   "note": "STATE.md F1.3 / SPEC §6, §7.1, §11.7. Synthetic ids only. 'expect' null fields mean absent; error cases carry 'error' instead of 'expect'. 'redacted' omitted means the input is returned unchanged.",
   "cases": [
     { "input": "https://www.youtube.com/watch?v=vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
@@ -36,6 +36,8 @@
     { "input": "https://old.reddit.com/comments/1vvtst0", "expect": { "platform": "reddit", "shape": "video", "sourceId": "1vvtst0", "canonical": "https://www.reddit.com/comments/1vvtst0/" } },
     { "input": "https://redd.it/1vvtst0", "expect": { "platform": "reddit", "shape": "video", "sourceId": "1vvtst0", "canonical": "https://www.reddit.com/comments/1vvtst0/" } },
     { "input": "https://www.reddit.com/r/vvtestsub/s/AbCdEf123", "expect": { "platform": "reddit", "shape": "short_link", "sourceId": null, "canonical": "https://www.reddit.com/r/vvtestsub/s/AbCdEf123" }, "note": "share link, resolved online" },
+    { "input": "https://packaged-media.redd.it/vvtestmedia01/pb/m2-res_720p.mp4?m=DASHPlaylist.mpd", "expect": { "platform": "reddit", "shape": "unknown", "sourceId": null, "canonical": "https://packaged-media.redd.it/vvtestmedia01/pb/m2-res_720p.mp4?m=DASHPlaylist.mpd" }, "note": "a media host under redd.it is not a post short link" },
+    { "input": "https://www.reddit.com/comments/vvtestmedia01", "expect": { "platform": "reddit", "shape": "unknown", "sourceId": null, "canonical": "https://www.reddit.com/comments/vvtestmedia01" }, "note": "13 characters: a media id, not a post id" },
     { "input": "https://v.redd.it/vvtestmedia01", "expect": { "platform": "reddit", "shape": "unknown", "sourceId": null, "canonical": "https://v.redd.it/vvtestmedia01" }, "note": "media id is not the post id" },
     { "input": "https://www.reddit.com/r/vvtestsub/", "expect": { "platform": "reddit", "shape": "collection", "sourceId": null, "canonical": "https://www.reddit.com/r/vvtestsub/" } },
 
