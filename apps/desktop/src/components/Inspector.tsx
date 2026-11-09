@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, ItemDetail, LibraryClient, TagRef } from "../ipc/types";
+import type { CollectionDto, ItemDetail, JobDto, LibraryClient, TagRef } from "../ipc/types";
+import { ItemDownload } from "./DownloadsView";
 import { errorCode } from "../ipc/errors";
 import { formatBytes, formatDate, formatDuration } from "../format";
 import { KIND_LABEL, LOCAL_STATE, PLATFORM_LABEL, orgErrorMessage } from "../labels";
@@ -40,6 +41,8 @@ export interface InspectorActions {
   openSource?(id: string): void;
   /** Opens the Download dialog (F3.8). */
   download?(id: string, title: string): void;
+  /** Opens the Downloads screen. */
+  openDownloads?(): void;
 }
 
 /**
@@ -56,6 +59,7 @@ export function Inspector({
   collections = [],
   actions,
   emptyHint,
+  downloadJob = null,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -67,6 +71,8 @@ export function Inspector({
   collections?: CollectionDto[];
   actions?: InspectorActions;
   emptyHint?: string;
+  /** The item's latest open or failed download (F3.8). */
+  downloadJob?: JobDto | null;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -101,7 +107,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -142,12 +148,14 @@ function Details({
   client,
   collections,
   actions,
+  downloadJob,
   onSaved,
 }: {
   detail: ItemDetail;
   client: LibraryClient;
   collections: CollectionDto[];
   actions?: InspectorActions;
+  downloadJob: JobDto | null;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -159,6 +167,7 @@ function Details({
       <h3 className="inspector-title" data-testid="inspector-title">
         {item.title}
       </h3>
+      {downloadJob && detail.assets.length === 0 && <ItemDownload job={downloadJob} onOpen={() => actions?.openDownloads?.()} />}
       {actions && (
         <div className="inspector-actions">
           {actions.play && detail.assets.length > 0 && (
@@ -166,7 +175,7 @@ function Details({
               ▶ {t("player.play")}
             </button>
           )}
-          {actions.download && detail.canonicalUrl && detail.assets.length === 0 && (
+          {actions.download && detail.canonicalUrl && detail.assets.length === 0 && !(downloadJob && downloadJob.status !== "failed" && downloadJob.status !== "canceled") && (
             <button type="button" className="button button-primary" onClick={() => actions.download!(item.id, item.title)} data-testid="inspector-download">
               {t("download.open")}
             </button>

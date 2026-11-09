@@ -26,6 +26,8 @@ export const TopBar = forwardRef<
     onMenu: () => void;
     onSettings: () => void;
     status: React.ReactNode;
+    /** Download queue indicator (F3.8). */
+    queue?: React.ReactNode;
   }
 >(function TopBar(p, searchRef) {
   return (
@@ -63,6 +65,7 @@ export const TopBar = forwardRef<
         Add URL
       </button>
       <ImportMenu importing={p.importing} onImport={p.onImport} />
+      {p.queue}
       <label className="sort">
         <span className="sr-only">Sort by</span>
         <select value={p.sort} onChange={(e) => p.onSort(e.target.value as SortChoice)} data-testid="sort-select">

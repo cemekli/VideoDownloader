@@ -3,7 +3,8 @@ import { AddUrlDialog } from "./components/AddUrlDialog";
 import { BackendStatus } from "./components/BackendStatus";
 import { BulkBar } from "./components/BulkBar";
 import { DownloadDialog } from "./components/DownloadDialog";
-import { DownloadsView } from "./components/DownloadsView";
+import { DownloadsView, QueueIndicator } from "./components/DownloadsView";
+import { isOpen, useJobs } from "./hooks/useJobs";
 import { DuplicatesView } from "./components/DuplicatesView";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
@@ -117,6 +118,7 @@ export function App({ client }: { client?: BackendClient }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), undo ? 12000 : 8000);
   }, []);
   const notify = useCallback((text: string, o?: { tone?: Toast["tone"]; undo?: boolean }) => toast(text, o?.tone ?? "info", !!o?.undo), [toast]);
+  const jobs = useJobs(c);
   const org = useOrganize({ client: c, notify, scope, onScope: (s) => setScope(s) });
 
   const { data, loadMore } = useLibrary(c, query, reloadKey + org.version * 1000);
@@ -457,6 +459,7 @@ export function App({ client }: { client?: BackendClient }) {
         onMenu={() => setNavOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         status={<BackendStatus client={c} />}
+        queue={<QueueIndicator jobs={jobs} onOpen={() => setScope({ kind: "downloads" })} />}
       />
       <div className="workspace">
         {(!compact || navOpen) && (
@@ -570,6 +573,7 @@ export function App({ client }: { client?: BackendClient }) {
             drawer={compact}
             onClose={closeInspector}
             refreshKey={org.version + reloadKey * 1000}
+            downloadJob={activeId ? (jobs.find((j) => j.kind === "download" && j.itemId === activeId && (isOpen(j) || j.status === "failed")) ?? null) : null}
             collections={sb?.collections ?? []}
             emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}
             actions={{
@@ -582,6 +586,7 @@ export function App({ client }: { client?: BackendClient }) {
               play: (id) => setPlaying(id),
               openSource,
               download: (id, title) => setDownloading({ id, title }),
+              openDownloads: () => setScope({ kind: "downloads" }),
             }}
           />
         )}

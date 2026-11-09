@@ -221,6 +221,8 @@ pub struct Progress {
     pub phase: Option<String>,
     pub bytes_done: Option<i64>,
     pub bytes_total: Option<i64>,
+    /// The tool's estimate while `bytes_total` is unknown; shown as "about".
+    pub bytes_estimate: Option<i64>,
     pub units_done: Option<i64>,
     pub units_total: Option<i64>,
 }
@@ -269,7 +271,7 @@ pub struct Lease {
     pub generation: i64,
 }
 
-const COLUMNS: &str = "id, type, item_id, parent_job_id, status, payload_version, payload, idempotency_key, priority, attempts, max_attempts, generation, lease_owner, lease_expires_at, next_retry_at, cancel_requested, cancel_reason, blocked_reason, phase, bytes_done, bytes_total, units_done, units_total, checkpoint_ref, error_code, redacted_error_message, created_at, updated_at, finished_at";
+const COLUMNS: &str = "id, type, item_id, parent_job_id, status, payload_version, payload, idempotency_key, priority, attempts, max_attempts, generation, lease_owner, lease_expires_at, next_retry_at, cancel_requested, cancel_reason, blocked_reason, phase, bytes_done, bytes_total, units_done, units_total, checkpoint_ref, error_code, redacted_error_message, created_at, updated_at, finished_at, bytes_estimate";
 
 fn from_row(r: &Row<'_>) -> rusqlite::Result<Job> {
     let bad = |i: usize, what: &str| {
@@ -311,6 +313,7 @@ fn from_row(r: &Row<'_>) -> rusqlite::Result<Job> {
             phase: r.get(18)?,
             bytes_done: r.get(19)?,
             bytes_total: r.get(20)?,
+            bytes_estimate: r.get(29)?,
             units_done: r.get(21)?,
             units_total: r.get(22)?,
         },
@@ -580,8 +583,8 @@ pub fn report_progress(
     let tx = c.transaction()?;
     held(&tx, id, generation)?;
     tx.execute(
-        "UPDATE job SET phase = ?2, bytes_done = ?3, bytes_total = ?4, units_done = ?5, units_total = ?6, lease_expires_at = ?7, updated_at = ?8 WHERE id = ?1",
-        params![id, p.phase, p.bytes_done, p.bytes_total, p.units_done, p.units_total, now + LEASE_MS, now],
+        "UPDATE job SET phase = ?2, bytes_done = ?3, bytes_total = ?4, units_done = ?5, units_total = ?6, lease_expires_at = ?7, updated_at = ?8, bytes_estimate = ?9 WHERE id = ?1",
+        params![id, p.phase, p.bytes_done, p.bytes_total, p.units_done, p.units_total, now + LEASE_MS, now, p.bytes_estimate],
     )?;
     tx.commit()?;
     heartbeat(c, id, generation, now)

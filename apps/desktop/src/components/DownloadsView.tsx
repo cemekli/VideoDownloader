@@ -6,26 +6,29 @@ import { errorMessage } from "../labels";
 import { formatDateTime, t, type MessageKey } from "../i18n";
 
 const ACTIVE = new Set(["queued", "blocked", "running", "retry_wait", "pausing", "paused", "canceling"]);
-const PHASES = new Set(["prepare", "download", "download_video", "download_audio", "merge", "postprocess", "verify", "copy"]);
-const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path"]);
+const PHASES = new Set(["prepare", "download", "download_video", "download_audio", "merge", "postprocess", "verify", "copy", "move"]);
+const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path", "storage_root", "model"]);
 
 export const statusLabel = (s: string) => t(`downloads.status.${s}` as MessageKey);
 export const presetLabel = (p: string | null) => (p ? t(`downloads.preset.${p}` as MessageKey) : "");
 const phaseLabel = (p: string | null) => (p ? t((PHASES.has(p) ? `downloads.phase.${p}` : "downloads.phase.other") as MessageKey) : null);
 
 /** Real progress when the total is known; an indeterminate bar otherwise (AC-09). */
-function ProgressBar({ job }: { job: JobDto }) {
+export function ProgressBar({ job }: { job: JobDto }) {
   if (job.status !== "running") return null;
   const units = job.kind === "storage_move" && job.unitsTotal;
-  const total = units ? job.unitsTotal : job.bytesTotal;
+  const estimated = !units && job.bytesTotal === null && job.bytesEstimate !== null && job.bytesEstimate > 0;
+  const total = units ? job.unitsTotal : (job.bytesTotal ?? (estimated ? job.bytesEstimate : null));
   const done = units ? job.unitsDone : job.bytesDone;
   const known = total !== null && total > 0 && done !== null;
   const pct = known ? Math.min(100, Math.round((done! / total!) * 100)) : null;
   const text = units
     ? t("downloads.move.units", { done: done ?? 0, total: total ?? 0 })
-    : known
-      ? t("downloads.progress", { done: formatBytes(done), total: formatBytes(total) })
-      : t("downloads.progress_unknown", { done: formatBytes(done ?? 0) });
+    : estimated && known
+      ? t("downloads.progress_about", { done: formatBytes(done), total: formatBytes(total) })
+      : known
+        ? t("downloads.progress", { done: formatBytes(done), total: formatBytes(total) })
+        : t("downloads.progress_unknown", { done: formatBytes(done ?? 0) });
   return (
     <div className="job-progress">
       <div
@@ -95,6 +98,45 @@ function JobRow({ job, busy, onAction }: { job: JobDto; busy: boolean; onAction:
         )}
       </div>
     </li>
+  );
+}
+
+/** Top bar: how many downloads run, or that one needs attention (§9.2 queue indicator). */
+export function QueueIndicator({ jobs, onOpen }: { jobs: JobDto[]; onOpen: () => void }) {
+  const active = jobs.filter((j) => ACTIVE.has(j.status));
+  const failed = jobs.filter((j) => j.status === "failed");
+  if (active.length === 0 && failed.length === 0) return null;
+  let text: string;
+  if (active.length > 0) {
+    const total = (j: JobDto) => j.bytesTotal ?? j.bytesEstimate;
+    const running = active.filter((j) => j.status === "running" && total(j) && j.bytesDone !== null);
+    const pct = running.length === 1 ? Math.min(100, Math.round((running[0]!.bytesDone! / total(running[0]!)!) * 100)) : null;
+    text = t("queue.active", { count: active.length }) + (pct !== null ? ` · ${pct}%` : "");
+  } else text = t("queue.failed", { count: failed.length });
+  return (
+    <button type="button" className={`button button-quiet queue${active.length ? "" : " queue-failed"}`} onClick={onOpen} aria-live="polite" data-testid="queue-indicator">
+      <span aria-hidden="true">{active.length ? "⬇" : "!"}</span> {text}
+    </button>
+  );
+}
+
+/** Inspector: the latest download of this item, while it runs or after it failed. */
+export function ItemDownload({ job, onOpen }: { job: JobDto; onOpen: () => void }) {
+  return (
+    <div className="item-download" data-testid="inspector-download-status" data-status={job.status}>
+      <p className="small">
+        <strong>{statusLabel(job.status)}</strong>
+        {job.status === "running" && phaseLabel(job.phase) ? ` · ${phaseLabel(job.phase)}` : ""} · {presetLabel(job.preset)}
+      </p>
+      <ProgressBar job={job} />
+      {job.errorCode && job.status === "failed" && <p className="job-error small">{errorMessage(job.errorCode)}</p>}
+      {job.status === "blocked" && (
+        <p className="small">{t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey)}</p>
+      )}
+      <button type="button" className="button button-quiet" onClick={onOpen} data-testid="inspector-open-downloads">
+        {t("queue.open")}
+      </button>
+    </div>
   );
 }
 

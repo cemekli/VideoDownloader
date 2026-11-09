@@ -115,6 +115,12 @@ impl Tracker {
                         phase: Some(phase.into()),
                         bytes_done: Some(d.bytes_done as i64),
                         bytes_total: d.bytes_total.map(|b| b as i64),
+                        bytes_estimate: d
+                            .bytes_total
+                            .is_none()
+                            .then_some(d.bytes_total_estimate)
+                            .flatten()
+                            .map(|b| b as i64),
                         units_done: d.units_done.map(|u| u as i64),
                         units_total: d.units_total.map(|u| u as i64),
                     },
@@ -523,6 +529,17 @@ mod tests {
         assert!(force);
         assert_eq!(p.phase.as_deref(), Some("download_audio"));
         assert_eq!(p.bytes_total, None, "unknown total stays unknown (AC-09)");
+        assert_eq!(p.bytes_estimate, None);
+        let mut e = dl(DownloadStatus::Downloading, 7, None);
+        if let ProgressEvent::Download(d) = &mut e {
+            d.bytes_total_estimate = Some(70);
+        }
+        let (p, _) = t.map(&e);
+        assert_eq!(
+            (p.bytes_total, p.bytes_estimate),
+            (None, Some(70)),
+            "an estimate is kept apart from the exact total"
+        );
         let (p, _) = t.map(&ProgressEvent::Postprocess {
             postprocessor: "Merger".into(),
             status: PostprocessStatus::Started,

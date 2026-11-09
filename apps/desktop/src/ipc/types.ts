@@ -575,6 +575,8 @@ export interface JobDto {
   bytesDone: number | null;
   /** null: unknown total, progress is indeterminate (AC-09). */
   bytesTotal: number | null;
+  /** yt-dlp's estimate while the total is unknown; shown as "about". */
+  bytesEstimate: number | null;
   unitsDone: number | null;
   unitsTotal: number | null;
   preset: PresetId | null;

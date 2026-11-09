@@ -114,6 +114,8 @@ pub struct JobDto {
     pub bytes_done: Option<i64>,
     /// `None`: the total is unknown and progress is indeterminate (AC-09).
     pub bytes_total: Option<i64>,
+    /// yt-dlp's estimate while the total is unknown; shown as "about".
+    pub bytes_estimate: Option<i64>,
     pub units_done: Option<i64>,
     pub units_total: Option<i64>,
     pub preset: Option<String>,
@@ -159,6 +161,7 @@ fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
         phase: j.progress.phase.clone(),
         bytes_done: j.progress.bytes_done,
         bytes_total: j.progress.bytes_total,
+        bytes_estimate: j.progress.bytes_estimate,
         units_done: j.progress.units_done,
         units_total: j.progress.units_total,
         preset,

@@ -257,6 +257,7 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
                 phase: Some("move".into()),
                 bytes_done: None,
                 bytes_total: None,
+                bytes_estimate: None,
                 units_done: Some(done),
                 units_total: Some(total),
             },

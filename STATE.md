@@ -178,7 +178,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 **Çıkış kapısı**
 
-- [ ] En az bir izinli gerçek indirme uçtan uca `manual verified`.
+- [x] En az bir izinli gerçek indirme uçtan uca `manual verified`: Cuma, Windows 11, 9 Kas 2026 09:30. YouTube videosu 720p indirildi ve uygulamada oynadı. İlk denemede medya klasörünün diski BitLocker ile kilitliydi; iş `blocked`/`storage_root` oldu, kilit açılınca Try again ile bitti.
 - [ ] Yukarıdaki AC'ler otomatik testte geçiyor.
 - [ ] Destek iddiaları yalnızca tarihli kanıtla `docs/platform-support.md` içinde.
 
@@ -300,6 +300,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | İlk gerçek indirme (Windows, YouTube 720p) elle doğrulandı. Elle denemeden düzeltmeler: üst çubukta indirme göstergesi, inspector'da öğenin indirme durumu, `storage_root` ve `model` engellerinin metni, YouTube'un yalnızca tahmin verdiği toplam boyutun "about" olarak gösterilmesi (migration 0007 `job.bytes_estimate`). |
 | 9 Kas 2026 | F3.2–F3.6, F3.8–F3.10 yazıldı (🟨): `vv-engine` crate'i (araç kontrolü, yt-dlp çalıştırma ağ kapısı arkasında, metadata ve thumbnail, önayarlar, indirme/doğrulama/yerleştirme, kota, `storage_move`, zamanlayıcı), migration 0006 (`remote_formats`, `storage_move_step`), sahte yt-dlp ve gerçek yt-dlp testleri, uygulamada motor ve 11 yeni komut, Downloads ekranı, Download penceresi, Settings'te depolama ve Diagnostics, Yolculuk 6 E2E. Öğe kaldırılınca açık işleri iptal ediliyor. ADR-0021. |
 | 8 Kas 2026 | F1.7, F1.8 ve F2.1–F2.9 ✅; F1 ve F2 çıkış kapıları işaretlendi (Windows `verify` + elle kontrol). Elle kontrolde bulunan: Play'e basınca video başlamıyordu (PR #22 ile düzeltildi). |
 | 8 Kas 2026 | F2.4–F2.9 ve çıkış kapısı testleri: migration 0004 (`playback_state`, `app_setting`), `vvmedia` protokolü ve oynatıcı (devam, klavye, HEVC algılama), JSON dışa/içe aktarma (önizleme, kök eşleme, güvenli yol), DB yedeği ve denetimli geri yükleme, Offline Mode (`vv-netguard` DNS öncesi ret), çeviri anahtarları, açık tema, beş adımlı ilk açılış; 20 yeni komut. E2E: oynatıcı, ayarlar, ilk açılış, axe (iki tema), %200 ölçek, Yolculuk 2 ve 5; gerçek uygulamada çevrimdışı akış. PLAY-07 daraltıldı (ADR-0016). |
