@@ -107,6 +107,9 @@ pub struct JobDto {
     pub kind: String,
     pub item_id: Option<String>,
     pub item_title: Option<String>,
+    /// The item's platform (`reddit`, `vk`, ...), so a job waiting for a
+    /// login can offer to connect a session for it.
+    pub item_platform: Option<String>,
     /// §12.3 state, e.g. `running`, `retry_wait`, `failed`.
     pub status: String,
     /// `download_video`, `merge`, `verify`, ... while running.
@@ -137,11 +140,14 @@ pub struct JobDto {
 }
 
 fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
-    let title = j
+    let item = j
         .item_id
         .as_deref()
-        .and_then(|id| repo::get_item(c, id).ok().flatten())
-        .and_then(|it| it.title.or(it.canonical_url));
+        .and_then(|id| repo::get_item(c, id).ok().flatten());
+    let platform = item
+        .as_ref()
+        .map(|it| it.source_platform.as_str().to_owned());
+    let title = item.and_then(|it| it.title.or(it.canonical_url));
     let partial = if j.kind == JobKind::Download {
         download::partial_bytes(staging, &j.id)
     } else {
@@ -157,6 +163,7 @@ fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
         kind: j.kind.as_str().to_owned(),
         item_id: j.item_id.clone(),
         item_title: title,
+        item_platform: platform,
         status: s.as_str().to_owned(),
         phase: j.progress.phase.clone(),
         bytes_done: j.progress.bytes_done,

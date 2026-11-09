@@ -1103,6 +1103,7 @@
           "kind": "download",
           "itemId": "00000000-0000-4000-8000-000000000001",
           "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
           "status": "running",
           "phase": "download_video",
           "bytesDone": 52428800,
@@ -1209,6 +1210,7 @@
         "kind": "download",
         "itemId": "00000000-0000-4000-8000-000000000001",
         "itemTitle": "Deniz kenarında sabah",
+        "itemPlatform": "youtube",
         "status": "queued",
         "phase": null,
         "bytesDone": null,
@@ -1246,6 +1248,7 @@
         "kind": "download",
         "itemId": "00000000-0000-4000-8000-000000000001",
         "itemTitle": "Deniz kenarında sabah",
+        "itemPlatform": "youtube",
         "status": "canceling",
         "phase": "download_video",
         "bytesDone": 52428800,
@@ -1277,6 +1280,7 @@
         "kind": "download",
         "itemId": "00000000-0000-4000-8000-000000000001",
         "itemTitle": "Deniz kenarında sabah",
+        "itemPlatform": "youtube",
         "status": "queued",
         "phase": "download_video",
         "bytesDone": 52428800,
@@ -1340,6 +1344,7 @@
         "kind": "storage_move",
         "itemId": null,
         "itemTitle": null,
+        "itemPlatform": null,
         "status": "running",
         "phase": "copy",
         "bytesDone": null,
@@ -1361,6 +1366,118 @@
         "canCancel": true,
         "canRemovePartial": false
       }
+    },
+    "list_sessions": {
+      "args": {},
+      "response": {
+        "sessions": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c001",
+            "provider": "reddit",
+            "label": "Reddit · Firefox (default-release)",
+            "method": "browser_cookies",
+            "browser": "firefox",
+            "browserProfile": "default-release",
+            "state": "session_available",
+            "consent": [
+              "metadata",
+              "download"
+            ],
+            "consentAt": 1762700000000,
+            "lastVerifiedAt": 1762700100000
+          }
+        ],
+        "browserProfiles": [
+          {
+            "browser": "firefox",
+            "name": "default-release",
+            "isDefault": true,
+            "hasCookies": true
+          }
+        ],
+        "providers": [
+          "reddit",
+          "vk",
+          "youtube",
+          "facebook",
+          "instagram",
+          "tiktok",
+          "x",
+          "dailymotion",
+          "twitch"
+        ]
+      }
+    },
+    "connect_session": {
+      "args": {
+        "provider": "reddit",
+        "browser": "firefox",
+        "browserProfile": "default-release",
+        "scope": [
+          "metadata",
+          "download"
+        ]
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "provider": "reddit",
+        "label": "Reddit · Firefox (default-release)",
+        "method": "browser_cookies",
+        "browser": "firefox",
+        "browserProfile": "default-release",
+        "state": "needs_verification",
+        "consent": [
+          "metadata",
+          "download"
+        ],
+        "consentAt": 1762700000000,
+        "lastVerifiedAt": null
+      }
+    },
+    "set_session_consent": {
+      "args": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "scope": [
+          "download"
+        ]
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "provider": "reddit",
+        "label": "Reddit · Firefox (default-release)",
+        "method": "browser_cookies",
+        "browser": "firefox",
+        "browserProfile": "default-release",
+        "state": "needs_verification",
+        "consent": [
+          "download"
+        ],
+        "consentAt": 1762700000000,
+        "lastVerifiedAt": null
+      }
+    },
+    "clear_session": {
+      "args": {
+        "id": "00000000-0000-4000-8000-00000000c001"
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c001",
+        "provider": "reddit",
+        "label": "Reddit · Firefox (default-release)",
+        "method": "browser_cookies",
+        "browser": "firefox",
+        "browserProfile": "default-release",
+        "state": "not_connected",
+        "consent": [],
+        "consentAt": null,
+        "lastVerifiedAt": null
+      }
+    },
+    "delete_session": {
+      "args": {
+        "id": "00000000-0000-4000-8000-00000000c001"
+      },
+      "response": null
     }
   },
   "domainError": {
@@ -1406,6 +1523,7 @@
       "kind": "download",
       "itemId": "00000000-0000-4000-8000-000000000001",
       "itemTitle": "Deniz kenarında sabah",
+      "itemPlatform": "youtube",
       "status": "failed",
       "phase": null,
       "bytesDone": 52428800,

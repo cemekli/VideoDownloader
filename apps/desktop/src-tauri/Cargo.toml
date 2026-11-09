@@ -33,6 +33,7 @@ vv-import = { path = "../../../crates/vv-import" }
 vv-engine = { path = "../../../crates/vv-engine" }
 vv-tools = { path = "../../../crates/vv-tools" }
 vv-netguard = { path = "../../../crates/vv-netguard" }
+vv-secrets = { path = "../../../crates/vv-secrets" }
 tauri-plugin-single-instance = "=2.5.5"
 tauri-plugin-dialog = "=2.8.4"
 # Opens a file in the default player and a source page in the browser from

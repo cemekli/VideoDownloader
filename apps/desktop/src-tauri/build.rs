@@ -70,6 +70,11 @@ const COMMANDS: &[&str] = &[
     "get_storage_usage",
     "set_storage_quota",
     "move_media_folder",
+    "list_sessions",
+    "connect_session",
+    "set_session_consent",
+    "clear_session",
+    "delete_session",
 ];
 
 fn main() {
