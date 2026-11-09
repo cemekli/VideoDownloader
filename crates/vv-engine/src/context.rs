@@ -56,6 +56,12 @@ impl Dirs {
     pub fn deno_dir(&self) -> PathBuf {
         self.cache.join("deno")
     }
+
+    /// Per-job working copies of cookie files (§21.1): a folder only the
+    /// current user can read, emptied at every start.
+    pub fn cookie_copies(&self) -> PathBuf {
+        self.staging.join("cookies")
+    }
 }
 
 /// Tools that passed the health check, plus the report.
@@ -108,6 +114,8 @@ pub struct Context<S: Store> {
     pub offline: AtomicBool,
     /// This process; written as the lease owner.
     pub owner: String,
+    /// The OS secret store (cookie-file sessions, ADR-0024).
+    pub secrets: Arc<dyn vv_secrets::SecretStore>,
 }
 
 impl<S: Store> Context<S> {

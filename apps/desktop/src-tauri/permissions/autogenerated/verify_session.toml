@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-verify-session"
+description = "Enables the verify_session command without any pre-configured scope."
+commands.allow = ["verify_session"]
+
+[[permission]]
+identifier = "deny-verify-session"
+description = "Denies the verify_session command without any pre-configured scope."
+commands.deny = ["verify_session"]

@@ -464,3 +464,61 @@ pub fn mark_item_authorized(
     )?;
     Ok(())
 }
+
+/// §12.2 "Reconnect" of a cleared browser profile: consent is given again
+/// and the session starts unproven (`needs_verification`). A cookie-file
+/// profile cannot be reconnected this way: its cookies were deleted with
+/// Clear, so the user picks a file again.
+pub fn reconnect(c: &Connection, id: &str, ops: &[Operation], now: i64) -> Result<AuthProfile> {
+    let p = get(c, id)?;
+    if ops.is_empty() {
+        return Err(AuthError::Invalid("consent is required"));
+    }
+    if p.method != Method::BrowserCookies {
+        return Err(AuthError::Invalid(
+            "only a browser profile reconnects in place",
+        ));
+    }
+    c.execute(
+        "UPDATE auth_profile SET consent_scope = ?2, consent_at = ?3, session_state = 'needs_verification', \
+           last_verified_at = NULL, updated_at = ?3 WHERE id = ?1",
+        params![id, scope_json(ops), now],
+    )?;
+    get(c, id)
+}
+
+/// An item `verify_session` can test the profile with (§12.1 evidence (a)):
+/// the newest live item of `provider` that needed a login. `None` when
+/// there is none yet.
+pub fn verification_item(c: &Connection, provider: Platform) -> Result<Option<String>> {
+    Ok(c
+        .query_row(
+            "SELECT id FROM library_item WHERE source_platform = ?1 AND removed_at IS NULL \
+               AND canonical_url IS NOT NULL AND access_state IN ('login_required', 'authorized', 'access_denied') \
+             ORDER BY access_state = 'authorized' DESC, coalesce(access_checked_at, 0) DESC, added_at DESC, id LIMIT 1",
+            [provider.as_str()],
+            |r| r.get(0),
+        )
+        .optional()?)
+}
+
+/// Start-up reconciliation (ADR-0022 "orphan secret"): deletes stored
+/// secrets no profile points at (a delete whose store step failed, or a
+/// crash between the two writes). Returns how many.
+pub fn reconcile_secrets(c: &Connection, store: &dyn SecretStore) -> Result<usize> {
+    let known: std::collections::HashSet<String> = {
+        let mut st = c.prepare(
+            "SELECT secure_local_ref FROM auth_profile WHERE secure_local_ref IS NOT NULL",
+        )?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    let mut n = 0;
+    for r in store.refs()? {
+        if !known.contains(r.as_str()) {
+            store.delete(&r)?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}

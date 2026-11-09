@@ -65,10 +65,45 @@ fn main() {
             Some(src) if src.ends_with("signedout") => fail("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication."),
             Some(_) => {}
         },
+        // F5.3: needs `--cookies <working copy>` holding a Reddit session
+        // cookie. Like the real yt-dlp it writes the cookie jar back to that
+        // file, and it notes where the file was (`<staging>/fake-cookie-seen`)
+        // so the test can check the copy is gone afterwards.
+        "login-file" | "login-file-slow" => match arg_after(&args, "--cookies") {
+            None => fail("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication."),
+            Some(path) => {
+                let path = PathBuf::from(path);
+                if let Some(staging) = path.parent().and_then(|d| d.parent()) {
+                    let _ = std::fs::write(staging.join("fake-cookie-seen"), path.to_string_lossy().as_bytes());
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                if !text.starts_with("# Netscape HTTP Cookie File") {
+                    fail("'cookies' is not a valid Netscape formatted cookies file");
+                }
+                if !text.contains("\treddit_session\t") || text.contains("signedout") {
+                    fail("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication.");
+                }
+                let mut f = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+                let _ = writeln!(f, ".reddit.com\tTRUE\t/\tTRUE\t0\tloid\twritten-back");
+            }
+        },
+        // F5.4: refused with HTTP 403 without a session; with one it opens
+        // unless the session is "nomember" (signed in, not allowed).
+        "denied-auth" => {
+            let cookies = arg_after(&args, "--cookies-from-browser").or_else(|| arg_after(&args, "--cookies"));
+            match cookies {
+                None => fail("[generic] Unable to download webpage: HTTP Error 403: Forbidden"),
+                Some(src) if src.ends_with("nomember") => fail("[generic] Unable to download webpage: HTTP Error 403: Forbidden"),
+                Some(_) => {}
+            }
+        }
         _ => {}
     }
-    if args.iter().any(|a| a == "--cookies") {
-        fail("usage: a cookie file must never be passed");
+    if args.iter().any(|a| a == "--cookies")
+        && !scenario.starts_with("login-file")
+        && scenario != "denied-auth"
+    {
+        fail("usage: a cookie file is only for the login-file scenarios");
     }
     if metadata {
         if scenario == "playlist" {
@@ -114,7 +149,7 @@ fn main() {
                 fail("Unable to download video data: <urlopen error [Errno 101] Network is unreachable>");
             }
         }
-        "slow" => {
+        "slow" | "login-file-slow" => {
             let part = dir.join("media.mp4.part");
             let mut done = 0u64;
             loop {

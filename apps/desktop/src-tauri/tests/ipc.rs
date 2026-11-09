@@ -269,6 +269,10 @@ fn main_capability_grants_only_app_commands() {
         "allow-set-session-consent",
         "allow-clear-session",
         "allow-delete-session",
+        "allow-connect-session-file",
+        "allow-reconnect-session",
+        "allow-verify-session",
+        "allow-open-sign-in",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1261,6 +1265,52 @@ fn session_commands_match_contract_and_never_show_the_folder() {
     );
     assert_eq!(cl["state"], "not_connected");
     assert_eq!(cl["consent"], json!([]));
+
+    // F5.5 Reconnect: consent again, the session starts unproven.
+    let rc = ok(
+        &w,
+        "reconnect_session",
+        json!({ "id": id, "scope": ["metadata", "download", "verify"] }),
+    );
+    assert_same_shape(
+        &rc,
+        &with_nulls_of(&rc, &spec("reconnect_session")),
+        "reconnect_session",
+    );
+    assert_eq!(rc["state"], "needs_verification");
+    assert!(invoke(
+        &w,
+        "reconnect_session",
+        json!({ "id": id, "scope": [] }),
+        app_origin()
+    )
+    .is_err());
+    // The sign-in page: only known platforms; never in Offline Mode.
+    assert!(invoke(
+        &w,
+        "open_sign_in",
+        json!({ "provider": "generic" }),
+        app_origin()
+    )
+    .is_err());
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": true } }),
+    );
+    let e = invoke(
+        &w,
+        "open_sign_in",
+        json!({ "provider": "reddit" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("OFFLINE_MODE"), "{e}");
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": false } }),
+    );
 
     // Only Firefox, only known platforms, only a profile that exists.
     for args in [

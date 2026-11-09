@@ -4352,6 +4352,7 @@ dependencies = [
  "vv-netguard",
  "vv-persistence",
  "vv-process",
+ "vv-secrets",
  "vv-tools",
  "vv-ytdlp",
 ]

@@ -161,29 +161,25 @@ pub fn run(
         policy,
         url,
         mode,
-        None,
+        &[],
         deadline,
         on_progress,
         should_stop,
     )
 }
 
-/// `--cookies-from-browser` value (`firefox:<profile folder>`), built by
-/// [`crate::auth`]. yt-dlp reads the browser's cookie store at run time; no
-/// cookie file is written (`--cookies` is never passed) and the value is
-/// one argv entry that is never logged (ADR-0023).
-pub fn cookies_args(source: &std::ffi::OsStr) -> Vec<OsString> {
-    vec!["--cookies-from-browser".into(), source.to_os_string()]
-}
-
-/// [`run`] as the user, with the browser cookies of an authorized profile.
+/// [`run`] as the user: `auth` are the session arguments of
+/// [`crate::auth::Attempt::prepare`] (`--cookies-from-browser
+/// firefox:<folder>` or `--cookies <working copy>`). They are single argv
+/// entries, placed before the guard's arguments, and never logged
+/// (ADR-0023, ADR-0024).
 #[allow(clippy::too_many_arguments)]
 pub fn run_as(
     tools: &YtdlpTools,
     policy: Policy,
     url: &str,
     mode: &Mode,
-    cookies: Option<&std::ffi::OsStr>,
+    auth: &[OsString],
     deadline: Option<Duration>,
     mut on_progress: impl FnMut(&ProgressEvent),
     should_stop: impl FnMut() -> bool,
@@ -203,9 +199,7 @@ pub fn run_as(
         }
     };
     let mut args = build_args(tools, mode);
-    if let Some(src) = cookies {
-        args.extend(cookies_args(src));
-    }
+    args.extend(auth.iter().cloned());
     args.extend(vv_ytdlp::args::network_guard_args(&guard.proxy_url()));
     args.push("--".into());
     args.push(url.into());

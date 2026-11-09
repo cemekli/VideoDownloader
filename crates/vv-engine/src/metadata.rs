@@ -223,7 +223,20 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         return;
     }
     let exec = |attempt: &crate::auth::Attempt| {
-        let cookies = attempt.cookies();
+        let prepared = match attempt.prepare(cx) {
+            Ok(p) => p,
+            Err(code) => {
+                return ytdlp::Run {
+                    result: RunResult::Failed {
+                        code,
+                        message: None,
+                    },
+                    stdout: Vec::new(),
+                    files: Vec::new(),
+                    connections: Vec::new(),
+                }
+            }
+        };
         ytdlp::run_as(
             &yt,
             cx.run_policy(),
@@ -231,7 +244,7 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
             &Mode::Metadata {
                 thumbnail_dir: Some(dir.clone()),
             },
-            cookies.as_deref(),
+            &prepared.args,
             Some(ytdlp::METADATA_TIMEOUT),
             |_| {},
             || w.should_stop(),
@@ -240,16 +253,12 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
     let op = Operation::Metadata;
     let mut attempt = crate::auth::first(cx, &item, op);
     let mut run = exec(&attempt);
-    if attempt.profile.is_none()
-        && matches!(
-            run.result,
-            RunResult::Failed {
-                code: ErrorCode::LoginRequired,
-                ..
-            }
-        )
-    {
-        if let Some(a) = crate::auth::after_login_required(cx, &item, op) {
+    let refusal = match &run.result {
+        RunResult::Failed { code, .. } if crate::auth::refused(*code) => Some(*code),
+        _ => None,
+    };
+    if let (None, Some(code)) = (&attempt.profile, refusal) {
+        if let Some(a) = crate::auth::after_refusal(cx, &item, op, code) {
             attempt = a;
             run = exec(&attempt);
         }

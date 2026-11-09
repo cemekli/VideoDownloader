@@ -75,6 +75,10 @@ const COMMANDS: &[&str] = &[
     "set_session_consent",
     "clear_session",
     "delete_session",
+    "connect_session_file",
+    "reconnect_session",
+    "verify_session",
+    "open_sign_in",
 ];
 
 fn main() {

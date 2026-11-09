@@ -157,6 +157,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         policy: vv_netguard::Policy::default(),
         offline: AtomicBool::new(false),
         owner: format!("app-{}-{}", std::process::id(), new_id()),
+        secrets: Arc::from(vv_secrets::os_store(&lib.data_dir().join("secrets"))),
     };
     if app
         .state::<EngineState>()

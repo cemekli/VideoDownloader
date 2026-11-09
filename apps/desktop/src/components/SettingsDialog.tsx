@@ -129,12 +129,15 @@ export function SettingsDialog({
   onClose,
   notify,
   onLibraryChanged,
+  onOpenSessions,
 }: {
   client: BackendClient;
   settings: Settings;
   onSettings: (patch: SettingsPatch) => Promise<void>;
   onClose: () => void;
   notify: Notify;
+  /** Opens the Sessions screen (F5.5). */
+  onOpenSessions: () => void;
   onLibraryChanged: () => void;
 }) {
   const [storage, setStorage] = useState<StorageOverview | null>(null);
@@ -221,7 +224,7 @@ export function SettingsDialog({
 
         <section aria-labelledby="set-sessions">
           <h3 id="set-sessions">{t("settings.sessions")}</h3>
-          <SessionsBlock client={client} notify={notify} />
+          <SessionsBlock onOpen={onOpenSessions} />
         </section>
 
         <section aria-labelledby="set-storage">

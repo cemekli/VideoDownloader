@@ -7,7 +7,7 @@
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import type { FixtureRecord, FixtureScenario } from "./fixture";
-import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, JobDto, Platform, PresetId, SessionClient, SessionDto, StorageUsage, ToolStatus } from "./types";
+import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, JobDto, Platform, PresetId, SessionClient, SessionDto, StorageUsage, ToolStatus, VerifyDto, VerifyOutcome } from "./types";
 
 const MB = 1024 * 1024;
 const PRESETS: PresetId[] = ["best", "1080", "720", "audio"];
@@ -202,7 +202,7 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
   };
   const sessionClient: SessionClient = {
     async listSessions() {
-      return structuredClone({ sessions, browserProfiles, providers: (contract.commands.list_sessions.response.providers as Platform[]) });
+      return structuredClone({ sessions, browserProfiles, providers: contract.commands.list_sessions.response.providers as Platform[], cookieFileSupported: true });
     },
     async connectSession(provider, browser, browserProfile, scope) {
       if (browser !== "firefox" || provider === "generic" || provider === "local") throw err("INPUT_REJECTED", "connect_session");
@@ -220,10 +220,60 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
         consent: [...scope],
         consentAt: now(),
         lastVerifiedAt: null,
+        hasCookies: false,
       };
       sessions.push(x);
       resume(provider);
       return structuredClone(x);
+    },
+    // The fixture has no file dialog: it acts as if the user picked a file
+    // with the site's cookies.
+    async connectSessionFile(provider, scope) {
+      if (provider === "generic" || provider === "local" || scope.length === 0) throw err("INPUT_REJECTED", "connect_session_file");
+      const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+      const x: SessionDto = {
+        id: `00000000-0000-4000-8000-${String(0xd000 + ++seq).padStart(12, "0")}`,
+        provider,
+        label: `${name} · cookie file`,
+        method: "cookie_file",
+        browser: null,
+        browserProfile: null,
+        state: "needs_verification",
+        consent: [...scope],
+        consentAt: now(),
+        lastVerifiedAt: null,
+        hasCookies: true,
+      };
+      sessions.push(x);
+      resume(provider);
+      return structuredClone(x);
+    },
+    async reconnectSession(id, scope) {
+      const x = findSession(id, "reconnect_session");
+      if (x.method !== "browser_cookies" || scope.length === 0) throw err("INPUT_REJECTED", "reconnect_session");
+      Object.assign(x, { consent: [...scope], consentAt: now(), state: "needs_verification", lastVerifiedAt: null });
+      resume(x.provider);
+      return structuredClone(x);
+    },
+    // §12.1 (a): a saved item of the site that needs a login is read with
+    // the session. Firefox profile "work" has no cookies: not signed in.
+    async verifySession(id) {
+      const x = findSession(id, "verify_session");
+      const result = (outcome: VerifyOutcome, itemId: string | null = null, code: string | null = null): VerifyDto => ({ outcome, session: structuredClone(x), itemId, code });
+      if (!x.consent.includes("verify")) return result("no_consent");
+      if (x.state === "not_connected" || x.state === "unsupported") return result("not_runnable");
+      const item = records.find((r) => !r.removed && r.platform === x.provider && NEEDS_LOGIN.has(r.platform));
+      if (!item) return result("no_test_item");
+      if (x.browserProfile === "work") {
+        x.state = "needs_verification";
+        return result("not_signed_in", item.id, "LOGIN_REQUIRED");
+      }
+      Object.assign(x, { state: "session_available", lastVerifiedAt: now() });
+      resume(x.provider);
+      return result("verified", item.id);
+    },
+    async openSignIn(provider) {
+      if (provider === "generic" || provider === "local") throw err("INPUT_REJECTED", "open_sign_in");
     },
     async setSessionConsent(id, scope) {
       const x = findSession(id, "set_session_consent");

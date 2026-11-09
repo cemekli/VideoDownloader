@@ -124,6 +124,11 @@ pub trait SecretStore: Send + Sync {
     fn get(&self, r: &SecretRef) -> Result<Secret>;
     /// Removes the secret. Removing a missing secret is not an error.
     fn delete(&self, r: &SecretRef) -> Result<()>;
+    /// Every stored reference, for start-up reconciliation (secrets no
+    /// profile points at any more are deleted).
+    fn refs(&self) -> Result<Vec<SecretRef>> {
+        Ok(Vec::new())
+    }
     /// Whether this store really protects data (false for
     /// [`UnavailableStore`]).
     fn available(&self) -> bool {
@@ -179,6 +184,10 @@ impl SecretStore for MemoryStore {
         }
         Ok(())
     }
+
+    fn refs(&self) -> Result<Vec<SecretRef>> {
+        Ok(self.items.lock().unwrap().keys().cloned().collect())
+    }
 }
 
 /// Platforms without an OS backend: nothing can be stored.
@@ -215,6 +224,8 @@ pub fn os_store(dir: &std::path::Path) -> Box<dyn SecretStore> {
 
 #[cfg(windows)]
 pub use dpapi::DpapiStore;
+
+pub mod private_fs;
 
 #[cfg(windows)]
 mod dpapi {
@@ -342,6 +353,32 @@ mod dpapi {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(e) => Err(SecretError::Io(e)),
             }
+        }
+
+        fn refs(&self) -> Result<Vec<SecretRef>> {
+            let rd = match std::fs::read_dir(&self.dir) {
+                Ok(rd) => rd,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+                Err(e) => return Err(SecretError::Io(e)),
+            };
+            let mut out = Vec::new();
+            for e in rd.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if let Some(stem) = name.strip_suffix(".tmp") {
+                    // A write that never finished: nothing points at it.
+                    if SecretRef::parse(&format!("{PREFIX}{stem}")).is_some() {
+                        let _ = std::fs::remove_file(e.path());
+                    }
+                    continue;
+                }
+                if let Some(r) = name
+                    .strip_suffix(".vvsec")
+                    .and_then(|stem| SecretRef::parse(&format!("{PREFIX}{stem}")))
+                {
+                    out.push(r);
+                }
+            }
+            Ok(out)
         }
     }
 }

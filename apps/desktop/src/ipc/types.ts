@@ -670,6 +670,8 @@ export interface SessionDto {
   consent: SessionOperation[];
   consentAt: number | null;
   lastVerifiedAt: number | null;
+  /** A cookie file's cookies are stored (F5.3). Never the cookies themselves. */
+  hasCookies: boolean;
 }
 
 export interface BrowserProfileDto {
@@ -683,12 +685,42 @@ export interface SessionOverview {
   sessions: SessionDto[];
   browserProfiles: BrowserProfileDto[];
   providers: Platform[];
+  /** This system keeps a cookie file's cookies in the OS secret store (Windows). */
+  cookieFileSupported: boolean;
 }
 
-/** Sessions (F5.2): connect a Firefox profile to a platform with explicit consent. */
+/** What `verifySession` found (F5.4, SPEC §12.1). */
+export type VerifyOutcome =
+  | "verified"
+  | "not_signed_in"
+  | "cookie_access_failed"
+  | "session_expired"
+  | "access_denied"
+  | "public_item"
+  | "no_test_item"
+  | "no_consent"
+  | "not_runnable"
+  | "failed";
+
+export interface VerifyDto {
+  outcome: VerifyOutcome;
+  session: SessionDto;
+  /** The item used for the test. */
+  itemId: string | null;
+  /** The §19 code behind a failure. */
+  code: string | null;
+}
+
+/** Sessions (F5.2–F5.5): connect a Firefox profile or a cookie file to a platform with explicit consent. */
 export interface SessionClient {
   listSessions(): Promise<SessionOverview>;
   connectSession(provider: Platform, browser: "firefox", browserProfile: string, scope: SessionOperation[]): Promise<SessionDto>;
+  /** Opens a file dialog in the backend; `null` when it was closed. The file's path never reaches the UI. */
+  connectSessionFile(provider: Platform, scope: SessionOperation[]): Promise<SessionDto | null>;
+  reconnectSession(id: string, scope: SessionOperation[]): Promise<SessionDto>;
+  verifySession(id: string): Promise<VerifyDto>;
+  /** Opens the platform's sign-in page in the user's browser. */
+  openSignIn(provider: Platform): Promise<void>;
   setSessionConsent(id: string, scope: SessionOperation[]): Promise<SessionDto>;
   clearSession(id: string): Promise<SessionDto>;
   deleteSession(id: string): Promise<void>;

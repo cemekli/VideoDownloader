@@ -15,6 +15,7 @@
 pub mod auth;
 pub mod browsers;
 pub mod context;
+pub mod cookiefile;
 pub mod download;
 pub mod formats;
 pub mod metadata;
@@ -23,6 +24,7 @@ pub mod runtime;
 pub mod storage;
 pub mod storage_move;
 pub mod toolset;
+pub mod verify;
 pub mod worker;
 pub mod ytdlp;
 

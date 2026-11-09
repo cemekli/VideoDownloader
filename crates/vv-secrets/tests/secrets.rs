@@ -13,12 +13,16 @@ fn contract(store: &dyn SecretStore) {
     // Two puts of the same value get unrelated references.
     let r2 = store.put(&Secret::new(CANARY.to_vec())).unwrap();
     assert_ne!(r, r2);
+    // Reconciliation sees both (F5.3).
+    let refs = store.refs().unwrap();
+    assert!(refs.contains(&r) && refs.contains(&r2));
 
     store.delete(&r).unwrap();
     assert!(matches!(store.get(&r), Err(SecretError::NotFound)));
     // Deleting again is fine.
     store.delete(&r).unwrap();
     store.delete(&r2).unwrap();
+    assert!(!store.refs().unwrap().contains(&r2));
 
     let big = Secret::new(vec![1; vv_secrets::MAX_SECRET_BYTES + 1]);
     assert!(matches!(store.put(&big), Err(SecretError::TooLarge)));

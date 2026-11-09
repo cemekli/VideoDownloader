@@ -29,7 +29,7 @@ Durum değerleri: `supported` (tarihli kanıt var), `conditional` (koşul yazıl
 | VK | supported | supported | supported (herkese açık video) | untested | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Oturumlu erişim F5.6. |
 | Dailymotion | supported | supported | supported | — | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Önce genel URL sayılıyordu ve format listesi gelmiyordu; PR #26 ile ayrı platform oldu, sonra indirme çalıştı. |
 | Twitch | supported | supported | conditional: VOD ve klip indirilir; canlı yayın reddedilir (SPEC §6) | — | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Eski bir VOD indirildi. Canlı kanal önce sonsuz bekliyordu; PR #28'den beri `INPUT_REJECTED` (`live-stream`). |
-| Reddit | supported | unsupported (girişsiz) | unsupported (girişsiz) | untested (F5.2) | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Paylaşım linki (`/r/<sub>/s/<kod>`) doğru gönderiye yönlendi; Reddit gönderi JSON'unu girişsiz vermedi: yt-dlp `Account authentication is required`. Aynı sonuç yt-dlp proxy'siz, tek başına çalıştırıldığında da alındı, yani engel uygulamada değil. Video dosyasının sağ tıkla kopyalanan adresi (`packaged-media.redd.it`) geçici, imzalı bir medya adresidir, gönderi değildir (PR #30). |
+| Reddit | supported | conditional: Firefox oturumuyla (F5.2) | conditional: Firefox oturumuyla (F5.2) | supported (Firefox oturumu, F5.2) | 9 Kas 2026 | yt-dlp 2026.10.26 | Cuma, Windows 11, release exe ve geliştirme derlemesi; girişsiz (çerez yok), `vv-netguard` proxy arkasında. Paylaşım linki (`/r/<sub>/s/<kod>`) doğru gönderiye yönlendi; Reddit gönderi JSON'unu girişsiz vermedi: yt-dlp `Account authentication is required`. Aynı sonuç yt-dlp proxy'siz, tek başına çalıştırıldığında da alındı, yani engel uygulamada değil. Video dosyasının sağ tıkla kopyalanan adresi (`packaged-media.redd.it`) geçici, imzalı bir medya adresidir, gönderi değildir (PR #30). 9 Kas 2026 akşam (PR #35 sonrası, release exe): Settings → Sessions'ta Firefox profili bağlandı, gönderi indirildi ve oynatıldı (Cuma). |
 | Genel URL (bookmark) | untested | — | — | — | — | — | Sözdizimsel URL politikası test edildi (F0.7), kayıt akışı F1.2'de |
 
 Yukarıdaki satırlar elle yapılmış tek seferlik testlerdir; platformlar değiştikçe yeniden denenmelidir. Otomatik testler gerçek yt-dlp'yi yalnızca yerel test sunucusuna karşı çalıştırır (ADR-0003, ADR-0007); onlar platform desteği kanıtı değildir.
@@ -52,6 +52,10 @@ Ayrıntılı sonuç her CI çalışmasında `test-artifacts/playback-matrix/` al
 ## Kimlik doğrulama (M3)
 
 VK-01…VK-10 canlı test matrisi SPEC §21.2'de tanımlıdır. Hiçbiri çalıştırılmadı. Sonuçlar F5.6'da buraya tarihli yazılır.
+
+**Oturum doğrulama (§12.1, ADR-0024).** Platforma özgü, yalnızca oturum açıkken geçen bir kontrol (kanıt (b)) hiçbir platform için yok: uygulamanın istekleri yalnızca yt-dlp üzerinden gider ve yt-dlp böyle bir kontrol sunmaz. Bu yüzden her platformda oturum yalnızca (a) ile doğrulanır: giriş gerektirmiş bir öğe profilsiz reddedilir, profille açılır. Sessions ekranındaki "Check now" bunu kaydedilmiş en yeni böyle öğeyle yapar; öyle bir öğe yoksa doğrulama yapılamaz.
+
+**Yöntemler.** Firefox profili (F5.2, Reddit'te 9 Kas 2026'da çalıştı) ve dışa aktarılmış çerez dosyası (F5.3, yalnızca Windows; gerçek platformla henüz denenmedi, VK-10). Chrome ve Edge Windows'ta doğrudan okunamaz (app-bound şifreleme); bunlardaki oturum çerez dosyası olarak dışa aktarılarak kullanılabilir.
 
 ## Kayıt kuralı
 

@@ -111,6 +111,7 @@ pub struct Lib {
     pub engine: Engine<TestStore>,
     pub clock: Arc<FixedClock>,
     pub events: Arc<Recorder>,
+    pub secrets: Arc<vv_secrets::MemoryStore>,
 }
 
 pub struct Setup {
@@ -138,6 +139,7 @@ pub fn library(setup: Setup) -> Lib {
     std::fs::create_dir_all(&dirs.staging).unwrap();
     let clock = Arc::new(FixedClock::new(1_794_000_000_000));
     let events = Arc::new(Recorder::default());
+    let secrets = Arc::new(vv_secrets::MemoryStore::new());
     let ffmpeg = setup
         .media
         .as_ref()
@@ -166,12 +168,14 @@ pub fn library(setup: Setup) -> Lib {
         policy: setup.policy,
         offline: AtomicBool::new(false),
         owner: "test-owner".into(),
+        secrets: secrets.clone() as Arc<dyn vv_secrets::SecretStore>,
     };
     Lib {
         dir,
         engine: Engine::new(cx),
         clock,
         events,
+        secrets,
     }
 }
 
