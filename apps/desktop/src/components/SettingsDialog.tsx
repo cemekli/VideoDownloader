@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
-import type { BackendClient, BackupDto, BackupPreview, PendingImport, Settings, SettingsPatch, StorageOverview, Theme } from "../ipc/types";
+import type { BackendClient, BackupDto, BackupPreview, PendingImport, Settings, SettingsPatch, StorageOverview, StorageUsage, Theme, ToolStatus } from "../ipc/types";
 import { formatBytes } from "../format";
 import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
@@ -26,6 +26,73 @@ export function ThemeChoice({ value, onChange, name }: { value: Theme; onChange:
 }
 
 /** The media folder line: name, free space, cloud warning (§9.7 step 3). */
+const GB = 1024 * 1024 * 1024;
+const QUOTAS = [null, 10, 25, 50, 100, 250, 500] as const;
+
+/** DATA-07: what downloads use, the optional limit and moving the folder (DATA-08). */
+export function StorageUsageBlock({ usage, busy, onQuota, onMove }: { usage: StorageUsage | null; busy: boolean; onQuota: (bytes: number | null) => void; onMove: () => void }) {
+  if (!usage) return null;
+  const current = usage.quotaBytes === null ? "" : String(Math.round(usage.quotaBytes / GB));
+  const options = QUOTAS.map((q) => (q === null ? "" : String(q)));
+  if (!options.includes(current)) options.push(current);
+  return (
+    <div className="storage-usage" data-testid="storage-usage">
+      <p className="muted small">{t("storage.usage", { media: formatBytes(usage.managedMediaBytes), derived: formatBytes(usage.derivedBytes), staging: formatBytes(usage.stagingBytes) })}</p>
+      {usage.lowSpace && (
+        <p className="warning small" role="alert" data-testid="storage-low">
+          {t("storage.low")}
+        </p>
+      )}
+      {usage.quotaExceeded && (
+        <p className="warning small" role="alert" data-testid="storage-quota-exceeded">
+          {t("storage.quota.exceeded")}
+        </p>
+      )}
+      <label className="field">
+        <span>{t("storage.quota")}</span>
+        <select value={current} disabled={busy} onChange={(e) => onQuota(e.target.value === "" ? null : Number(e.target.value) * GB)} data-testid="storage-quota">
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o === "" ? t("storage.quota.none") : t("storage.quota.gb", { size: Number(o) })}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="actions">
+        <button type="button" className="button" disabled={busy} onClick={onMove} aria-describedby="move-help" data-testid="storage-move">
+          {t("storage.move")}
+        </button>
+      </div>
+      <p id="move-help" className="muted small">
+        {t("storage.move.help")}
+      </p>
+    </div>
+  );
+}
+
+/** MT-11: each managed tool's pinned version and check result. No paths. */
+export function ToolHealthBlock({ tools }: { tools: ToolStatus | null }) {
+  if (!tools) return null;
+  return (
+    <div data-testid="tool-health">
+      <h4>{t("diag.tools")}</h4>
+      <p className={tools.ready ? "muted small" : "warning small"} data-testid="tool-health-summary">
+        {tools.checking ? t("diag.checking") : tools.ready ? t("diag.ready") : t("diag.not_ready", { code: tools.code ?? "TOOL_MISSING" })}
+      </p>
+      <ul className="tool-list">
+        {tools.tools.map((x) => (
+          <li key={x.id} data-testid="tool" data-state={x.state}>
+            <span>
+              {x.id} <span className="muted small">{t("diag.version", { version: x.version })}</span>
+            </span>
+            <span className={x.state === "ok" ? "" : "warning"}>{t(`diag.state.${x.state}` as MessageKey)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function StorageLine({ storage, onChoose }: { storage: StorageOverview | null; onChoose: () => void }) {
   return (
     <div className="storage-line" data-testid="storage-line">
@@ -70,6 +137,8 @@ export function SettingsDialog({
   onLibraryChanged: () => void;
 }) {
   const [storage, setStorage] = useState<StorageOverview | null>(null);
+  const [usage, setUsage] = useState<StorageUsage | null>(null);
+  const [tools, setTools] = useState<ToolStatus | null>(null);
   const [backups, setBackups] = useState<BackupDto[] | null>(null);
   const [paths, setPaths] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,6 +150,8 @@ export function SettingsDialog({
 
   useEffect(() => {
     client.getStorageOverview().then(setStorage, fail);
+    client.getStorageUsage().then(setUsage, fail);
+    client.getToolHealth().then(setTools, () => {});
     client.listBackups().then(setBackups, fail);
     client.getStatus().then((s) => setVersion(s.appVersion), () => {});
   }, [client]);
@@ -150,6 +221,21 @@ export function SettingsDialog({
         <section aria-labelledby="set-storage">
           <h3 id="set-storage">{t("settings.storage")}</h3>
           <StorageLine storage={storage} onChoose={() => void run(async () => setStorage((await client.chooseMediaFolder()) ?? storage))} />
+          <StorageUsageBlock
+            usage={usage}
+            busy={busy}
+            onQuota={(bytes) => void run(async () => setUsage(await client.setStorageQuota(bytes)))}
+            onMove={() =>
+              void run(async () => {
+                if (await client.moveMediaFolder()) notify(t("storage.move.started"));
+              })
+            }
+          />
+        </section>
+
+        <section aria-labelledby="set-diag">
+          <h3 id="set-diag">{t("diag.title")}</h3>
+          <ToolHealthBlock tools={tools} />
         </section>
 
         <section aria-labelledby="set-data">

@@ -54,6 +54,12 @@ pub const MIGRATIONS: &[Migration] = &[
         up: include_str!("../migrations/0005_jobs.up.sql"),
         down: Some(include_str!("../migrations/0005_jobs.down.sql")),
     },
+    Migration {
+        version: 6,
+        name: "downloads",
+        up: include_str!("../migrations/0006_downloads.up.sql"),
+        down: Some(include_str!("../migrations/0006_downloads.down.sql")),
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

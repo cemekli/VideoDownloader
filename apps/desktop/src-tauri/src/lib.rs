@@ -7,6 +7,8 @@
 pub mod capture_commands;
 pub mod commands;
 pub mod data_commands;
+pub mod download_commands;
+pub mod engine;
 pub mod instance;
 pub mod library;
 pub mod library_commands;
@@ -23,6 +25,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
     builder
         .manage(instance::InstanceState::default())
         .manage(library::LibraryState::default())
+        .manage(engine::EngineState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::get_status,
@@ -80,7 +83,18 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             player_commands::save_playback_position,
             player_commands::open_externally,
             player_commands::open_source,
-            player_commands::relink_asset
+            player_commands::relink_asset,
+            download_commands::get_tool_health,
+            download_commands::list_jobs,
+            download_commands::cancel_job,
+            download_commands::retry_job,
+            download_commands::remove_partial,
+            download_commands::get_download_options,
+            download_commands::start_download,
+            download_commands::fetch_metadata,
+            download_commands::get_storage_usage,
+            download_commands::set_storage_quota,
+            download_commands::move_media_folder
         ])
         .register_uri_scheme_protocol(library_commands::THUMB_SCHEME, |ctx, request| {
             thumb_protocol::handle(&ctx.app_handle().state::<library::LibraryState>(), &request)

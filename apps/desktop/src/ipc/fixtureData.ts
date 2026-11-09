@@ -12,6 +12,8 @@ import type { BackupDto, DataClient, PlaybackState, Settings, StorageOverview } 
 const MEDIA: Record<string, { file: string; codec: string }> = {
   "holiday.mp4": { file: "mp4-h264-aac.mp4", codec: "h264" },
   "postgres-replication.mp4": { file: "mp4-hevc-aac.mp4", codec: "hevc" },
+  // What a finished fixture download publishes (fixtureDownloads.ts).
+  "downloaded.mp4": { file: "mp4-h264-aac.mp4", codec: "h264" },
 };
 
 export function fixtureMedia(fileName: string | null): { file: string; codec: string } | null {

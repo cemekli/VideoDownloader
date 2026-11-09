@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Main window: only VideoVault's own commands, plus listening for the import event. No filesystem, dialog, opener, shell or HTTP permissions; files and URLs are opened by Rust commands (SPEC §10.1, §20; ADR-0013).",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "allow-ping",
     "allow-get-status",
@@ -61,6 +63,17 @@
     "allow-open-externally",
     "allow-open-source",
     "allow-relink-asset",
+    "allow-get-tool-health",
+    "allow-list-jobs",
+    "allow-cancel-job",
+    "allow-retry-job",
+    "allow-remove-partial",
+    "allow-get-download-options",
+    "allow-start-download",
+    "allow-fetch-metadata",
+    "allow-get-storage-usage",
+    "allow-set-storage-quota",
+    "allow-move-media-folder",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

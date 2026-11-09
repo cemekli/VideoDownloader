@@ -128,7 +128,47 @@ describe("Tauri client: organize commands", () => {
   });
 });
 
+// Download commands (F3): the UI sends a preset name and ids, nothing else.
+const DOWNLOAD_CALLS: Array<[string, (c: ReturnType<typeof createTauriClient>, a: Record<string, unknown>) => Promise<unknown>]> = [
+  ["get_tool_health", (c) => c.getToolHealth()],
+  ["list_jobs", (c) => c.listJobs()],
+  ["get_download_options", (c, a) => c.getDownloadOptions(a.itemId as string)],
+  ["start_download", (c, a) => c.startDownload(a.itemId as string, a.preset as "720")],
+  ["fetch_metadata", (c, a) => c.fetchMetadata(a.itemId as string)],
+  ["cancel_job", (c, a) => c.cancelJob(a.jobId as string)],
+  ["retry_job", (c, a) => c.retryJob(a.jobId as string)],
+  ["remove_partial", (c, a) => c.removePartial(a.jobId as string)],
+  ["get_storage_usage", (c) => c.getStorageUsage()],
+  ["set_storage_quota", (c, a) => c.setStorageQuota(a.bytes as number)],
+  ["move_media_folder", (c) => c.moveMediaFolder()],
+];
+
+describe("Tauri client: download commands", () => {
+  it.each(DOWNLOAD_CALLS)("%s sends the contract arguments", async (cmd, callIt) => {
+    const spec = (contract.commands as Record<string, { args: Record<string, unknown>; response: unknown }>)[cmd]!;
+    const calls: Array<[string, unknown]> = [];
+    mockIPC((name, args) => {
+      calls.push([name, args]);
+      return spec.response;
+    });
+    await expect(callIt(createTauriClient(), spec.args)).resolves.toEqual(spec.response);
+    expect(calls).toEqual([[cmd, spec.args]]);
+  });
+});
+
 describe("fixture client", () => {
+  it("answers the download reads with the contract shapes", async () => {
+    const c = createFixtureClient();
+    const keys = (o: object) => Object.keys(o).sort();
+    const o = await c.getDownloadOptions("00000000-0000-4000-8000-000000000002");
+    expect(keys(o)).toEqual(keys(contract.commands.get_download_options.response));
+    const j = await c.startDownload("00000000-0000-4000-8000-000000000002", "720");
+    expect(keys(j)).toEqual(keys(contract.commands.start_download.response));
+    expect(keys(await c.getToolHealth())).toEqual(keys(contract.commands.get_tool_health.response));
+    expect(keys(await c.getStorageUsage())).toEqual(keys(contract.commands.get_storage_usage.response));
+    await expect(c.startDownload("00000000-0000-4000-8000-000000000005", "best")).rejects.toMatchObject({ code: "INPUT_REJECTED" });
+  });
+
   it("reports itself as fixture data with the contract status shape", async () => {
     const c = createFixtureClient();
     expect(c.kind).toBe("fixture");

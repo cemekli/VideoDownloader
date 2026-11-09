@@ -301,3 +301,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: no-preference) {
   .card, .chip, .button, .nav-item { transition: background-color 120ms ease, border-color 120ms ease; }
 }
+
+/* Downloads (F3.8) */
+.downloads { display: flex; flex-direction: column; gap: var(--s5); padding: var(--s3) 0; }
+.downloads-heading { font-size: 1rem; margin: 0 0 var(--s2); }
+.job-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.job { padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.job p { margin: var(--s1) 0; }
+.job-head { display: flex; justify-content: space-between; gap: var(--s3); align-items: baseline; }
+.job-title { overflow-wrap: anywhere; }
+.job-status { font-size: .85rem; white-space: nowrap; }
+.job-status-failed { color: var(--danger); }
+.job-status-succeeded { color: var(--ok); }
+.job-error { color: var(--danger); }
+.job-progress { display: flex; flex-direction: column; gap: var(--s1); margin: var(--s2) 0; }
+.bar { position: relative; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.bar > span { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px; }
+.bar-indeterminate > span { width: 30%; animation: bar-slide 1.4s ease-in-out infinite; }
+@keyframes bar-slide { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .bar-indeterminate > span { animation: none; width: 100%; opacity: .4; } }
+.preset { width: 100%; }
+.tool-list { list-style: none; margin: 0; padding: 0; }
+.tool-list li { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s1) 0; }

@@ -4320,8 +4320,11 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "vv-domain",
+ "vv-engine",
  "vv-import",
+ "vv-netguard",
  "vv-persistence",
+ "vv-tools",
 ]
 
 [[package]]
@@ -4331,6 +4334,25 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "vv-engine"
+version = "0.0.1"
+dependencies = [
+ "fs4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "url",
+ "vv-domain",
+ "vv-ffmpeg",
+ "vv-import",
+ "vv-netguard",
+ "vv-persistence",
+ "vv-process",
+ "vv-tools",
+ "vv-ytdlp",
 ]
 
 [[package]]

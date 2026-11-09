@@ -12,7 +12,7 @@
 use crate::library::{internal, LibraryState};
 use crate::library_commands::{blocking, dto_of, LibraryItemDto};
 use serde::Serialize;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
 use vv_domain::normalize::{derived_title, normalize, Normalized, Shape};
 use vv_domain::url_policy::validate_capture_url;
@@ -191,10 +191,23 @@ pub async fn save_url<R: Runtime>(
     app: AppHandle<R>,
     url: String,
 ) -> Result<SaveUrlResult, DomainError> {
-    blocking(app, move |st: &LibraryState| {
-        st.get()?.write(|c| save(c, &SystemClock, &url))
+    let a = app.clone();
+    let r = blocking(app, move |st: &LibraryState| {
+        st.get()?.write(|c| {
+            let r = save(c, &SystemClock, &url)?;
+            // A new bookmark gets its title, thumbnail and formats in the
+            // background (F3.3). It waits while Offline Mode is on.
+            if r.outcome == "created" {
+                let _ = vv_engine::metadata::enqueue(c, &r.item.id, SystemClock.now_ms());
+            }
+            Ok(r)
+        })
     })
-    .await
+    .await;
+    if let Some(e) = a.try_state::<crate::engine::EngineState>() {
+        e.wake();
+    }
+    r
 }
 
 /// Restore from Recently removed (AC-45).

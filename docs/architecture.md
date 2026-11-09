@@ -32,13 +32,13 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | `vv-domain` | Hata kodları ve `DomainError`, yakalama URL politikası, platform tanıma ve URL normalizasyonu (sürüm 1) | domain, security | Kısmen | F0.7, ADR-0011 |
 | `vv-persistence` | Bağlantı ayarları (WAL, `synchronous=FULL`), checksum'lı migration, migration öncesi yedek, `videovault.lock`; `library`: kütüphane şeması (migration 0002), repository'ler, `save_bookmark`, yeniden normalizasyon, FTS arama (`search`) | persistence | Şema ve bookmark kaydı hazır; uygulamaya F1.8'de bağlanır | ADR-0002, ADR-0008, ADR-0011 |
 | `vv-import` | Yerel dosya/klasör import, kök erişilebilirliği ve `missing` durumu, relink, thumbnail | media, library | Hazır; uygulamaya F1.7'de bağlanır | ADR-0012 |
-| `vv-process` | Araç süreçlerini temiz ortamla, Job Object içinde başlatma; iptal ve zaman aşımı | jobs (süreç denetimi) | Hazır; henüz çağıran yok (F3) | ADR-0008 |
+| `vv-process` | Araç süreçlerini temiz ortamla, Job Object içinde başlatma; iptal ve zaman aşımı | jobs (süreç denetimi) | Hazır; `vv-import` ve `vv-engine` kullanır | ADR-0008 |
 | `vv-ytdlp` | yt-dlp için sabit argümanlar, çıktı ayrıştırma, hata eşleme | connectors | Fixture ile test edildi | ADR-0003 |
 | `vv-ffmpeg` | Kısıtlı ffprobe/FFmpeg çağrıları, referanslı girdilerin reddi | media | Fixture ve gerçek build ile test edildi | ADR-0006 |
 | `vv-netguard` | yt-dlp bağlantılarını port, DNS sonrası IP ve jetonla denetleme | security | Gerçek yt-dlp ile test edildi | ADR-0007 |
 | `vv-tools` | `tools/manifest.json`: sürüm pin, SHA-256, GPG imzası, FFmpeg lisans kontrolü | diagnostics, security | Hazır | ADR-0005, ADR-0006 |
 | `vv-benchdata` | Sürümlü benchmark verisi (10.000 öğe, 100.000 segment) ve BM-01…03 | — (test aracı) | Hazır; uygulamaya girmez | ADR-0009 |
-| İş zamanlayıcı (lease, retry, bağımlılık) | Kalıcı kuyruk | jobs | Yok | F3.1 |
+| `vv-engine` | İş zamanlayıcı ve işçiler: araç kontrolü, metadata, önayarlar, indirme/doğrulama/yerleştirme, kota, `storage_move`; kuyruk `vv-persistence::jobs` | jobs, connectors, storage | Uygulamada çalışıyor | ADR-0019, ADR-0020, ADR-0021 |
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |
 | Yerel AI sağlayıcıları | Döküm, embedding, OCR | ai | Yok | F6, F7 |
 
@@ -66,7 +66,7 @@ Hedef akış (SPEC §8, §13). Kalın adımlar bugün kodda vardır.
 5. **Oynatma:** WebView2 `<video>` ← yerel medya protokolü (Range destekli; **test derlemesinde prototip**, F2.4'te üretim). HEVC oynatılamaz sayılır (ADR-0004).
 6. **Arama:** FTS5 (`SearchDocument`); paketlenen SQLite'ta FTS5 **doğrulandı**, sorgu oluşturucu F1.6'da.
 
-Uygulama açılışı bugün: tek süreç eklentisi → **kütüphane kilidi** → pencere. Veritabanı henüz açılmıyor; açılış uzlaştırması (lease'lerin toparlanması) F3.1'de eklenecek.
+Uygulama açılışı bugün: tek süreç eklentisi → **kütüphane kilidi** → veritabanı → indirme motoru (arka planda araç kontrolü, sonra açılış uzlaştırması: lease'lerin toparlanması, yarım kalan taşıma temizliği, bitmiş işlerin staging klasörleri, sonra zamanlayıcı) → pencere (ADR-0021).
 
 ## Paketleme
 

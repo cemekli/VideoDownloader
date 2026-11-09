@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddUrlDialog } from "./components/AddUrlDialog";
 import { BackendStatus } from "./components/BackendStatus";
 import { BulkBar } from "./components/BulkBar";
+import { DownloadDialog } from "./components/DownloadDialog";
+import { DownloadsView } from "./components/DownloadsView";
 import { DuplicatesView } from "./components/DuplicatesView";
 import { FilterBar } from "./components/FilterBar";
 import { Inspector } from "./components/Inspector";
@@ -66,6 +68,8 @@ export function App({ client }: { client?: BackendClient }) {
   /** Item open in the player (F2.4), and whether Settings is open. */
   const [playing, setPlaying] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Item whose Download dialog is open (F3.8). */
+  const [downloading, setDownloading] = useState<{ id: string; title: string } | null>(null);
 
   const [view, setView] = useState<LibraryView>("all");
   const [scope, setScope] = useState<Scope>({ kind: "none" });
@@ -141,6 +145,23 @@ export function App({ client }: { client?: BackendClient }) {
 
   const selectedItems = items.filter((i) => selection.ids.has(i.id));
   const selectedIds = selectedItems.map((i) => i.id);
+
+  // A download or metadata fetch finished: titles, thumbnails and the
+  // Downloaded state change, so the list and details load again.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let live = true;
+    c.onJobChanged((e) => {
+      if (e.jobId === "" && e.itemId) setReloadKey((k) => k + 1);
+    }).then(
+      (u) => (live ? (unlisten = u) : u()),
+      () => {},
+    );
+    return () => {
+      live = false;
+      unlisten?.();
+    };
+  }, [c]);
 
   // Imports started by a drop on the window (backend event).
   useEffect(() => {
@@ -274,7 +295,7 @@ export function App({ client }: { client?: BackendClient }) {
         void org.undo();
         return;
       }
-      if (e.key === "Delete" && !inTextField(e.target) && selectedIds.length > 0 && view !== "removed" && scope.kind !== "duplicates") {
+      if (e.key === "Delete" && !inTextField(e.target) && selectedIds.length > 0 && view !== "removed" && scope.kind !== "duplicates" && scope.kind !== "downloads") {
         e.preventDefault();
         void org.actions.remove(selectedIds);
         return;
@@ -328,11 +349,15 @@ export function App({ client }: { client?: BackendClient }) {
           ? `#${sb?.tags.find((x) => x.id === scope.id)?.name ?? ""}`
           : scope.kind === "duplicates"
             ? "Duplicates"
+            : scope.kind === "downloads"
+              ? t("downloads.title")
             : platforms.length === 1 && view === "all"
               ? PLATFORM_LABEL[platforms[0]!]
               : VIEW_LABEL[view];
   const smartInvalid = scope.kind === "smart" && !!sb?.smartCollections.find((x) => x.id === scope.id)?.invalid;
-  const total = data.status === "ready" && scope.kind !== "duplicates" ? data.total : null;
+  /** Screens that are not a list of library items. */
+  const special = scope.kind === "duplicates" || scope.kind === "downloads";
+  const total = data.status === "ready" && !special ? data.total : null;
 
   const importButtons = (
     <div className="actions">
@@ -489,7 +514,7 @@ export function App({ client }: { client?: BackendClient }) {
               A tag or collection these rules use was deleted, so this list may be incomplete. Edit the rules from its ⋯ menu.
             </p>
           )}
-          {scope.kind !== "duplicates" && (
+          {!special && (
             <>
               <BulkBar
                 selected={selectedItems}
@@ -518,7 +543,9 @@ export function App({ client }: { client?: BackendClient }) {
               Nothing to search for in “{searchText.trim()}”; showing the whole list.
             </p>
           )}
-          {scope.kind === "duplicates" ? (
+          {scope.kind === "downloads" ? (
+            <DownloadsView client={c} notify={(m, tone) => toast(m, tone)} />
+          ) : scope.kind === "duplicates" ? (
             <DuplicatesView client={c} reloadKey={org.version} onMerge={(candidateId, target) => org.open({ kind: "merge", candidateId, target })} onChanged={(m) => (toast(m), org.refresh())} />
           ) : (
             <Results
@@ -538,11 +565,11 @@ export function App({ client }: { client?: BackendClient }) {
         {inspectorVisible && (
           <Inspector
             client={c}
-            itemId={view === "removed" || scope.kind === "duplicates" ? null : activeId}
+            itemId={view === "removed" || special ? null : activeId}
             selectedCount={selection.ids.size}
             drawer={compact}
             onClose={closeInspector}
-            refreshKey={org.version}
+            refreshKey={org.version + reloadKey * 1000}
             collections={sb?.collections ?? []}
             emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}
             actions={{
@@ -554,6 +581,7 @@ export function App({ client }: { client?: BackendClient }) {
               removeFromCollection: (id, cid) => org.actions.removeFromCollection([id], cid),
               play: (id) => setPlaying(id),
               openSource,
+              download: (id, title) => setDownloading({ id, title }),
             }}
           />
         )}
@@ -571,6 +599,18 @@ export function App({ client }: { client?: BackendClient }) {
       )}
       {org.dialog}
       {playing && <Player client={c} itemId={playing} onClose={() => setPlaying(null)} notify={(m, tone) => toast(m, tone)} />}
+      {downloading && (
+        <DownloadDialog
+          client={c}
+          itemId={downloading.id}
+          title={downloading.title}
+          onClose={() => setDownloading(null)}
+          onStarted={(m) => {
+            setDownloading(null);
+            toast(m);
+          }}
+        />
+      )}
       {settingsOpen && settings && (
         <SettingsDialog
           client={c}

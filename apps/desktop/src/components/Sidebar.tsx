@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { CollectionDto, LibraryView, Platform, Sidebar as SidebarData, SmartCollectionDto, TagDto } from "../ipc/types";
 import { PLATFORMS } from "../ipc/types";
 import { PLATFORM_LABEL, VIEW_LABEL } from "../labels";
 import { MenuButton } from "./Menu";
+import { t } from "../i18n";
 
 /** What the main area shows besides the plain views (STATE.md F2.1). */
-export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" };
+export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" } | { kind: "downloads" };
 
 export type SidebarAction =
   | { kind: "new-collection"; parentId: string | null }
@@ -22,8 +23,8 @@ export type SidebarAction =
 const TOP_VIEWS: LibraryView[] = ["inbox", "all", "favorites", "recent"];
 
 /**
- * Left navigation (SPEC §9.2). Entries for later phases (Downloads,
- * Sessions, AI, Settings) stay hidden until they work (§9.3).
+ * Left navigation (SPEC §9.2). Entries for later phases (Sessions, AI)
+ * stay hidden until they work (§9.3).
  */
 export function Sidebar({
   view,
@@ -87,7 +88,11 @@ export function Sidebar({
     <nav className="sidebar" aria-label="Library navigation" data-testid="sidebar">
       <ul className="nav-list">
         {TOP_VIEWS.map((v) => (
-          <li key={v}>{navButton(VIEW_LABEL[v], plain && view === v, () => onView(v), `nav-${v}`, v === "inbox" ? count(data?.counts.inbox) : null)}</li>
+          <Fragment key={v}>
+            <li>{navButton(VIEW_LABEL[v], plain && view === v, () => onView(v), `nav-${v}`, v === "inbox" ? count(data?.counts.inbox) : null)}</li>
+            {/* §9.2 order: Inbox, All Items, Favorites, Downloads, Recently Added. */}
+            {v === "favorites" && <li>{navButton(t("downloads.title"), is("downloads"), () => onScope({ kind: "downloads" }), "nav-downloads")}</li>}
+          </Fragment>
         ))}
       </ul>
 
