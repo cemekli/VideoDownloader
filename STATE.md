@@ -3,7 +3,7 @@
 | Bilgi | Değer |
 |---|---|
 | Son güncelleme | 7 Kasım 2026 |
-| Referans belge | [SPEC.md](./SPEC.md) v1.7 |
+| Referans belge | [SPEC.md](./SPEC.md) v1.8 |
 | Aktif faz | **F1 — Çevrimdışı kütüphane çekirdeği** (F0 ✅) |
 | Genel ilerleme | 19 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
@@ -300,6 +300,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | Reddit bilinen platform oldu (gönderi, `redd.it`; paylaşım bağlantısı ve `v.redd.it` çevrimiçi çözülür): SPEC v1.8, normalizasyon sürümü 4, migration 0011. |
 | 9 Kas 2026 | Thumbnail üretimi paralel: çekirdek sayısının yarısı kadar (1–4) FFmpeg aynı anda. Pencere titremesinin yalnızca `tauri dev`'de olduğu exe ile doğrulandı (Cuma). Twitch geçmiş yayın indirmesi çalıştı (Cuma). |
 | 9 Kas 2026 | Canlı yayın indirilmiyor (SPEC §6): metadata `is_live` kaydediyor (migration 0010), Download penceresi nedenini söylüyor, motor ve komut reddediyor. Yerel videoların thumbnail'leri artık arka planda üretiliyor: FFmpeg veritabanı kilidi tutulmadan çalışıyor, başarısız öğe sırayı tıkamıyor, her yeni thumbnail ekrana hemen geliyor (önceden açılışta ve import sonunda 200'lük parti kilit tutarak üretiliyordu). |
 | 9 Kas 2026 | Twitch bilinen platform oldu (VOD, klip; kanal sayfası canlı yayın): SPEC v1.7, normalizasyon sürümü 3, migration 0009. Geliştirme derlemesinde araç özeti hızlandı (`sha2` opt-level 3); liste art arda gelen metadata için tek seferde yenileniyor. |

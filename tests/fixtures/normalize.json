@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "normalizationVersion": 3,
+  "normalizationVersion": 4,
   "note": "STATE.md F1.3 / SPEC §6, §7.1, §11.7. Synthetic ids only. 'expect' null fields mean absent; error cases carry 'error' instead of 'expect'. 'redacted' omitted means the input is returned unchanged.",
   "cases": [
     { "input": "https://www.youtube.com/watch?v=vvTestVid01", "expect": { "platform": "youtube", "shape": "video", "sourceId": "vvTestVid01", "canonical": "https://www.youtube.com/watch?v=vvTestVid01" } },
@@ -32,6 +32,12 @@
     { "input": "https://www.twitch.tv/vvtestchannel/clip/VvTestClip-Ab12_x?filter=clips", "expect": { "platform": "twitch", "shape": "video", "sourceId": "VvTestClip-Ab12_x", "canonical": "https://clips.twitch.tv/VvTestClip-Ab12_x" } },
     { "input": "https://www.twitch.tv/vvtestchannel/videos", "expect": { "platform": "twitch", "shape": "collection", "sourceId": null, "canonical": "https://www.twitch.tv/vvtestchannel/videos" } },
     { "input": "https://www.twitch.tv/vvtestchannel", "expect": { "platform": "twitch", "shape": "unknown", "sourceId": null, "canonical": "https://www.twitch.tv/vvtestchannel" }, "note": "a channel page is a live stream" },
+    { "input": "https://www.reddit.com/r/vvtestsub/comments/1vvtst0/some_title_slug/?utm_source=share&utm_medium=web", "expect": { "platform": "reddit", "shape": "video", "sourceId": "1vvtst0", "canonical": "https://www.reddit.com/comments/1vvtst0/" } },
+    { "input": "https://old.reddit.com/comments/1vvtst0", "expect": { "platform": "reddit", "shape": "video", "sourceId": "1vvtst0", "canonical": "https://www.reddit.com/comments/1vvtst0/" } },
+    { "input": "https://redd.it/1vvtst0", "expect": { "platform": "reddit", "shape": "video", "sourceId": "1vvtst0", "canonical": "https://www.reddit.com/comments/1vvtst0/" } },
+    { "input": "https://www.reddit.com/r/vvtestsub/s/AbCdEf123", "expect": { "platform": "reddit", "shape": "short_link", "sourceId": null, "canonical": "https://www.reddit.com/r/vvtestsub/s/AbCdEf123" }, "note": "share link, resolved online" },
+    { "input": "https://v.redd.it/vvtestmedia01", "expect": { "platform": "reddit", "shape": "unknown", "sourceId": null, "canonical": "https://v.redd.it/vvtestmedia01" }, "note": "media id is not the post id" },
+    { "input": "https://www.reddit.com/r/vvtestsub/", "expect": { "platform": "reddit", "shape": "collection", "sourceId": null, "canonical": "https://www.reddit.com/r/vvtestsub/" } },
 
     { "input": "https://www.tiktok.com/@vv.user/video/7000000000000000001?is_from_webapp=1&sender_device=pc", "expect": { "platform": "tiktok", "shape": "video", "sourceId": "7000000000000000001", "canonical": "https://www.tiktok.com/@vv.user/video/7000000000000000001" } },
     { "input": "https://vm.tiktok.com/ZMvvTest/", "expect": { "platform": "tiktok", "shape": "short_link", "sourceId": null, "canonical": "https://vm.tiktok.com/ZMvvTest/" }, "note": "short link not resolved offline (§6)" },

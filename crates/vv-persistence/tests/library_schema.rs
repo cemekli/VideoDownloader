@@ -146,6 +146,7 @@ fn rust_enums_and_sql_checks_list_the_same_values() {
         vv_domain::normalize::Platform::Vk,
         vv_domain::normalize::Platform::Dailymotion,
         vv_domain::normalize::Platform::Twitch,
+        vv_domain::normalize::Platform::Reddit,
     ] {
         assert_eq!(SourcePlatform::from(p).as_str(), p.as_str());
     }
