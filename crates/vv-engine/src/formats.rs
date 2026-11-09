@@ -223,10 +223,7 @@ struct Choice<'a> {
     audio: Option<&'a StoredFormat>,
 }
 
-fn best_audio(
-    formats: &[StoredFormat],
-    prefer: Option<AudioFamily>,
-) -> Option<&StoredFormat> {
+fn best_audio(formats: &[StoredFormat], prefer: Option<AudioFamily>) -> Option<&StoredFormat> {
     let mut audio: Vec<&StoredFormat> = formats
         .iter()
         .filter(|f| usable(f) && f.vcodec.is_none() && f.acodec.is_some())
