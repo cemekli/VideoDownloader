@@ -40,6 +40,9 @@ import type {
   Sidebar,
   UndoResult,
   UrlCheck,
+  SessionClient,
+  SessionDto,
+  SessionOverview,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -95,6 +98,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   return {
     ...createFixtureData(recs, scenario, library),
     ...downloads.client,
+    ...downloads.sessions,
     downloads,
     kind: "fixture",
     listItems: (q) => library.listItems(q),
@@ -214,6 +218,15 @@ const downloadCommands: DownloadClient = {
   },
 };
 
+/** Sessions (F5.2). The UI names a Firefox profile; the backend finds its folder. */
+const sessionCommands: SessionClient = {
+  listSessions: () => call<SessionOverview>("list_sessions"),
+  connectSession: (provider, browser, browserProfile, scope) => call<SessionDto>("connect_session", { provider, browser, browserProfile, scope }),
+  setSessionConsent: (id, scope) => call<SessionDto>("set_session_consent", { id, scope }),
+  clearSession: (id) => call<SessionDto>("clear_session", { id }),
+  deleteSession: (id) => call<void>("delete_session", { id }),
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -227,6 +240,7 @@ export function createTauriClient(): BackendClient {
     ...organizeCommands,
     ...dataCommands,
     ...downloadCommands,
+    ...sessionCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));
@@ -240,9 +254,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required"];
 
-/** `?fixture=empty|many|error|slow|first-run|download-error` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run|download-error|login-required` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

@@ -31,6 +31,46 @@ async function startDownload(user: ReturnType<typeof userEvent.setup>, preset: s
 }
 
 describe("Downloads", () => {
+  it("a download that needs a login waits; connecting a Firefox session with consent lets it finish (F5.2)", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient(undefined, "login-required");
+    render(<App client={client} />);
+    await startDownload(user, "720");
+    await waitFor(() => expect(screen.getByTestId("job")).toHaveAttribute("data-status", "blocked"), SLOW);
+    expect(screen.getByTestId("job-blocked")).toHaveTextContent("sign in");
+    await user.click(screen.getByTestId("job-connect-session"));
+    const dialog = await screen.findByTestId("session-dialog");
+    expect(within(dialog).getByTestId("session-provider")).toHaveValue("instagram");
+    expect(within(dialog).getByTestId("session-browser-profile")).toHaveValue("default-release");
+    // Nothing is connected without explicit consent.
+    expect(within(dialog).getByTestId("session-connect-submit")).toBeDisabled();
+    await user.click(within(dialog).getByTestId("session-consent"));
+    await user.click(within(dialog).getByTestId("session-connect-submit"));
+    await waitFor(() => expect(screen.queryByTestId("session-dialog")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("downloads-done")).toBeVisible(), SLOW);
+    const overview = await client.listSessions();
+    expect(overview.sessions).toHaveLength(1);
+    expect(overview.sessions[0]).toMatchObject({ provider: "instagram", state: "session_available", consent: ["metadata", "download"] });
+  });
+
+  it("Settings → Sessions lists a connected site; Clear withdraws consent and Remove deletes it", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient(undefined, "login-required");
+    await client.connectSession("reddit", "firefox", "default-release", ["download"]);
+    render(<App client={client} />);
+    await user.click(await screen.findByTestId("settings-button"));
+    const block = await screen.findByTestId("sessions");
+    const row = await within(block).findByTestId("session");
+    expect(row).toHaveAttribute("data-provider", "reddit");
+    expect(row).toHaveTextContent("Firefox (default-release)");
+    expect(row).toHaveTextContent("Allowed: Downloading");
+    await user.click(within(row).getByTestId("session-clear"));
+    await waitFor(() => expect(within(block).getByTestId("session")).toHaveAttribute("data-state", "not_connected"));
+    expect(within(block).getByTestId("session")).toHaveTextContent("Nothing allowed");
+    await user.click(within(block).getByTestId("session-delete"));
+    await within(block).findByTestId("sessions-empty");
+  });
+
   it("a download shows its phase and real progress, then lands in Completed and the item is Downloaded", async () => {
     const user = userEvent.setup();
     render(<App client={createFixtureClient()} />);
