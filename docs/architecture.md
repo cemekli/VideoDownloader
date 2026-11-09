@@ -14,7 +14,8 @@ apps/desktop/src            React + TypeScript + Vite arayüzü
 apps/desktop/src-tauri      Tauri 2 kabuğu: komutlar, tek süreç, medya protokolü
         |
         +-- crates/vv-domain       kimlikler, hata kodları, URL politikası (saf, IO yok)
-        +-- crates/vv-persistence  SQLite (rusqlite bundled), migration, yedek, kütüphane kilidi
+        +-- crates/vv-persistence  SQLite (rusqlite bundled), migration, yedek, kütüphane kilidi, AuthProfile
+        +-- crates/vv-secrets      OS korumalı secret store (DPAPI), opak referans
         +-- crates/vv-process      alt süreç: temiz ortam, Windows Job Object, ağaç öldürme
         |       +-- crates/vv-ytdlp     yt-dlp argümanları, JSON/progress/hata ayrıştırma
         |       +-- crates/vv-ffmpeg    ffprobe/FFmpeg argümanları, biçim sınıflandırma
@@ -38,11 +39,12 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | `vv-netguard` | yt-dlp bağlantılarını port, DNS sonrası IP ve jetonla denetleme | security | Gerçek yt-dlp ile test edildi | ADR-0007 |
 | `vv-tools` | `tools/manifest.json`: sürüm pin, SHA-256, GPG imzası, FFmpeg lisans kontrolü | diagnostics, security | Hazır | ADR-0005, ADR-0006 |
 | `vv-benchdata` | Sürümlü benchmark verisi (10.000 öğe, 100.000 segment) ve BM-01…03 | — (test aracı) | Hazır; uygulamaya girmez | ADR-0009 |
+| `vv-secrets` | Gizli değerler için işletim sistemi korumalı store (Windows DPAPI), opak `vvsec:` referansı; düz metin backend'i yok | auth | Hazır; `vv-persistence::auth` kullanır, uygulamaya F5.2'de bağlanır | ADR-0022 |
 | `vv-engine` | İş zamanlayıcı ve işçiler: araç kontrolü, metadata, önayarlar, indirme/doğrulama/yerleştirme, kota, `storage_move`; kuyruk `vv-persistence::jobs` | jobs, connectors, storage | Uygulamada çalışıyor | ADR-0019, ADR-0020, ADR-0021 |
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |
 | Yerel AI sağlayıcıları | Döküm, embedding, OCR | ai | Yok | F6, F7 |
 
-Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir, `vv-persistence` yalnızca `vv-domain`'e, `vv-import` `vv-persistence`, `vv-ffmpeg` ve `vv-process`'e bağlıdır; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
+Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı değildir, `vv-secrets` hiçbir iç crate'e bağlı değildir, `vv-persistence` yalnızca `vv-domain` ve `vv-secrets`'e, `vv-import` `vv-persistence`, `vv-ffmpeg` ve `vv-process`'e bağlıdır; uygulama kabuğu crate'leri birleştirir. Domain kuralları executable yollarına bağlı değildir (SPEC §10.3).
 
 ## Güven sınırları
 

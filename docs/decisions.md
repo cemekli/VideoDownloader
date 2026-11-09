@@ -908,3 +908,40 @@ STATE.md F3.2–F3.6, F3.8–F3.10. SPEC §9.3, §9.5, §12.3, §13, §14, §20.
 - Gerçek platform URL'leriyle uçtan uca kanıt (F3.4'ün gerçek URL testi, F3.11 ve çıkış kapısı) Cuma'nın seçeceği izinli URL'lerle elle yapılır. Sonuç tarihli olarak `docs/platform-support.md`'ye girer.
 - Oturum gerektiren içerik `LOGIN_REQUIRED` ile `blocked`/`auth` olur; giriş akışı M3'te (F5).
 - `MEDIA_URL_EXPIRED` hâlâ üretilmiyor (ADR-0003).
+
+## ADR-0022: Yetkili oturum profili, izin kapsamı ve işletim sistemi secret store'u
+
+STATE.md F5.1. SPEC §11.6, §12.1, §12.2, §20.3, §21; DEC-08 (ilk kısım); AC-18, AC-54.
+
+**Bağlam.** Reddit gibi bazı içerikler girişsiz indirilemiyor (yt-dlp tek başına `Account authentication is required` diyor, `docs/platform-support.md`). F5'in sonraki adımları (F5.2 tarayıcı çerezi, F5.3 çerez dosyası, F5.7 uygulamaya ait profil) aynı temele dayanır: kullanıcının hangi platform için, hangi yöntemle ve hangi işlem için izin verdiği kaydedilmeli; varsa gizli değer veritabanına, loga, export'a ve arayüze hiç girmemeli.
+
+**Seçenekler (secret store).**
+
+| | Windows Credential Manager (`CredWriteW`) | DPAPI (`CryptProtectData`) + uygulama klasöründe şifreli dosya | `keyring` crate'i |
+|---|---|---|---|
+| Boyut sınırı | 2560 bayt; platform çerezleri bunu aşabilir | Yok (biz 256 KiB ile sınırlıyoruz) | Credential Manager'ın sınırı |
+| Koruma | Kullanıcı hesabına bağlı | Kullanıcı hesabına bağlı; başka kullanıcı ya da başka makine çözemez | Aynı |
+| Bağımlılık | `windows-sys` (zaten var) | `windows-sys` (zaten var) | Yeni bağımlılık zinciri |
+| Silme | API ile | Dosyayı silmek | API ile |
+
+**Karar: secret store DPAPI'dir.** Yeni crate `crates/vv-secrets`. Windows'ta her secret mevcut Windows kullanıcısı için DPAPI ile şifrelenir (`CRYPTPROTECT_UI_FORBIDDEN`, uygulamaya özgü ek entropi) ve `<uygulama verisi>/secrets/<uuid>.vvsec` dosyasına yazılır. Referans `vvsec:<uuid-v4>` biçimindedir, değerden türetilmez; yalnızca bu biçim kabul edildiği için veritabanındaki bir değer store'u başka bir yola yönlendiremez. Windows dışında işletim sistemi backend'i yoktur (`UnavailableStore`): yazma her zaman başarısız olur, düz metin dosyasına düşülmez. Bellekteki değer `Secret` tipindedir: `Debug` değeri göstermez, bırakılınca bellek sıfırlanır. Hata mesajları yol içermez (yol kullanıcı adını taşır). Testler `MemoryStore` kullanır; Windows CI'da gerçek DPAPI testi diskte düz metin olmadığını ve bozulmuş dosyanın çözülmediğini denetler.
+
+**Karar: `auth_profile` tablosu (migration 0012).** SPEC §11.6 alanları: `provider` (tek bir bilinen platform; `generic` yasak), `label`, `method` (`browser_cookies`, `cookie_file`, `app_profile`), `browser_kind` (yalnızca `browser_cookies` için ve onda zorunlu), `profile_locator` (tarayıcı profil adı ya da klasörü; özel yol, loga ve arayüz JSON'una girmez), `secure_local_ref`, `session_state` (§12.2'nin beş durumu), `consent_scope` (izin verilen işlemler: `metadata`, `download`, `verify`), `consent_at`, `last_verified_at`. Tabloda gizli değer için sütun yoktur; şema kuralları ayrıca şunları reddeder: izin zamanı olmadan kapsam (ya da tersi), `vvsec:` biçiminde olmayan referans, doğrulama zamanı olmadan `session_available`. Profil silinince ona işaret eden öğelerin `access_profile_id` alanı boşaltılır (tetikleyici).
+
+**Karar: izin kuralları (`vv_persistence::auth`).**
+
+- İzinsiz profil oluşturulamaz. Yeni profil `needs_verification` ile başlar: saklı bir referans tek başına çalışan oturum değildir (§12.2).
+- Profil yalnızca kendi platformu ve izin verilen işlem için kullanılır (`usable_for`, `read_secret`). İzin daraltılabilir ya da tümüyle geri alınabilir (`set_consent`); geri alınan profil kullanılmaz.
+- `session_available` ve `last_verified_at` yalnızca kimlik doğrulanmış erişim kanıtıyla yazılır (`apply_state_change`, ADR-0020'nin `session_verified` alanı). Kanıtsız başarı profile dokunmaz (AC-54). `COOKIE_ACCESS_FAILED` `needs_verification` yapar, `SESSION_EXPIRED` `expired` yapar, `ACCESS_DENIED` profile dokunmaz (AC-19 ayrımı).
+- Clear (§12.2): uygulamanın secret'ını siler, izni geri alır, profili `not_connected` yapar. Kullanıcının tarayıcı çerezlerine ya da hesabına dokunmaz. Delete profili ve secret'ını siler.
+- Secret eklenirken önce store'a yazılır, sonra referans kaydedilir; veritabanı yazımı başarısız olursa yeni secret geri silinir. Değiştirilen eski secret silinir.
+
+**Hangi yöntem secret tutar.** `browser_cookies` (F5.2) hiçbir şey saklamaz: yt-dlp çerezleri iş sırasında tarayıcıdan kendisi okur, uygulama yalnızca hangi tarayıcı ve profil olduğunu bilir. `cookie_file` (F5.3) kullanıcının dosyasını saklamaz (§21.1); dosyadan yalnızca o platformun alan adlarına ait çerezler süzülür. Bunları yeniden başlatmadan sonra da kullanmak için süzülmüş hâli secret store'da tutulabilir; iş başına çalışma kopyası bundan üretilir ve iş sonunda silinir. `app_profile` (F5.7) gerekirse kısa ömürlü, platforma daraltılmış oturumu yine burada tutar. Bu ayrıntılar ilgili alt görevin ADR'sinde kesinleşir.
+
+**Sonuçlar.**
+
+- Canary testi (`crates/vv-persistence/tests/auth.rs`): profile eklenen canary secret veritabanı dosyalarında (WAL dahil), JSON export'ta, profilin `Debug` ve arayüz JSON'unda ve hata mesajlarında yoktur; arayüz JSON'u referansı ve tarayıcı profil yolunu da taşımaz.
+- Masaüstü komutları ve Sessions ekranı bu fazda yok: profil oluşturma akışı F5.2 ile, ekran F5.5 ile gelir.
+- Orphan secret: veritabanından silinip store'dan silinemeyen dosya şifreli kalır. Açılışta referansı olmayan `.vvsec` dosyalarını silen uzlaştırma F5.3 ile eklenecek.
+
+**Kanıt.** `cargo test -p vv-secrets -p vv-persistence` (Linux yerelde yeşil); DPAPI testi yalnızca Windows'ta çalışır, sonucu PR CI'ında.

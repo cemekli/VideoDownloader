@@ -4,6 +4,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
+- **F5.1 (9 Kas, PR #32, CI yeşil):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
 - **Son durum (9 Kas, akşam):** F3 tamamlandı (PR #25–#30). Cuma Windows 11'de YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch VOD ve Dailymotion indirdi; sonuçlar `docs/platform-support.md`'de. Reddit girişsiz engelli (yt-dlp tek başına da `Account authentication is required` diyor).
 - **Tamamlananlar:** F0, F1, F2, F3 (41/74).
 - **Sıra değişikliği:** F4 (installer, imzalı güncelleme) ertelendi; sıradaki faz **F5 yetkili oturum** (Cuma'nın kararı, 9 Kas).
@@ -11,8 +12,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
-1. F5.1: `AuthProfile`, izin akışı, işletim sistemi secret store (SPEC §11.6, §20.3, DEC-08). Önce bir ADR.
-2. F5.2: `--cookies-from-browser`. Windows'ta Chrome çerezleri app-bound şifreli; önce Firefox, Chrome için F5.7 (uygulamaya ait tarayıcı profili) gerekebilir. İlk gerçek hedef: Reddit.
+1. F5.2: `--cookies-from-browser`. Windows'ta Chrome çerezleri app-bound şifreli; önce Firefox, Chrome için F5.7 (uygulamaya ait tarayıcı profili) gerekebilir. İlk gerçek hedef: Reddit. Plan: masaüstü komutları (profil oluştur/izin/clear/sil), Download'da "login required" olunca profil seçme, yt-dlp'ye `--cookies-from-browser firefox:<profil>`, hata teşhisi (`COOKIE_ACCESS_FAILED`) ve kanıt kuralı (oturumsuz deneme `LOGIN_REQUIRED`, profille başarı → `authorized`).
 
 ## Bilinmesi gerekenler
 
