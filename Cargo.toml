@@ -6,3 +6,9 @@ members = ["crates/vv-domain", "crates/vv-persistence", "crates/vv-ytdlp", "crat
 edition = "2021"
 license = "UNLICENSED"
 publish = false
+
+# Development builds (`npm run desktop`) hash every managed tool at start-up
+# (about 400 MB) and every finished download: unoptimized SHA-256 took tens
+# of seconds before any metadata job could start.
+[profile.dev.package.sha2]
+opt-level = 3
