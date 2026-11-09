@@ -10,7 +10,7 @@
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
@@ -27,8 +27,8 @@ pub const IMPORT_EVENT: &str = "import-status";
 /// `scripts/fetch-tools.mjs` layout). Honoured only in debug and E2E builds.
 pub const TOOLS_DIR_ENV: &str = "VV_TOOLS_DIR";
 
-/// Thumbnails made per background pass; the rest follow on the next pass.
-const THUMBNAIL_BATCH: u32 = 200;
+/// Items looked up per round of the thumbnail worker.
+const THUMBNAIL_BATCH: u32 = 20;
 
 pub struct Library {
     /// Shared with the download engine's store (`engine::AppStore`).
@@ -47,6 +47,9 @@ pub struct LibraryState {
     cancel: AtomicBool,
     /// This app run. Undo reaches only operations of the current run (§7.3).
     session: OnceLock<String>,
+    /// The thumbnail worker runs; `thumbs_again` asks it for one more pass.
+    thumbs_running: AtomicBool,
+    thumbs_again: AtomicBool,
     /// Checked JSON imports waiting for the user's choices (F2.5), by token.
     pub(crate) imports:
         Mutex<std::collections::HashMap<String, crate::data_commands::PendingImport>>,
@@ -152,8 +155,8 @@ impl Library {
         self.data_dir.join("media")
     }
 
-    /// Imports `paths` and then makes the missing thumbnails. Holds the
-    /// writer for the whole run; reads go on in parallel.
+    /// Imports `paths`. Holds the writer for the whole run; reads go on in
+    /// parallel. Thumbnails follow in the background ([`thumbnails`]).
     pub fn import(
         &self,
         paths: &[PathBuf],
@@ -174,13 +177,11 @@ impl Library {
         let report =
             vv_import::import::import_paths(db.writer(), &SystemClock, tools, paths, &opts, cancel)
                 .map_err(|_| internal("import-failed"))?;
-        // A thumbnail failure never fails the import (IMP-06).
-        let _ = make_thumbnails(db.writer(), &SystemClock, tools, &self.cache_dir);
         Ok(ImportSummary::from(&report))
     }
 
-    /// Start-up pass: storage roots and asset presence (DATA-09), then
-    /// thumbnails that are still missing.
+    /// Start-up pass: storage roots and asset presence (DATA-09). Missing
+    /// thumbnails follow in the background ([`thumbnails`]).
     pub fn refresh_storage(&self) {
         let Ok(mut db) = self.writer.lock() else {
             return;
@@ -200,9 +201,6 @@ impl Library {
         })();
         if let Ok(r) = purged {
             delete_files(db.writer(), &r.files_to_delete);
-        }
-        if let Some(tools) = &self.tools {
-            let _ = make_thumbnails(db.writer(), &SystemClock, tools, &self.cache_dir);
         }
     }
 }
@@ -248,15 +246,91 @@ pub fn delete_files(c: &Connection, refs: &[(String, String)]) -> FileDeletion {
     out
 }
 
-fn make_thumbnails(
-    c: &Connection,
-    clock: &dyn Clock,
-    tools: &MediaTools,
-    cache_dir: &Path,
-) -> Result<(), vv_persistence::library::LibraryError> {
-    let cache = vv_import::thumbnail::ensure_cache_root(c, clock, cache_dir)?;
-    vv_import::thumbnail::generate_missing(c, clock, tools, &cache, THUMBNAIL_BATCH)?;
-    Ok(())
+/// Makes the missing thumbnails of local videos in the background (IMP-06).
+///
+/// The writer is held only to look items up and to record each result;
+/// FFmpeg runs without it, so downloads, edits and the engine are not held
+/// up by a large import. A failed item is not tried again in this run (it
+/// would otherwise come first in every round and block the rest). Each new
+/// thumbnail is announced with `item-changed`, so the grid shows it at once.
+pub fn thumbnails<R: Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<LibraryState>();
+    state.thumbs_again.store(true, Ordering::SeqCst);
+    if state.thumbs_running.swap(true, Ordering::SeqCst) {
+        return; // the running worker takes another pass
+    }
+    let app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("vv-thumbnails".into())
+        .spawn(move || {
+            let state = app.state::<LibraryState>();
+            let mut failed = std::collections::HashSet::new();
+            while state.thumbs_again.swap(false, Ordering::SeqCst) {
+                let Ok(lib) = state.get() else { break };
+                lib.thumbnail_pass(&mut failed, |id| {
+                    let _ = app.emit(
+                        crate::engine::ITEM_EVENT,
+                        crate::engine::ItemChanged {
+                            item_id: id.to_owned(),
+                        },
+                    );
+                });
+            }
+            state.thumbs_running.store(false, Ordering::SeqCst);
+        });
+    if spawned.is_err() {
+        state.thumbs_running.store(false, Ordering::SeqCst);
+    }
+}
+
+impl Library {
+    /// Rounds of [`THUMBNAIL_BATCH`] until no item without a thumbnail is
+    /// left except those that failed in this run.
+    fn thumbnail_pass(&self, failed: &mut std::collections::HashSet<String>, done: impl Fn(&str)) {
+        use vv_import::thumbnail::{prepare, record, render};
+        let Some(tools) = &self.tools else { return };
+        loop {
+            let round = (|| {
+                let mut db = self.writer.lock().ok()?;
+                let c = db.writer();
+                let cache =
+                    vv_import::thumbnail::ensure_cache_root(c, &SystemClock, &self.cache_dir)
+                        .ok()?;
+                let ids = vv_persistence::library::repo::items_missing_thumbnail(
+                    c,
+                    THUMBNAIL_BATCH + failed.len() as u32,
+                )
+                .ok()?;
+                Some((cache, ids))
+            })();
+            let Some((cache, ids)) = round else { return };
+            let todo: Vec<String> = ids.into_iter().filter(|id| !failed.contains(id)).collect();
+            if todo.is_empty() {
+                return;
+            }
+            for id in todo {
+                let prepared = {
+                    let Ok(mut db) = self.writer.lock() else {
+                        return;
+                    };
+                    prepare(db.writer(), &SystemClock, &cache, &id)
+                };
+                let result = prepared.and_then(|p| {
+                    let size = render(tools, &p)?;
+                    let Ok(mut db) = self.writer.lock() else {
+                        return Err(vv_import::thumbnail::ThumbnailError::NoOutput);
+                    };
+                    record(db.writer(), &SystemClock, tools, p, size)
+                });
+                match result {
+                    Ok(_) => done(&id),
+                    Err(_) => {
+                        failed.insert(id);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Counts for the toast after an import. Per-file reasons stay in the
@@ -395,6 +469,7 @@ pub fn open_library<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::e
         if let Ok(lib) = handle.state::<LibraryState>().get() {
             lib.refresh_storage();
         }
+        thumbnails(&handle);
     });
     Ok(())
 }
@@ -413,7 +488,10 @@ pub fn import_dropped<R: Runtime>(app: &AppHandle<R>, paths: Vec<PathBuf>) {
             .get()
             .and_then(|lib| lib.import(&paths, true, &state.cancel))
         {
-            Ok(summary) => ImportStatus::Finished { summary },
+            Ok(summary) => {
+                thumbnails(&handle);
+                ImportStatus::Finished { summary }
+            }
             Err(error) => ImportStatus::Failed { error },
         };
         let _ = handle.emit(IMPORT_EVENT, status);

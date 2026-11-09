@@ -300,6 +300,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | Canlı yayın indirilmiyor (SPEC §6): metadata `is_live` kaydediyor (migration 0010), Download penceresi nedenini söylüyor, motor ve komut reddediyor. Yerel videoların thumbnail'leri artık arka planda üretiliyor: FFmpeg veritabanı kilidi tutulmadan çalışıyor, başarısız öğe sırayı tıkamıyor, her yeni thumbnail ekrana hemen geliyor (önceden açılışta ve import sonunda 200'lük parti kilit tutarak üretiliyordu). |
 | 9 Kas 2026 | Twitch bilinen platform oldu (VOD, klip; kanal sayfası canlı yayın): SPEC v1.7, normalizasyon sürümü 3, migration 0009. Geliştirme derlemesinde araç özeti hızlandı (`sha2` opt-level 3); liste art arda gelen metadata için tek seferde yenileniyor. |
 | 9 Kas 2026 | Altı platformda gerçek indirme denendi (Cuma). Düzeltmeler: codec'i bildirilmeyen biçimler artık "ses/görüntü yok" sayılmıyor (X'te sessiz inen video, Dailymotion doğrudan dosya bağlantısında hiçbir önayarın sunulmaması); birleştirme MKV yerine önce MP4/WebM'e; yeniden ulaşılan depolama kökü "Drive disconnected" olarak kalmıyor. Dailymotion bilinen platform oldu: SPEC v1.6, normalizasyon sürümü 2, migration 0008. |
 | 9 Kas 2026 | İlk gerçek indirme (Windows, YouTube 720p) elle doğrulandı. Elle denemeden düzeltmeler: üst çubukta indirme göstergesi, inspector'da öğenin indirme durumu, `storage_root` ve `model` engellerinin metni, YouTube'un yalnızca tahmin verdiği toplam boyutun "about" olarak gösterilmesi (migration 0007 `job.bytes_estimate`). |

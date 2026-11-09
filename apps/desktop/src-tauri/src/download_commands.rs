@@ -302,6 +302,9 @@ pub struct DownloadOptions {
     pub storage: StorageUsage,
     /// An open download of this item, if any.
     pub active_job_id: Option<String>,
+    /// The page was a live stream at the last metadata fetch: not
+    /// downloaded (SPEC §6); every preset is unavailable.
+    pub live: bool,
 }
 
 fn media_dir(c: &Connection, d: &Dirs) -> std::path::PathBuf {
@@ -323,9 +326,13 @@ fn options(
         .map_err(|_| internal("item-read"))?
         .ok_or_else(|| DomainError::new(ErrorCode::InputRejected, "item-not-found"))?;
     let stored = metadata::stored_formats(c, item_id);
+    let live = metadata::is_live(c, item_id);
     let presets = formats::presets(stored.as_deref().unwrap_or(&[]))
         .into_iter()
-        .map(|(p, _)| p)
+        .map(|(p, _)| Preset {
+            available: p.available && !live,
+            ..p
+        })
         .collect();
     let active_job_id: Option<String> = c
         .query_row(
@@ -343,6 +350,7 @@ fn options(
         tools_ready,
         storage: storage::usage(c, d, &media_dir(c, d)),
         active_job_id,
+        live,
     })
 }
 
@@ -387,6 +395,9 @@ pub fn start(
     let preset = PresetId::parse(preset)
         .ok_or_else(|| DomainError::new(ErrorCode::InputRejected, "preset-unknown"))?;
     downloadable(c, item_id)?;
+    if metadata::is_live(c, item_id) {
+        return Err(DomainError::new(ErrorCode::InputRejected, "live-stream"));
+    }
     if settings::offline_mode(c).unwrap_or(false) {
         return Err(DomainError::new(ErrorCode::OfflineMode, "download-offline"));
     }
@@ -565,6 +576,21 @@ mod tests {
         .unwrap();
         let e = start(c, &dirs.staging, &id, "best").unwrap_err();
         assert_eq!(e.code, ErrorCode::OfflineMode);
+    }
+
+    #[test]
+    fn a_live_stream_is_not_downloaded() {
+        let (_d, mut db, dirs, id) = setup();
+        let c = db.writer();
+        c.execute(
+            "INSERT INTO remote_formats (item_id, fetched_at, tool_version, formats, is_live) VALUES (?1, 1, 'x', '[]', 1)",
+            [&id],
+        )
+        .unwrap();
+        let o = options(c, &dirs, &id, true).unwrap();
+        assert!(o.live && o.presets.iter().all(|p| !p.available));
+        let e = start(c, &dirs.staging, &id, "best").unwrap_err();
+        assert_eq!(e.code, ErrorCode::InputRejected);
     }
 
     #[test]

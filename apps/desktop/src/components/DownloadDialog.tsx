@@ -67,7 +67,7 @@ export function DownloadDialog({
     }
   };
 
-  const blocker = opts ? (opts.offline ? t("download.offline") : !opts.toolsReady ? t("download.tools") : opts.storage.quotaExceeded ? t("download.quota") : null) : null;
+  const blocker = opts ? (opts.live ? t("download.live") : opts.offline ? t("download.offline") : !opts.toolsReady ? t("download.tools") : opts.storage.quotaExceeded ? t("download.quota") : null) : null;
   const chosen = opts?.presets.find((p) => p.id === choice);
   return (
     <Modal title={t("download.title")} onClose={onClose} testId="download-dialog">
