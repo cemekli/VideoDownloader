@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LibraryItemDto, Snippet } from "../ipc/types";
 import { formatDate, formatDuration } from "../format";
 import { LOCAL_STATE, PLATFORM_LABEL } from "../labels";
@@ -26,13 +26,26 @@ export function SnippetText({ snippet }: { snippet: Snippet }) {
   );
 }
 
+/** Loads per thumbnail before the placeholder stays; retries wait 0.5, 1, 2 s. */
+const THUMB_TRIES = 4;
+
 export function Thumbnail({ item, large = false }: { item: LibraryItemDto; large?: boolean }) {
-  const [broken, setBroken] = useState(false);
-  const url = broken ? null : item.thumbnailUrl;
+  // A failed load is tried again a few times: on Windows the first loads
+  // after start-up could fail although the file was there, and one failure
+  // used to leave the placeholder until the card was mounted again.
+  const [state, setState] = useState({ url: item.thumbnailUrl, tries: 0, waiting: false });
+  const cur = state.url === item.thumbnailUrl ? state : { url: item.thumbnailUrl, tries: 0, waiting: false };
+  useEffect(() => {
+    if (!cur.waiting) return;
+    const t = setTimeout(() => setState({ url: cur.url, tries: cur.tries, waiting: false }), 250 * 2 ** cur.tries);
+    return () => clearTimeout(t);
+  }, [cur.url, cur.tries, cur.waiting]);
+  const url = !cur.url || cur.waiting || cur.tries >= THUMB_TRIES ? null : cur.tries === 0 ? cur.url : `${cur.url}?try=${cur.tries}`;
+  const onError = () => setState({ url: cur.url, tries: cur.tries + 1, waiting: cur.tries + 1 < THUMB_TRIES });
   return (
     <div className={`thumb${large ? " thumb-large" : ""}`} data-thumb={url ? "ready" : "missing"}>
       {url ? (
-        <img src={url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} draggable={false} />
+        <img key={url} src={url} alt="" loading="lazy" decoding="async" onError={onError} draggable={false} />
       ) : (
         <span className="thumb-placeholder" aria-hidden="true">
           {PLATFORM_LABEL[item.platform].slice(0, 2)}

@@ -21,19 +21,29 @@ type Body = Cow<'static, [u8]>;
 static REQUESTS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static ANSWERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-/// Timing log: the first request, then every 50th.
-pub fn count_request() {
+/// Timing log: each of the first 300 requests (the asset id's first 8
+/// characters and the retry number), then every 50th.
+pub fn count_request(uri: &tauri::http::Uri) -> u32 {
     let n = REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-    if n == 1 || n.is_multiple_of(50) {
-        crate::diag::log(&format!("thumbnail requests: {n}"));
+    if n <= 300 || n.is_multiple_of(50) {
+        let id = uri.path().trim_start_matches('/');
+        crate::diag::log(&format!(
+            "thumbnail request #{n} {} {}",
+            id.get(..8).unwrap_or(id),
+            uri.query().unwrap_or("")
+        ));
     }
+    n
 }
 
-/// Timing log: the first answer, every 50th, and any slow or failed one.
-pub fn count_answer(status: u16, ms: u128) {
+/// Timing log: each of the first 300 answers, every 50th, and any slow
+/// or failed one.
+pub fn count_answer(request: u32, status: u16, ms: u128) {
     let n = ANSWERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-    if n == 1 || n.is_multiple_of(50) || ms >= 500 || status != 200 {
-        crate::diag::log(&format!("thumbnail answer #{n}: {status} after {ms} ms"));
+    if n <= 300 || n.is_multiple_of(50) || ms >= 500 || status != 200 {
+        crate::diag::log(&format!(
+            "thumbnail answer to #{request}: {status} after {ms} ms"
+        ));
     }
 }
 
