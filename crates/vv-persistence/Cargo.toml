@@ -16,6 +16,7 @@ serde_json = "1"
 # Random v4 ids for library rows (SPEC §11.1); same version Tauri already locks.
 uuid = { version = "=1.29.0", features = ["v4"] }
 vv-domain = { path = "../vv-domain" }
+vv-secrets = { path = "../vv-secrets" }
 
 [dev-dependencies]
 tempfile = "3"

@@ -4399,6 +4399,7 @@ dependencies = [
  "tempfile",
  "uuid",
  "vv-domain",
+ "vv-secrets",
 ]
 
 [[package]]

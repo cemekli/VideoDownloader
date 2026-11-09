@@ -78,6 +78,7 @@ impl SecretRef {
         &self.0
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn file_stem(&self) -> &str {
         &self.0[PREFIX.len()..]
     }

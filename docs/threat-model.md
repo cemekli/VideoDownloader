@@ -33,7 +33,7 @@ Her satır SPEC §20.1'deki bir varlık/girişe karşılık gelir. "Uygulandı" 
 | Metadata / altyazı | — | Güvenli render, alan ve çıktı limitleri | F3.4, AC-28 |
 | Dosya adı / yolu | FFmpeg'e yalnızca `file:<mutlak yol>`; medya protokolü kök dışına çıkmıyor (test derlemesi); import'ta yollar canonical, kök göreli yol bileşen bazlı (string prefix değil), klasörde symlink/junction izlenmiyor, bulut yer tutucu dosyalar okunmuyor | Güvenli create/rename (indirme hedefi) | ADR-0004, ADR-0006, ADR-0012; F3.6, AC-30 |
 | CLI girdisi | Argüman dizisi (kabuk yok), sabit bayraklar, temiz ortam | Kötü niyetli metadata ile metakarakter testleri | ADR-0003, ADR-0008; F4.4 |
-| Cookie / profile | — | İzin akışı, OS secret store, redaksiyon | F5.1, F3.10, AC-18, AC-55 |
+| Cookie / profile | — | İzin akışı, OS secret store (DPAPI, ADR-0022), redaksiyon | F5.1, F3.10, AC-18, AC-55 |
 | Dış binary / model | Sürüm pin, SHA-256, yt-dlp GPG imzası, FFmpeg lisans kontrolü | İmzalı uygulama güncellemesi, model checksum | ADR-0005, ADR-0006; F4.2, F6.1, AC-25 |
 | Medya parser | Protokol ve biçim izin listesi, referanslı girdi reddi (import'ta gerçek ffprobe ile AC-59 testi); iptal ve zaman aşımında süreç ağacı ölür; ffprobe 30 s, thumbnail 60 s sınırı | Kaynak (bellek/CPU) sınırı | ADR-0006, ADR-0008, ADR-0012; F3.1 |
 | Arama sorgusu | Kullanıcı metni FTS5 sözdizimine dönüşmüyor: her terim tırnaklı dize, operatörler kelime; parametreli SQL; vurgulama HTML değil parça listesi | — | ADR-0012, AC-31 |

@@ -40,7 +40,7 @@ Bu dosya projenin tek durum kaynağıdır. Her faz bir **çıktı** üretir ve b
 | F2 | Düzenleme, oynatma, taşınabilirlik | M1 (2/2) | İndirmesiz tam Windows kütüphanesi | ✅ |
 | F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | ✅ |
 | F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⏸ F5'ten sonraya ertelendi |
-| F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | ⬜ sıradaki |
+| F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | 🟨 başladı (F5.1) |
 | F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | ⬜ |
 | F7 | Anlamsal ve görsel arama | M5 | Hibrit ve görsel arama | ⬜ |
 | F8 | Android | M6 | Android uygulaması | ⬜ |
@@ -214,7 +214,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F5.1 | `AuthProfile`, izin akışı, işletim sistemi secret store | §11.6, §20.3, DEC-08 | canary testi; secret DB'de yok | ⬜ |
+| F5.1 | `AuthProfile`, izin akışı, işletim sistemi secret store | §11.6, §20.3, DEC-08 | canary testi; secret DB'de yok | 🟨 PR açık: `vv-secrets` (DPAPI), migration 0012, `vv_persistence::auth`, canary testi (`tests/auth.rs`), ADR-0022. ✅ için CI'da Windows DPAPI testi yeşil olmalı. |
 | F5.2 | `--cookies-from-browser` (Firefox ve Chrome) ve hata teşhisi | §21.1 | VK-01…05, VK-09 | ⬜ |
 | F5.3 | Çerez dosyası için iş başına çalışma kopyası | §21.1 | AC-55, VK-10 | ⬜ |
 | F5.4 | Oturum doğrulama kanıtı kuralı ve `verify_session` | §12.1 | AC-19, AC-54 | ⬜ |
@@ -302,6 +302,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 9 Kas 2026 | F5 başladı. F5.1: secret store crate'i `vv-secrets` (Windows DPAPI, opak `vvsec:` referansı), `auth_profile` tablosu (migration 0012), izin kuralları `vv_persistence::auth`, canary testi; ADR-0022. |
 | 9 Kas 2026 | F3 tamamlandı: F3.2–F3.6, F3.8–F3.11 ✅, `docs/platform-support.md` ilk tarihli platform sonuçlarıyla dolduruldu. F4 ertelendi, sıradaki faz F5 (Cuma'nın kararı). Faz özetinde F1/F2 de ✅ olarak düzeltildi. |
 | 9 Kas 2026 | Windows testinden: thumbnail'ler en yeni öğeden başlar (grid'in üstü önce dolar); liste yenilemesi yüklenmiş sayfaları korur ve değişmeyen veriyi yeniden çizmez (grid zıplaması). Reddit medya bağlantıları (`packaged-media.redd.it` vb.) artık gönderi sanılmaz: SPEC v1.9, normalizasyon sürümü 5. |
 | 9 Kas 2026 | Reddit bilinen platform oldu (gönderi, `redd.it`; paylaşım bağlantısı ve `v.redd.it` çevrimiçi çözülür): SPEC v1.8, normalizasyon sürümü 4, migration 0011. |
