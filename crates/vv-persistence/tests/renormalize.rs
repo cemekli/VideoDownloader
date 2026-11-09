@@ -60,7 +60,7 @@ fn ac44_oldest_item_takes_the_new_value_and_the_other_becomes_a_candidate() {
     );
     assert_eq!(
         (a_row.normalization_version, a_row.normalization_conflict),
-        (1, false)
+        (vv_domain::normalize::NORMALIZATION_VERSION, false)
     );
 
     let b_row = repo::get_item(c, &b).unwrap().unwrap();
@@ -97,7 +97,10 @@ fn ac44_oldest_item_takes_the_new_value_and_the_other_becomes_a_candidate() {
             fine_row.canonical_url.as_deref(),
             fine_row.normalization_version
         ),
-        (Some("https://example.com/already"), 1)
+        (
+            Some("https://example.com/already"),
+            vv_domain::normalize::NORMALIZATION_VERSION
+        )
     );
     // Both stay findable; neither is merged or hidden.
     let hits = repo::search_phrase_ids(c, "vvTestVid44").unwrap();
@@ -160,7 +163,10 @@ fn stale_holder_with_the_new_value_already_keeps_it() {
     let h = repo::get_item(c, &holder).unwrap().unwrap();
     assert_eq!(
         (h.normalization_version, h.source_id.as_deref()),
-        (1, Some("vvTestVid45"))
+        (
+            vv_domain::normalize::NORMALIZATION_VERSION,
+            Some("vvTestVid45")
+        )
     );
     assert_eq!(repo::open_duplicates_for_item(c, &older).unwrap().len(), 1);
 }
@@ -177,5 +183,20 @@ fn unusable_stored_urls_are_skipped_not_dropped() {
     assert_eq!(
         (row.canonical_url.as_deref(), row.normalization_version),
         (Some("not a url"), 0)
+    );
+}
+
+#[test]
+fn a_dailymotion_bookmark_saved_as_web_becomes_dailymotion() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = Database::open(&d.path().join("library.sqlite"), &OpenOptions::default()).unwrap();
+    let c = db.writer();
+    let id = raw_v0(c, "https://www.dailymotion.com/video/x8vvtst", 1);
+    let report = renormalize(c, &FixedClock::new(2)).unwrap();
+    assert_eq!(report.updated, 1);
+    let row = repo::get_item(c, &id).unwrap().unwrap();
+    assert_eq!(
+        (row.source_platform, row.source_id.as_deref()),
+        (SourcePlatform::Dailymotion, Some("x8vvtst"))
     );
 }

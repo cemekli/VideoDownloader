@@ -9,8 +9,6 @@ use vv_persistence::library::*;
 use vv_persistence::migrations::{Migrator, MIGRATIONS};
 use vv_persistence::{Database, OpenOptions};
 
-const UP: &str = include_str!("../migrations/0002_library.up.sql");
-
 fn open() -> (tempfile::TempDir, Database) {
     let d = tempfile::tempdir().unwrap();
     let db = Database::open(&d.path().join("library.sqlite"), &OpenOptions::default()).unwrap();
@@ -24,10 +22,20 @@ fn bookmark(url: &str, now: i64) -> LibraryItem {
     it
 }
 
-/// Values listed in `CHECK (<col> IN (...))` for a column, from the SQL text.
+/// Values listed in `CHECK (<col> IN (...))` for a column, from the schema
+/// of a fully migrated database (later migrations may widen a list).
 fn check_list(table: &str, col: &str) -> Vec<String> {
-    let start = UP.find(&format!("CREATE TABLE {table} ")).unwrap();
-    let body = &UP[start..start + UP[start..].find(") STRICT").unwrap()];
+    let (_d, db) = open();
+    let sql: String = db
+        .reader()
+        .unwrap()
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let body = sql.as_str();
     let line = body
         .lines()
         .find(|l| l.trim_start().starts_with(&format!("{col} ")))
@@ -136,6 +144,7 @@ fn rust_enums_and_sql_checks_list_the_same_values() {
         vv_domain::normalize::Platform::Youtube,
         vv_domain::normalize::Platform::Generic,
         vv_domain::normalize::Platform::Vk,
+        vv_domain::normalize::Platform::Dailymotion,
     ] {
         assert_eq!(SourcePlatform::from(p).as_str(), p.as_str());
     }

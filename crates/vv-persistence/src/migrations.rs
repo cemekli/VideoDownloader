@@ -66,6 +66,12 @@ pub const MIGRATIONS: &[Migration] = &[
         up: include_str!("../migrations/0007_job_estimate.up.sql"),
         down: Some(include_str!("../migrations/0007_job_estimate.down.sql")),
     },
+    Migration {
+        version: 8,
+        name: "dailymotion",
+        up: include_str!("../migrations/0008_dailymotion.up.sql"),
+        down: Some(include_str!("../migrations/0008_dailymotion.down.sql")),
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

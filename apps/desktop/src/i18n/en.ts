@@ -9,6 +9,7 @@ export const en = {
   "platform.tiktok": "TikTok",
   "platform.x": "X",
   "platform.vk": "VK",
+  "platform.dailymotion": "Dailymotion",
   "platform.generic": "Web",
   "platform.local": "Local file",
   "kind.bookmark": "Bookmarks",

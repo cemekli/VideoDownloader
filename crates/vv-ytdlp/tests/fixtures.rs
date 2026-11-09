@@ -167,6 +167,7 @@ fn hls_metadata_lists_formats_without_media_urls() {
     assert_eq!(f.vcodec.as_deref(), Some("avc1.64001e"));
     assert_eq!(f.acodec.as_deref(), Some("mp4a.40.2"));
     assert_eq!(f.tbr, Some(800.0));
+    assert!(f.has_video && f.has_audio);
     assert!(!v.has_drm);
 
     // The raw document has media URLs and headers; the parsed one must not.
