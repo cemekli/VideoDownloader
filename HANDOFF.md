@@ -1,31 +1,29 @@
-# Devir notu — 8 Kasım 2026
+# Devir notu — 9 Kasım 2026
 
-Yarın buradan devam edilir. Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
+Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
-- **Son durum (8 Kas 16:35):** F3.1 kalıcı iş kuyruğu ✅ (PR #23 merge edildi; 31/74). F3.7 hata sınıflandırması ✅ (PR #24; CI #42500414511 Linux + Windows yeşil; 32/74). Yarın ilk iş: Cuma PR #24'ü merge eder, sonra F3.2.
-- **Tamamlananlar:** F0, F1 ve F2'nin tamamı (30/74; M1 bitti). F1: PR #13, #14, #16, #17. F2: PR #18–#22; ADR-0015…0018. Kanıt: Cuma'nın Windows 11 `npm run verify` raporu (8 Kas 2026 15:12, gerçek uygulama E2E dahil) + Linux `verify` + Windows elle kontrol listesi (8 Kas 15:22).
-- Elle kontrolde bulunan tek sorun: Play'e basınca video başlamıyordu; PR #22 ile düzeltildi.
-- Uygulamada şu an: bookmark kaydetme, yerel import, arama, etiket/koleksiyon/toplu işlem/Undo, duplicate birleştirme, oynatıcı (kaldığı yerden devam), JSON dışa/içe aktarma, DB yedeği ve geri yükleme, Offline Mode, ilk açılış, açık/koyu tema. Ağ kullanan hiçbir özellik henüz yok.
+- **Son durum (9 Kas):** F3'ün kalanı tek PR'da yazıldı (dal `claude/project-thread-qp6onk`; ADR-0021). F3.2–F3.6 ve F3.8–F3.10 🟨: kod ve otomatik testler hazır, Linux `npm run verify` geçti. ✅ için CI ve Windows'ta gerçek bir indirme gerekiyor.
+- **Tamamlananlar:** F0, F1, F2 (30/74; M1 bitti), F3.1 (PR #23) ve F3.7 (PR #24): 32/74.
+- **Uygulamada şu an:** öncekilere ek olarak bookmark kaydedilince arka planda başlık, kanal, süre ve küçük resim gelir. Inspector'da "Download…" ile dört önayardan biri seçilir (Best, 1080p, 720p, Audio). Downloads ekranı faz, ilerleme, hata cümlesi, Try again / Cancel / Delete partial file gösterir. Settings'te depolama kullanımı, kota, "Move media folder…" ve araç kontrolü (Diagnostics) var.
 
 ## Sonraki ilk adımlar
 
-1. PR #24'ü (F3.7) merge et, sonra `git checkout main && git pull`.
-2. F3 (indirme motoru, M2'nin ilk yarısı). F3.1 kalıcı iş kuyruğu yazıldı (`crates/vv-persistence/src/jobs.rs`, ADR-0019; işçi çalışma zamanı henüz yok). F3.7 hata sınıflandırması yazıldı (`crates/vv-persistence/src/classify.rs`, ADR-0020). Kalan sıra: F3.2 araç sağlık kontrolü → F3.3 ağ politikası → F3.4 uzak metadata → F3.5/F3.6 format ve indirme → F3.8 Downloads ekranı. F3.11 izinli gerçek URL'ler ister; Cuma'nın seçeceği URL'lerle yapılır.
+1. PR'ı incele, CI'ın yeşil olduğunu gör, merge et; sonra `git checkout main && git pull`.
+2. Windows'ta `node scripts/fetch-tools.mjs`, sonra `npm run desktop`. Settings → Diagnostics'te dört araç "OK" olmalı.
+3. İzinli bir gerçek URL kaydet, metadata gelsin, Download → 720p, Downloads ekranında bitmesini izle, Play ile oynat. Bu F3 çıkış kapısının "izinli gerçek indirme uçtan uca" maddesidir.
+4. F3.4'ün gerçek URL testi ve F3.11 platform matrisi: Cuma'nın seçeceği izinli URL'lerle; sonuç tarihli olarak `docs/platform-support.md`'ye.
+5. Sonra F3 ✅ ve F4 (Windows dağıtımı).
 
 ## Bilinmesi gerekenler
 
-- **Çalışma düzeni:** Claude bir dalda PR açar (son dal: `claude/project-thread-yn7xg0`). Cuma merge eder ve `C:\Users\cumae\VideoDownloader` içinde `git pull` yapar. STATE.md'de bir alt görev yalnızca kanıtla ✅ olur: CI linki, test sonucu ya da elle kontrol. CI yalnızca hazır (taslak olmayan) PR'larda çalışır; CI çalışmadıysa Windows'ta Cuma'nın ve Linux'ta Claude'un `npm run verify` raporları birlikte kanıt sayılır (`docs/testing.md` "CI ne zaman çalışır").
+- **Çalışma düzeni:** Claude bir dalda PR açar, Cuma merge eder ve `C:\Users\cumae\VideoDownloader` içinde `git pull` yapar. STATE.md'de bir alt görev yalnızca kanıtla ✅ olur: CI linki, test sonucu ya da elle kontrol. CI yalnızca hazır (taslak olmayan) PR'larda çalışır.
 - **Windows yerel komutları:**
   - `npm run verify`: tüm kapılar.
-  - `npm run desktop`: uygulamayı geliştirme modunda açar. Import için önce `node scripts/fetch-tools.mjs` (ffprobe/FFmpeg `tools/bin`'e iner); yoksa import "media tools missing" der.
-  - `npm run dev:fixture`, sonra tarayıcıda `?fixture=empty|many|error|slow`: Library ekranının durumları sahte veriyle.
+  - `npm run desktop`: uygulamayı geliştirme modunda açar. İndirme ve import için önce `node scripts/fetch-tools.mjs` (yt-dlp, Deno, FFmpeg, ffprobe `tools/bin`'e iner); yoksa Diagnostics "Missing" der ve Download düğmesi çalışmaz.
+  - `npm run dev:fixture`, sonra tarayıcıda `?fixture=empty|many|error|slow|first-run|download-error`. `download-error`: her indirmenin ilk denemesi ağ hatasıyla düşer, Try again başarır (Yolculuk 6).
   - `npm run desktop:e2e-exe` ve ardından `npm run e2e:desktop`: gerçek uygulama E2E.
-- **yt-dlp fixture'larını yeniden yakalamak** yalnızca yt-dlp sürümü değişince gerekir: `VV_YTDLP=<yol> npm run fixtures:ytdlp`. ffmpeg PATH'te olmalıdır; ayrıntılar ADR-0003'te.
-- **Açık noktalar (ADR-0003):**
-  - `MEDIA_URL_EXPIRED` henüz üretilmiyor.
-  - Windows'a özgü ağ hata metinleri işletim sistemi metinlerinden yazıldı; gerçek Windows yakalaması, indirme işleri `vv-process` üzerinden çalışınca (F2) yapılacak.
-  - Video ve sesin ayrı indirildiği durumda ilerlemeyi birleştirme işi F2'de.
-- **FFmpeg kurulum boyutu (ADR-0006):** iki statik exe 252 MiB tutuyor. F4'te `lgpl-shared` varyantına geçmek değerlendirilecek.
+- **Testler:** motor `crates/vv-engine/tests` (sahte yt-dlp `src/bin/vv-fake-ytdlp.rs`; `real_ytdlp.rs` gerçek araçlarla yerel sunucuya karşı, araçlar yoksa yerelde atlanır, CI'da zorunlu).
+- **Açık noktalar:** oturum gerektiren içerik `blocked`/`auth` olur (giriş M3'te). Pause motor tarafında var, arayüzde yok. `MEDIA_URL_EXPIRED` henüz üretilmiyor (ADR-0003). FFmpeg kurulum boyutu (ADR-0006) F4'te.
 - **Engeller:** STATE.md "Engeller ve açık noktalar" bölümünde. Uygulama simgesi hâlâ geçici.
