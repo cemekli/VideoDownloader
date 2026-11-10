@@ -1,0 +1,10 @@
+DROP TRIGGER IF EXISTS search_chunk_deleted;
+DROP TABLE IF EXISTS transcript_search;
+DROP INDEX IF EXISTS search_chunk_item;
+DROP INDEX IF EXISTS search_chunk_transcript;
+DROP TABLE IF EXISTS search_chunk;
+DROP TABLE IF EXISTS transcript_segment;
+DROP INDEX IF EXISTS transcript_identity;
+DROP INDEX IF EXISTS transcript_item;
+DROP TABLE IF EXISTS transcript;
+DROP TABLE IF EXISTS model_installation;

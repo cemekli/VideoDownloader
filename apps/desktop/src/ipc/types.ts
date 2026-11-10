@@ -562,7 +562,7 @@ export interface ToolStatus {
   checkedAt: number | null;
 }
 
-export type JobKind = "download" | "metadata" | "storage_move";
+export type JobKind = "download" | "metadata" | "storage_move" | "model_download";
 export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
 
 export interface JobDto {
@@ -733,4 +733,40 @@ export interface SessionClient {
   deleteSession(id: string): Promise<void>;
 }
 
-export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient;
+/** Install state of a transcription model (F6.1). `pending`: agreed to, not verified yet. */
+export type ModelStatus = "not_installed" | "pending" | "ready" | "missing" | "corrupt";
+
+/** A catalog model with what the consent dialog shows (SPEC §17.1). No paths. */
+export interface ModelDto {
+  id: string;
+  label: string;
+  languages: string;
+  /** null while the catalog entry is not pinned; such a model cannot be downloaded. */
+  sizeBytes: number | null;
+  license: string;
+  /** The repository the file comes from. */
+  source: string;
+  /** Memory whisper.cpp lists for the model, not a measurement of ours. */
+  upstreamMemoryMb: number;
+  status: ModelStatus;
+  consentAt: number | null;
+  verifiedAt: number | null;
+  job: JobDto | null;
+}
+
+export interface ModelOverview {
+  models: ModelDto[];
+  freeBytes: number | null;
+}
+
+/** Transcription models (F6.1, AC-20): nothing is downloaded until the user agrees in the consent dialog. */
+export interface ModelClient {
+  listModels(): Promise<ModelOverview>;
+  /** `agreed` must be true; the backend refuses a download without consent. */
+  downloadModel(modelId: string, agreed: boolean): Promise<ModelOverview>;
+  verifyModel(modelId: string): Promise<ModelOverview>;
+  /** Cancels an open download and removes the file and the consent. */
+  removeModel(modelId: string): Promise<ModelOverview>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient;

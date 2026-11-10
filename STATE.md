@@ -41,7 +41,7 @@ Bu dosya projenin tek durum kaynağıdır. Her faz bir **çıktı** üretir ve b
 | F3 | İndirme motoru ve kalıcı kuyruk | M2 (1/2) | İzinli videoyu indirip oynatan uygulama | ✅ |
 | F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⏸ F5'ten sonraya ertelendi |
 | F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | 🟨 başladı (F5.1) |
-| F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | ⬜ |
+| F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | 🟨 |
 | F7 | Anlamsal ve görsel arama | M5 | Hibrit ve görsel arama | ⬜ |
 | F8 | Android | M6 | Android uygulaması | ⬜ |
 
@@ -234,7 +234,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F6.1 | Model kaydı, izinli indirme, checksum | §17.1 | AC-20 | ⬜ |
+| F6.1 | Model kaydı, izinli indirme, checksum | §17.1 | AC-20 | 🟨 yazıldı: migration 0013 (transkript, segment, arama parçası, `model_installation`), `tools/models.json` kataloğu (whisper.cpp çok dilli modelleri, sabitlenmiş commit, SHA-256 + yayımlanmış SHA-1), Settings → Transcription ve izin penceresi, `model_download` işi (sürdürme, ağ koruması politikası, yalnızca Hugging Face). ADR-0026. ✅ için CI yeşil ve Cuma'nın Windows'ta gerçek model indirmesi. |
 | F6.2 | Mevcut altyazıyı tercih etme ve yerel Whisper sağlayıcısı (CPU) | AI-A01, AI-A02, DEC-11 | AC-21 | ⬜ |
 | F6.3 | Ses parçalama, checkpoint ve iptal | AI-A03, AI-A04 | AC-23 | ⬜ |
 | F6.4 | Segment doğrulama, transkript FTS, gruplanmış sonuçlar | SEA-06, §16.2 | AC-22, NFR-04 | ⬜ |
@@ -296,12 +296,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1, F5.2, F5.4 ve F5.5 de ✅, toplam 45/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **Sıradaki: F5 (yetkili oturum), F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026).
+**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1, F5.2, F5.4 ve F5.5 de ✅, toplam 45/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026). **F6 başladı** (10 Kas 2026; F5'te kalan elle testler: F5.3, F5.7, VK).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 10 Kas 2026 | F6 başladı. F6.1 yazıldı (🟨): migration 0013 (transkript, segment, arama parçası ve FTS, `model_installation`), whisper.cpp model kataloğu `tools/models.json`, izinli ve sürdürülebilir `model_download` işi (SHA-256 + yayımlanmış SHA-1), Settings → Transcription; 4 yeni komut. ADR-0026. |
 | 10 Kas 2026 | F5.7 yazıldı (🟨): uygulama içi giriş penceresi (InPrivate WebView2), yalnızca platformun çerezleri secret store'a, `app_profile` yöntemi çalışır hâle geldi; 3 yeni komut. ADR-0025. VK takipçilere özel video bilinen kısıt (yt-dlp tek başına da açamıyor), VK-01…10 not run. |
 | 9 Kas 2026 | F5.4 ve F5.5 ✅: Cuma'nın Reddit oturumunda Check now geçti. Check now artık doğrulama izni yokken gizlenmiyor, pasif görünüp izni gösteriyor. |
 | 9 Kas 2026 | F5.3–F5.5 yazıldı (🟨): çerez dosyası ve iş başına çalışma kopyası, `verify_session` ve `ACCESS_DENIED` kanıtı, Sessions ekranı, 4 yeni komut. ADR-0024. |

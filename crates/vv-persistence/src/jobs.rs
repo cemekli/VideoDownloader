@@ -384,13 +384,21 @@ fn load(tx: &Transaction<'_>, id: &str) -> Result<Job> {
 /// child of a failed or cancelled parent starts cancelled
 /// (`dependency_failed`).
 pub fn enqueue(c: &mut Connection, new: &NewJob, now: i64) -> Result<Enqueued> {
+    let tx = c.transaction()?;
+    let q = enqueue_in(&tx, new, now)?;
+    tx.commit()?;
+    Ok(q)
+}
+
+/// [`enqueue`] inside the caller's transaction, so a job and the domain
+/// rows it needs (e.g. a model consent, F6.1) are written together.
+pub fn enqueue_in(tx: &Connection, new: &NewJob, now: i64) -> Result<Enqueued> {
     if !new.payload.is_object() {
         return Err(JobError::Invalid("job payload"));
     }
     if new.max_attempts < 1 {
         return Err(JobError::Invalid("max attempts"));
     }
-    let tx = c.transaction()?;
     let open: Option<String> = tx
         .query_row("SELECT id FROM job WHERE idempotency_key = ?1 AND status NOT IN ('succeeded','failed','canceled')", [&new.idempotency_key], |r| r.get(0))
         .optional()?;
@@ -399,7 +407,7 @@ pub fn enqueue(c: &mut Connection, new: &NewJob, now: i64) -> Result<Enqueued> {
     }
     let (status, blocked, cancel) = match &new.parent_job_id {
         None => (JobStatus::Queued, None, None),
-        Some(p) => match load(&tx, p)?.status {
+        Some(p) => match get(tx, p)?.status {
             JobStatus::Succeeded => (JobStatus::Queued, None, None),
             JobStatus::Failed | JobStatus::Canceled => (
                 JobStatus::Canceled,
@@ -429,7 +437,6 @@ pub fn enqueue(c: &mut Connection, new: &NewJob, now: i64) -> Result<Enqueued> {
             status.is_terminal().then_some(now),
         ],
     )?;
-    tx.commit()?;
     Ok(Enqueued {
         id,
         existing: false,

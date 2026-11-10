@@ -1041,3 +1041,33 @@ STATE.md F5.7. SPEC §21.3, §20.3, §21.1; DEC-08, DEC-10; VK-04.
 - `tests/ipc.rs`: sözleşme, izin listesi, bilinmeyen platform ve Offline Mode reddi, pencere yokken Done `session-app-closed`.
 - `apps/desktop/src/Sessions.test.tsx`: bağlama akışı (izin, pencere, Cancel, Done).
 - Gerçek pencere ve WebView2 çerez okuması yalnızca Windows'ta Cuma'nın elle testiyle görülür (Reddit ve VK). ✅ için bu test gerekir.
+
+## ADR-0026: Transkript veri modeli, model kataloğu ve izinli model indirme
+
+STATE.md F6.1 (F6.4'ün veri kısmı). SPEC §11.5, §16.2, §17.1, §20.2; AC-20; DEC-11.
+
+**Bağlam.** F6 yerel transkripsiyonu ve konuşma içinde aramayı getirir. Önce iki temel gerekir: dökümlerin ve aranabilir parçaların nerede, hangi kurallarla tutulacağı; ve Whisper modelinin kullanıcının açık izni olmadan inmemesi (AC-20). SPEC model indirmesinde boyut, disk ihtiyacı, lisans/kaynak, CPU beklentisi ve ilerleme gösterilmesini, checksum doğrulanmadan modelin hazır sayılmamasını ister.
+
+**Karar: Whisper sağlayıcısı whisper.cpp (DEC-11, ön karar).** Model dosyaları whisper.cpp'nin ggml biçimi (`ggml-*.bin`), çalıştırıcı F6.2'de `tools/bin`'e diğer araçlar gibi sabitlenmiş sürümle gelen `whisper-cli`. Rust'a gömülü bağlama (whisper-rs) derlemede CMake ve C++ derleyicisi isterdi; ayrı exe yt-dlp ve FFmpeg ile aynı model (ADR-0005), çökmesi uygulamayı düşürmez ve iptal süreci öldürerek olur. Kesin seçim TR/EN kalite, hız ve RAM ölçümünden sonra (F6.7) yapılır.
+
+**Karar: katalog `tools/models.json`, güven çapası kodda.** Katalog derlemeye gömülür. `vv_engine::models::REPOSITORY` (`https://huggingface.co/ggerganov/whisper.cpp`) dışını gösteren, commit kimliği (40 hex) olmayan, dosya adı `ggml-*.bin` dışında olan katalog reddedilir. İndirme URL'si `<repo>/resolve/<commit>/<dosya>`: depo sonradan değişse de sabitlenmiş dosya değişmez. Her model için iki bağımsız kaynak:
+
+- SHA-256 ve boyut: Hugging Face'in o commit'teki LFS listesinden (`scripts/model-pins.mjs --write`);
+- SHA-1: whisper.cpp projesinin `models/README.md`'de yayımladığı değer.
+
+İndirilen dosya ikisiyle de eşleşmezse kullanılmaz. Henüz sabitlenmemiş (SHA-256/boyut `null`) model için izin verilemez, arayüzde "Not available in this version yet" görünür. Yalnızca çok dilli modeller var (Türkçe gerekiyor): Tiny, Base, Small, Medium. Bellek değerleri whisper.cpp README'sinden alınmıştır ve arayüzde "ölçülmedi" diye belirtilir (AI-A07); F6.6 ölçümle değiştirir.
+
+**Karar: izin ve iş tek transaction'da; izin yoksa satır da yok.** `model_installation` satırı yalnızca `agree_and_queue` ile yazılır; aynı transaction'da `model_download` işi kuyruğa girer (`jobs::enqueue_in` bunun için eklendi). Satır, izin verilen dosyanın sürümünü, boyutunu, hash'ini, lisansını ve kaynağını kopyalar; katalog başka bir dosyaya geçerse iş `INPUT_REJECTED` ile durur, yeni dosya yeni izin ister (§17.1). Arayüzde izin penceresi boyutu, boş alanı, belleği, kaynağı ve lisansı gösterir; Cancel hiçbir şey yazmaz. Komut `agreed: false` ile çağrılırsa reddeder. `ready` durumunu şema yalnızca doğrulama zamanıyla kabul eder.
+
+**Karar: indirme ağ korumasının politikasıyla, sürdürülebilir.** HTTP istemcisi `ureq` (rustls). Her bağlantının adresi `vv_netguard::Policy::vet` ile seçilir: yalnızca genel adresler, 80/443, Offline Mode'da hiç bağlantı yok. Yönlendirmeler elle izlenir (en çok 5) ve yalnızca https ile `huggingface.co` / `hf.co` alt alanlarına gidebilir; kullanıcı adı/parola içeren URL reddedilir. Dosya `<data>/models/<dosya>.part` olarak yazılır; Pause ve Offline Mode parçayı tutar, sonraki deneme `Range` ile kaldığı yerden devam eder. Cancel ve hash uyuşmazlığı parçayı siler. Boyut, SHA-256 ve SHA-1 tutunca dosya yerine taşınır ve satır aynı transaction'da `ready` olur (iş yayımlama kuralı, §13.2). Aynı anda tek model iner (havuz 1). Başlangıçta hazır modelin dosyası yoksa `missing`, boyutu farklıysa `corrupt` işaretlenir; "Check file" tam hash'i yeniden hesaplar. Modelsiz ya da bozuk modelle kütüphane aynen çalışır.
+
+**Karar: transkript şeması (migration 0013).** `transcript` (provenance `source_captions | generated_local | imported`, §11.5 durumları, `source_fingerprint`, kısmi döküm için `covered_ms`, site altyazısının elle/otomatik türü), `transcript_segment` (`0 <= start < end`, sıra numarası benzersiz), `search_chunk` (komşu segmentlerin birleşimi, ilk/son segment ve gerçek zaman aralığı) ve `transcript_search` FTS5 tablosu (`search_document` ile aynı tokenizer ve `ı → i` katlaması, ADR-0012). Aynı öğenin farklı dil, provenance ya da modeldeki dökümleri ayrı satırdır. `vv_persistence::transcripts::save` segmentleri yazmadan önce doğrular: boş metin, geri giden başlangıç, medya süresinden sonra başlayan ya da süreyi 1 sn'den fazla aşan segment tüm dökümü reddettirir; 1 sn içindeki taşma süreye kırpılır, zaman uydurulmaz. Yeniden üretim aynı transaction'da eski segmentleri, parçaları ve indeks satırlarını silip yenilerini yazar. Parçalar en çok 400 karakter ya da 30 sn'dir. Öğe silinince her şey cascade ve tetikleyiciyle gider.
+
+**Komutlar.** `list_models` (`ModelOverview`), `download_model(modelId, agreed)`, `verify_model(modelId)`, `remove_model(modelId)`. Webview yol görmez.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/transcripts.rs`: izinsiz satır yok ve sabitlenmemiş model reddi (AC-20), `ready`'nin doğrulama gerektirmesi, yeni katalog dosyasında iznin sıfırlanması, dosya adı kuralı, segment doğrulaması, parça/indeks yazımı ve Türkçe katlama, yeniden üretimde eski indeksin gitmesi, ayrı dil/provenance, silmede indeks temizliği.
+- `crates/vv-engine/tests/models.rs` (yerel HTTP sunucusu): izinsiz iş yok, yönlendirme + doğrulama + kurulum, `Range` ile sürdürme, SHA-256 ve SHA-1 uyuşmazlığı, Hugging Face dışına yönlendirme reddi, eski izinle yeni dosya reddi, eksik/bozuk model tespiti ve kaldırma, Offline Mode'da bağlantısız bloklama.
+- `apps/desktop/src-tauri/tests/ipc.rs` `model_commands_match_contract_and_need_consent`; `apps/desktop/src/Transcription.test.tsx` (izin penceresi, Cancel, ilerleme, yer yetersizliği).
+- Gerçek indirme (Hugging Face'ten) Cuma'nın Windows testiyle görülür; ✅ için CI yeşil ve bu test gerekir.

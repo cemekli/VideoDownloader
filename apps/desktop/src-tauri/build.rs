@@ -82,6 +82,10 @@ const COMMANDS: &[&str] = &[
     "start_app_sign_in",
     "finish_app_sign_in",
     "cancel_app_sign_in",
+    "list_models",
+    "download_model",
+    "verify_model",
+    "remove_model",
 ];
 
 fn main() {

@@ -276,6 +276,10 @@ fn main_capability_grants_only_app_commands() {
         "allow-start-app-sign-in",
         "allow-finish-app-sign-in",
         "allow-cancel-app-sign-in",
+        "allow-list-models",
+        "allow-download-model",
+        "allow-verify-model",
+        "allow-remove-model",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1378,4 +1382,68 @@ fn session_commands_match_contract_and_never_show_the_folder() {
 
     assert_eq!(ok(&w, "delete_session", json!({ "id": id })), Value::Null);
     assert_eq!(ok(&w, "list_sessions", json!({}))["sessions"], json!([]));
+}
+
+#[test]
+fn model_commands_match_contract_and_need_consent() {
+    // STATE.md F6.1, AC-20: no model and no download until the user agrees.
+    let d = tempfile::tempdir().unwrap();
+    let (app, _) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+
+    let l = ok(&w, "list_models", json!({}));
+    assert_same_shape(&l, &spec("list_models"), "list_models");
+    let m0 = &l["models"][0];
+    assert_same_shape(
+        m0,
+        &with_nulls_of(m0, &spec("list_models")["models"][0]),
+        "list_models.models[0]",
+    );
+    assert!(l["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|m| m["status"] == "not_installed" && m["job"].is_null()));
+    let text = l.to_string();
+    assert!(!text.contains(&*d.path().to_string_lossy()), "{text}");
+
+    let e = invoke(
+        &w,
+        "download_model",
+        json!({ "modelId": "whisper-tiny", "agreed": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
+    assert!(invoke(
+        &w,
+        "download_model",
+        json!({ "modelId": "whisper-nope", "agreed": true }),
+        app_origin()
+    )
+    .is_err());
+    let l = ok(&w, "list_models", json!({}));
+    assert!(l["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|m| m["status"] == "not_installed"));
+
+    if vv_engine::models::catalog().revision.is_some() {
+        let r = ok(
+            &w,
+            "download_model",
+            json!({ "modelId": "whisper-tiny", "agreed": true }),
+        );
+        assert_same_shape(&r, &spec("download_model"), "download_model");
+        let tiny = &r["models"][0];
+        assert_eq!(tiny["status"], "pending");
+        assert_eq!(tiny["job"]["kind"], "model_download");
+        assert!(tiny["consentAt"].is_i64());
+        let r = ok(&w, "remove_model", json!({ "modelId": "whisper-tiny" }));
+        assert_eq!(r["models"][0]["status"], "not_installed");
+        assert_eq!(r["models"][0]["job"]["status"], "canceled");
+    }
 }

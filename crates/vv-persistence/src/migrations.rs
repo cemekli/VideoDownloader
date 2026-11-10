@@ -96,6 +96,12 @@ pub const MIGRATIONS: &[Migration] = &[
         up: include_str!("../migrations/0012_auth_profile.up.sql"),
         down: Some(include_str!("../migrations/0012_auth_profile.down.sql")),
     },
+    Migration {
+        version: 13,
+        name: "transcripts",
+        up: include_str!("../migrations/0013_transcripts.up.sql"),
+        down: Some(include_str!("../migrations/0013_transcripts.down.sql")),
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
