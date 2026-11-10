@@ -1018,7 +1018,7 @@ STATE.md F5.7. SPEC §21.3, §20.3, §21.1; DEC-08, DEC-10; VK-04.
 
 - `incognito(true)` ile açılır (WebView2'de InPrivate): çerezleri ve önbelleği diske yazılmaz, pencere kapanınca hepsi gider. Kalıcı bir "uygulama profili" klasörü yoktur, uzlaştırılacak bir şey kalmaz.
 - Uygulamanın komutlarına erişemez: `capabilities/main.json` yalnızca `main` penceresini kapsar; uzak sayfaya IPC izni verilmez. `tests/ipc.rs` izin listesini sabitler.
-- Yalnızca `https` bağlantılarını izler (`on_navigation`); `http`, `file`, özel şemalar reddedilir.
+- Yalnızca `https` sayfalarını (ve giriş/captcha sayfalarının yüklenirken kullandığı `about:`/`blob:` çerçevelerini) izler (`on_navigation`); `http`, `file`, özel şemalar reddedilir. Sayfanın açmak istediği açılır pencereler ("Google ile giriş", captcha adımı) yeni pencere olarak açılmaz, https ise aynı pencerede açılır (`on_new_window`); böylece çerezler tek özel depoda kalır. (10 Kas 2026: VK'da robot kontrolünden sonra pencere boş kaldı, Cuma.)
 - Offline Mode'da ve secret store olmayan sistemde (Windows dışı) açılmaz.
 - Aynı anda tek pencere vardır; başka bir site için açılırsa eskisi kapanır.
 
