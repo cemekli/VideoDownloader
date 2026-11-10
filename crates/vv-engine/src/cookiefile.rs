@@ -1,5 +1,6 @@
-//! A cookie file the user exported, narrowed to one platform (STATE.md
-//! F5.3; SPEC §20.3, §21.1, VK-10; ADR-0024).
+//! A cookie file the user exported, or the cookies of the in-app sign-in
+//! window, narrowed to one platform (STATE.md F5.3, F5.7; SPEC §20.3,
+//! §21.1, §21.3, VK-04, VK-10; ADR-0024, ADR-0025).
 //!
 //! The file is read once, when the user connects it. Only the cookies of
 //! the chosen platform's own domains are kept; everything else in the file
@@ -124,6 +125,79 @@ pub fn filter(text: &str, platform: Platform, now_secs: i64) -> Result<Filtered,
     Ok(Filtered { text: out, count })
 }
 
+/// One cookie as a webview's cookie store reports it (F5.7: the in-app
+/// sign-in window). Plain data, so this module needs no webview.
+pub struct WebCookie {
+    /// The cookie's domain, with or without a leading dot.
+    pub domain: String,
+    /// Set without a `Domain` attribute: valid for this host only.
+    pub host_only: bool,
+    pub path: String,
+    pub secure: bool,
+    pub http_only: bool,
+    /// Unix seconds; `0` for a session cookie.
+    pub expires: i64,
+    pub name: String,
+    pub value: String,
+}
+
+impl std::fmt::Debug for WebCookie {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WebCookie {{ domain: {}, name: [redacted] }}",
+            self.domain
+        )
+    }
+}
+
+fn field_ok(s: &str) -> bool {
+    !s.contains(['\t', '\r', '\n'])
+}
+
+/// The platform's cookies from a webview's cookie store, as a Netscape
+/// file (the same form a cookie file is stored in). Cookies of other
+/// sites, and cookies whose fields would break the file's lines, are
+/// dropped before anything is written.
+pub fn from_webview(
+    cookies: &[WebCookie],
+    platform: Platform,
+    now_secs: i64,
+) -> Result<Filtered, CookieFileError> {
+    let bases = domains(platform);
+    let mut text = String::from(HEADER);
+    for c in cookies {
+        if !domain_matches(&c.domain, bases)
+            || ![&c.domain, &c.path, &c.name, &c.value]
+                .iter()
+                .all(|f| field_ok(f))
+        {
+            continue;
+        }
+        let host = c.domain.trim_start_matches('.');
+        let (domain, sub) = if c.host_only {
+            (host.to_owned(), "FALSE")
+        } else {
+            (format!(".{host}"), "TRUE")
+        };
+        let path = if c.path.starts_with('/') {
+            c.path.as_str()
+        } else {
+            "/"
+        };
+        let flag = |b: bool| if b { "TRUE" } else { "FALSE" };
+        text.push_str(&format!(
+            "{}{domain}\t{sub}\t{path}\t{}\t{}\t{}\t{}\n",
+            if c.http_only { "#HttpOnly_" } else { "" },
+            flag(c.secure),
+            c.expires.max(0),
+            c.name,
+            c.value
+        ));
+    }
+    filter(&text, platform, now_secs)
+}
+
 /// Reads the user's file (never writes it) and filters it.
 pub fn read_and_filter(
     path: &std::path::Path,
@@ -187,6 +261,64 @@ old.reddit.com\tFALSE\t/\tFALSE\t1000\texpired\tR-OLD\n\
             filter("not a cookie file", Platform::Reddit, 0),
             Err(CookieFileError::NoCookiesForSite)
         );
+    }
+
+    fn web(domain: &str, name: &str, value: &str) -> WebCookie {
+        WebCookie {
+            domain: domain.into(),
+            host_only: false,
+            path: "/".into(),
+            secure: true,
+            http_only: false,
+            expires: 0,
+            name: name.into(),
+            value: value.into(),
+        }
+    }
+
+    #[test]
+    fn webview_cookies_keep_only_the_platforms_and_round_trip() {
+        let mut host = web("login.vk.com", "remixsid", "VK-CANARY-1");
+        host.host_only = true;
+        host.http_only = true;
+        host.expires = 4_102_444_800;
+        let cookies = vec![
+            host,
+            web("vkvideo.ru", "remixnsid", "VK-CANARY-2"),
+            web(".google.com", "SID", "GOOGLE"),
+            web("notvk.com", "x", "EVIL"),
+            web(
+                ".vk.com",
+                "inject",
+                "a\n.vk.com\tTRUE\t/\tTRUE\t0\tforged\tF",
+            ),
+            web(".vk.com", "old", "OLD").with_expiry(1000),
+        ];
+        let f = from_webview(&cookies, Platform::Vk, 2_000_000_000).unwrap();
+        assert_eq!(f.count, 2);
+        assert!(f.text.contains(
+            "#HttpOnly_login.vk.com\tFALSE\t/\tTRUE\t4102444800\tremixsid\tVK-CANARY-1\n"
+        ));
+        assert!(f
+            .text
+            .contains(".vkvideo.ru\tTRUE\t/\tTRUE\t0\tremixnsid\tVK-CANARY-2\n"));
+        for gone in ["GOOGLE", "EVIL", "forged", "OLD"] {
+            assert!(!f.text.contains(gone), "{gone} must be dropped");
+        }
+        // The stored text is a valid cookie file: filtering it again keeps it.
+        assert_eq!(filter(&f.text, Platform::Vk, 2_000_000_000).unwrap(), f);
+        assert!(!format!("{:?}", cookies[0]).contains("CANARY"));
+        assert_eq!(
+            from_webview(&cookies[2..4], Platform::Vk, 0),
+            Err(CookieFileError::NoCookiesForSite)
+        );
+    }
+
+    impl WebCookie {
+        fn with_expiry(mut self, e: i64) -> Self {
+            self.expires = e;
+            self
+        }
     }
 
     #[test]

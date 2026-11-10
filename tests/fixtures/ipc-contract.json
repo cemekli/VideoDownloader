@@ -1407,7 +1407,8 @@
           "dailymotion",
           "twitch"
         ],
-        "cookieFileSupported": true
+        "cookieFileSupported": true,
+        "appSignInSupported": true
       }
     },
     "connect_session": {
@@ -1569,6 +1570,43 @@
       "args": {
         "provider": "reddit"
       },
+      "response": null
+    },
+    "start_app_sign_in": {
+      "args": {
+        "provider": "vk"
+      },
+      "response": null
+    },
+    "finish_app_sign_in": {
+      "args": {
+        "provider": "vk",
+        "scope": [
+          "metadata",
+          "download",
+          "verify"
+        ]
+      },
+      "response": {
+        "id": "00000000-0000-4000-8000-00000000c003",
+        "provider": "vk",
+        "label": "VK · in-app sign-in",
+        "method": "app_profile",
+        "browser": null,
+        "browserProfile": null,
+        "state": "needs_verification",
+        "consent": [
+          "metadata",
+          "download",
+          "verify"
+        ],
+        "consentAt": 1762700000000,
+        "lastVerifiedAt": null,
+        "hasCookies": true
+      }
+    },
+    "cancel_app_sign_in": {
+      "args": {},
       "response": null
     }
   },

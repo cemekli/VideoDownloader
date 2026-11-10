@@ -79,6 +79,9 @@ const COMMANDS: &[&str] = &[
     "reconnect_session",
     "verify_session",
     "open_sign_in",
+    "start_app_sign_in",
+    "finish_app_sign_in",
+    "cancel_app_sign_in",
 ];
 
 fn main() {

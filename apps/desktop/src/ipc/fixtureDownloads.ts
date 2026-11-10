@@ -12,8 +12,8 @@ import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, Jo
 const MB = 1024 * 1024;
 const PRESETS: PresetId[] = ["best", "1080", "720", "audio"];
 
-const err = (code: string, cmd: string) =>
-  new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
+const err = (code: string, cmd: string, reason?: string) =>
+  new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: reason ? { reason } : {} });
 
 export interface FixtureDownloads {
   client: DownloadClient;
@@ -35,6 +35,8 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
   const now = () => (clock += 1_000);
 
   const sessions: SessionDto[] = [];
+  // The site the in-app sign-in window is open on (F5.7); the fixture acts as if the user signed in there.
+  let signInWindow: Platform | null = null;
   const browserProfiles: BrowserProfileDto[] = [
     { browser: "firefox", name: "default-release", isDefault: true, hasCookies: true },
     { browser: "firefox", name: "work", isDefault: false, hasCookies: false },
@@ -202,7 +204,7 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
   };
   const sessionClient: SessionClient = {
     async listSessions() {
-      return structuredClone({ sessions, browserProfiles, providers: contract.commands.list_sessions.response.providers as Platform[], cookieFileSupported: true });
+      return structuredClone({ sessions, browserProfiles, providers: contract.commands.list_sessions.response.providers as Platform[], cookieFileSupported: true, appSignInSupported: true });
     },
     async connectSession(provider, browser, browserProfile, scope) {
       if (browser !== "firefox" || provider === "generic" || provider === "local") throw err("INPUT_REJECTED", "connect_session");
@@ -247,6 +249,35 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       sessions.push(x);
       resume(provider);
       return structuredClone(x);
+    },
+    async startAppSignIn(provider) {
+      if (provider === "generic" || provider === "local") throw err("INPUT_REJECTED", "start_app_sign_in");
+      signInWindow = provider;
+    },
+    async finishAppSignIn(provider, scope) {
+      if (signInWindow !== provider) throw err("INPUT_REJECTED", "finish_app_sign_in", "session-app-closed");
+      if (scope.length === 0) throw err("INPUT_REJECTED", "finish_app_sign_in");
+      signInWindow = null;
+      const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+      const x: SessionDto = {
+        id: `00000000-0000-4000-8000-${String(0xd000 + ++seq).padStart(12, "0")}`,
+        provider,
+        label: `${name} · in-app sign-in`,
+        method: "app_profile",
+        browser: null,
+        browserProfile: null,
+        state: "needs_verification",
+        consent: [...scope],
+        consentAt: now(),
+        lastVerifiedAt: null,
+        hasCookies: true,
+      };
+      sessions.push(x);
+      resume(provider);
+      return structuredClone(x);
+    },
+    async cancelAppSignIn() {
+      signInWindow = null;
     },
     async reconnectSession(id, scope) {
       const x = findSession(id, "reconnect_session");

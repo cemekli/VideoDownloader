@@ -1,7 +1,7 @@
 //! Authorized sessions: connect a browser profile or a cookie file to a
 //! platform, change or withdraw consent, verify, reconnect, clear and
-//! delete (STATE.md F5.2–F5.5; SPEC §9.3, §12.1, §12.2, §20.3, §21.1;
-//! ADR-0022, ADR-0023, ADR-0024).
+//! delete (STATE.md F5.2–F5.5, F5.7; SPEC §9.3, §12.1, §12.2, §20.3,
+//! §21.1, §21.3; ADR-0022, ADR-0023, ADR-0024, ADR-0025).
 //!
 //! The webview sees a profile's platform, method, browser, browser profile
 //! *name*, state and consent. It never sees the browser profile folder (a
@@ -134,6 +134,9 @@ pub struct SessionOverview {
     /// Whether this system can keep a cookie file's cookies protected (the
     /// OS secret store; Windows only).
     pub cookie_file_supported: bool,
+    /// Whether the in-app sign-in window can be used (it keeps the cookies
+    /// the same way, so the same condition).
+    pub app_sign_in_supported: bool,
 }
 
 fn firefox() -> Vec<BrowserProfile> {
@@ -158,6 +161,7 @@ fn overview(st: &LibraryState) -> Result<SessionOverview, DomainError> {
             .collect(),
         providers: PROVIDERS.to_vec(),
         cookie_file_supported: store(st)?.available(),
+        app_sign_in_supported: store(st)?.available(),
     })
 }
 
@@ -288,6 +292,67 @@ pub async fn delete_session<R: Runtime>(app: AppHandle<R>, id: String) -> Result
     .await
 }
 
+/// Stores `cookies` (already narrowed to `provider`) as a new profile of
+/// `method` in the OS secret store and lets waiting jobs of the platform
+/// run again. Nothing is left behind when it fails.
+fn store_cookies(
+    c: &vv_persistence::rusqlite::Connection,
+    secrets: &dyn SecretStore,
+    provider: Platform,
+    method: Method,
+    cookies: cookiefile::Filtered,
+    ops: &[Operation],
+    now_ms: i64,
+) -> Result<SessionDto, DomainError> {
+    let how = if method == Method::AppProfile {
+        "in-app sign-in"
+    } else {
+        "cookie file"
+    };
+    let label = format!("{} · {how}", provider.display_name());
+    let p = auth::create(
+        c,
+        &NewProfile {
+            provider,
+            label: &label,
+            method,
+            browser_kind: None,
+            profile_locator: None,
+            consent_scope: ops,
+        },
+        now_ms,
+    )
+    .map_err(auth_err)?;
+    let secret = Secret::new(cookies.text.into_bytes());
+    match auth::attach_secret(c, secrets, &p.id, &secret, now_ms) {
+        Ok(p) => {
+            auth::unblock_provider(c, provider, now_ms).map_err(auth_err)?;
+            Ok(dto(&p))
+        }
+        Err(e) => {
+            let _ = auth::delete(c, secrets, &p.id);
+            Err(auth_err(e))
+        }
+    }
+}
+
+fn check_store_and_scope(secrets: &dyn SecretStore, ops: &[Operation]) -> Result<(), DomainError> {
+    if !secrets.available() {
+        return Err(DomainError::new(
+            ErrorCode::CookieAccessFailed,
+            "session-file-unsupported",
+        ));
+    }
+    if ops.is_empty() {
+        return Err(DomainError::new(ErrorCode::InputRejected, "session-scope"));
+    }
+    Ok(())
+}
+
+fn cookie_err(e: cookiefile::CookieFileError) -> DomainError {
+    DomainError::new(ErrorCode::InputRejected, e.reason()).with_detail("reason", e.reason())
+}
+
 /// Connects `provider` to the cookies of a Netscape cookie file at `path`
 /// (§21.1): only the platform's own cookies are kept, in the OS secret
 /// store; the file is read, never written, never kept. Shared by the
@@ -300,43 +365,48 @@ pub fn connect_cookie_file(
     ops: &[Operation],
     now_ms: i64,
 ) -> Result<SessionDto, DomainError> {
-    if !secrets.available() {
-        return Err(DomainError::new(
-            ErrorCode::CookieAccessFailed,
-            "session-file-unsupported",
-        ));
-    }
-    if ops.is_empty() {
-        return Err(DomainError::new(ErrorCode::InputRejected, "session-scope"));
-    }
-    let filtered = cookiefile::read_and_filter(path, provider, now_ms / 1000).map_err(|e| {
-        DomainError::new(ErrorCode::InputRejected, e.reason()).with_detail("reason", e.reason())
-    })?;
-    let label = format!("{} · cookie file", provider.display_name());
-    let p = auth::create(
+    check_store_and_scope(secrets, ops)?;
+    let filtered =
+        cookiefile::read_and_filter(path, provider, now_ms / 1000).map_err(cookie_err)?;
+    store_cookies(
         c,
-        &NewProfile {
-            provider,
-            label: &label,
-            method: Method::CookieFile,
-            browser_kind: None,
-            profile_locator: None,
-            consent_scope: ops,
-        },
+        secrets,
+        provider,
+        Method::CookieFile,
+        filtered,
+        ops,
         now_ms,
     )
-    .map_err(auth_err)?;
-    let secret = Secret::new(filtered.text.into_bytes());
-    match auth::attach_secret(c, secrets, &p.id, &secret, now_ms) {
-        Ok(p) => {
-            auth::unblock_provider(c, provider, now_ms).map_err(auth_err)?;
-            Ok(dto(&p))
-        }
-        Err(e) => {
-            let _ = auth::delete(c, secrets, &p.id);
-            Err(auth_err(e))
-        }
-    }
+}
+
+/// Connects `provider` to the cookies the in-app sign-in window holds
+/// (§21.3, F5.7): only the platform's own cookies are kept, the same way
+/// as a cookie file's. Shared by the command and the tests.
+pub fn connect_app_cookies(
+    c: &vv_persistence::rusqlite::Connection,
+    secrets: &dyn SecretStore,
+    provider: Platform,
+    cookies: &[cookiefile::WebCookie],
+    ops: &[Operation],
+    now_ms: i64,
+) -> Result<SessionDto, DomainError> {
+    check_store_and_scope(secrets, ops)?;
+    let filtered = cookiefile::from_webview(cookies, provider, now_ms / 1000).map_err(|e| {
+        let reason = match e {
+            cookiefile::CookieFileError::NoCookiesForSite => "session-app-not-signed-in",
+            other => other.reason(),
+        };
+        DomainError::new(ErrorCode::InputRejected, reason).with_detail("reason", reason)
+    })?;
+    store_cookies(
+        c,
+        secrets,
+        provider,
+        Method::AppProfile,
+        filtered,
+        ops,
+        now_ms,
+    )
 }
 
 /// Connects `provider` to a cookie file the user picks in a dialog. `None`
@@ -479,6 +549,116 @@ pub async fn open_sign_in<R: Runtime>(
     .await
 }
 
+/// The in-app sign-in window's label. One at a time.
+pub const SIGN_IN_WINDOW: &str = "sign-in";
+
+/// Opens the in-app sign-in window on `provider`'s sign-in page (§21.3,
+/// F5.7, ADR-0025). The window is a private (InPrivate) webview: nothing
+/// it holds is written to disk, and it is gone when the window closes. It
+/// has no access to the app's commands (the capability names only the main
+/// window), and it only follows https links. Refused in Offline Mode and
+/// where cookies cannot be kept protected.
+#[tauri::command]
+pub async fn start_app_sign_in<R: Runtime>(
+    app: AppHandle<R>,
+    provider: String,
+) -> Result<(), DomainError> {
+    let platform = auth::provider(&provider)
+        .ok_or_else(|| DomainError::new(ErrorCode::InputRejected, "session-provider"))?;
+    let url = sign_in_url(platform)
+        .ok_or_else(|| DomainError::new(ErrorCode::InputRejected, "session-provider"))?;
+    blocking(app.clone(), move |st| {
+        crate::data_commands::ensure_online(&st.get()?.reader()?)?;
+        check_store_and_scope(store(st)?.as_ref(), &[Operation::Download])
+    })
+    .await?;
+    if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+        // A window left open for another site starts over.
+        let _ = w.destroy();
+    }
+    let url: tauri::Url = url.parse().map_err(|_| internal("sign-in-url"))?;
+    let mut b =
+        tauri::WebviewWindowBuilder::new(&app, SIGN_IN_WINDOW, tauri::WebviewUrl::External(url))
+            .title(format!(
+                "Sign in to {} · VideoVault",
+                platform.display_name()
+            ))
+            .inner_size(520.0, 760.0)
+            .incognito(true)
+            .on_navigation(|u| u.scheme() == "https");
+    if let Some(main) = app.get_webview_window("main") {
+        b = b.parent(&main).map_err(|_| internal("sign-in-window"))?;
+    }
+    b.build().map_err(|_| internal("sign-in-window"))?;
+    Ok(())
+}
+
+/// Takes `provider`'s cookies from the sign-in window, keeps them as an
+/// `app_profile` session and closes the window. `session-app-not-signed-in`
+/// when the window holds none of the site's cookies yet (the user has not
+/// signed in), `session-app-closed` when the window was closed.
+#[tauri::command]
+pub async fn finish_app_sign_in<R: Runtime>(
+    app: AppHandle<R>,
+    provider: String,
+    scope: Vec<String>,
+) -> Result<SessionDto, DomainError> {
+    let platform = auth::provider(&provider)
+        .ok_or_else(|| DomainError::new(ErrorCode::InputRejected, "session-provider"))?;
+    let ops = parse_ops(&scope)?;
+    let w = app.get_webview_window(SIGN_IN_WINDOW).ok_or_else(|| {
+        DomainError::new(ErrorCode::InputRejected, "session-app-closed")
+            .with_detail("reason", "session-app-closed")
+    })?;
+    // WebView2 deadlocks when cookies are read on the main thread or in a
+    // synchronous command (tauri-apps/wry#583): this command is async and
+    // reads them on a worker thread.
+    let all = tauri::async_runtime::spawn_blocking(move || w.cookies())
+        .await
+        .map_err(|_| internal("sign-in-cookies"))?
+        .map_err(|_| DomainError::new(ErrorCode::CookieAccessFailed, "sign-in-cookies"))?;
+    let cookies: Vec<cookiefile::WebCookie> = all
+        .iter()
+        .filter_map(|c| {
+            let domain = c.domain()?.to_owned();
+            Some(cookiefile::WebCookie {
+                host_only: !domain.starts_with('.'),
+                domain,
+                path: c.path().unwrap_or("/").to_owned(),
+                secure: c.secure().unwrap_or(false),
+                http_only: c.http_only().unwrap_or(false),
+                expires: c.expires_datetime().map_or(0, |t| t.unix_timestamp()),
+                name: c.name().to_owned(),
+                value: c.value().to_owned(),
+            })
+        })
+        .collect();
+    drop(all);
+    let a = app.clone();
+    let r = blocking(app.clone(), move |st| {
+        let s = store(st)?;
+        st.get()?
+            .write(|c| connect_app_cookies(c, s.as_ref(), platform, &cookies, &ops, now()))
+    })
+    .await;
+    if r.is_ok() {
+        if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+            let _ = w.destroy();
+        }
+    }
+    wake(&a);
+    r
+}
+
+/// Closes the sign-in window without keeping anything.
+#[tauri::command]
+pub async fn cancel_app_sign_in<R: Runtime>(app: AppHandle<R>) -> Result<(), DomainError> {
+    if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+        let _ = w.destroy();
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,6 +704,65 @@ mod tests {
             &vv_secrets::UnavailableStore,
             Platform::Vk,
             &file,
+            &ops,
+            4_000,
+        )
+        .unwrap_err();
+        assert_eq!(e.code, ErrorCode::CookieAccessFailed);
+        assert_eq!(auth::list(c).unwrap().len(), 1);
+        assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn app_sign_in_keeps_only_the_sites_cookies_and_never_shows_them() {
+        let d = tempfile::tempdir().unwrap();
+        let mut db = Database::open(&d.path().join("l.sqlite"), &OpenOptions::default()).unwrap();
+        let store = vv_secrets::MemoryStore::new();
+        let c = db.writer();
+        let ops = [Operation::Metadata, Operation::Download, Operation::Verify];
+        let cookie = |domain: &str, value: &str| cookiefile::WebCookie {
+            domain: domain.into(),
+            host_only: false,
+            path: "/".into(),
+            secure: true,
+            http_only: true,
+            expires: 0,
+            name: "remixsid".into(),
+            value: value.into(),
+        };
+        let jar = [
+            cookie(".vk.com", "VK-CANARY-77"),
+            cookie(".google.com", "OTHER-SITE"),
+        ];
+        let s = connect_app_cookies(c, &store, Platform::Vk, &jar, &ops, 1_000).unwrap();
+        assert_eq!(s.method, Method::AppProfile);
+        assert_eq!(s.label, "VK · in-app sign-in");
+        assert!(s.has_cookies);
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(
+            !json.contains("VK-CANARY") && !json.contains("vvsec:"),
+            "{json}"
+        );
+        let kept = auth::read_secret(c, &store, &s.id, Operation::Download).unwrap();
+        let kept = String::from_utf8(kept.expose().to_vec()).unwrap();
+        assert!(kept.contains("VK-CANARY-77") && !kept.contains("OTHER-SITE"));
+        let p = auth::get(c, &s.id).unwrap();
+        assert!(vv_engine::auth::runnable(&p));
+
+        // Not signed in yet (no cookie of the site), no consent, no secure
+        // store: refused, and nothing is left behind.
+        let e = connect_app_cookies(c, &store, Platform::Reddit, &jar, &ops, 2_000).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InputRejected);
+        assert_eq!(
+            e.safe_details.get("reason").map(String::as_str),
+            Some("session-app-not-signed-in")
+        );
+        assert!(connect_app_cookies(c, &store, Platform::Vk, &jar, &[], 3_000).is_err());
+        let e = connect_app_cookies(
+            c,
+            &vv_secrets::UnavailableStore,
+            Platform::Vk,
+            &jar,
             &ops,
             4_000,
         )

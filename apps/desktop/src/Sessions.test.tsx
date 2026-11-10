@@ -90,6 +90,36 @@ describe("Sessions screen", () => {
     expect(row).toHaveTextContent("Cookie file");
   });
 
+  it("signs in inside the app's own window (F5.7): Done keeps the session, Cancel keeps nothing", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient(undefined, "login-required");
+    render(<App client={client} />);
+    const s = await openSessions(user);
+    const vk = within(s).getAllByTestId("session-site").find((r) => r.dataset.provider === "vk")!;
+    await user.click(within(vk).getByTestId("session-site-connect"));
+    const dialog = await screen.findByTestId("session-dialog");
+    await user.click(within(dialog).getByTestId("session-method-app"));
+    expect(within(dialog).getByTestId("session-app-help")).toHaveTextContent("never sees your password");
+    expect(within(dialog).getByTestId("session-connect-submit")).toBeDisabled();
+    await user.click(within(dialog).getByTestId("session-consent"));
+    await user.click(within(dialog).getByTestId("session-connect-submit"));
+    // Cancel closes the window; nothing is connected.
+    await user.click(await within(dialog).findByTestId("session-app-cancel"));
+    expect(within(dialog).getByTestId("session-connect-submit")).toBeInTheDocument();
+    expect((await client.listSessions()).sessions).toEqual([]);
+    // Done after signing in keeps the session.
+    await user.click(within(dialog).getByTestId("session-connect-submit"));
+    expect(await within(dialog).findByTestId("session-app-waiting-text")).toHaveTextContent("Sign in to VK in the window that opened");
+    await user.click(within(dialog).getByTestId("session-app-done"));
+    await waitFor(() => expect(screen.queryByTestId("session-dialog")).toBeNull());
+    await screen.findByText(/connected with the in-app sign-in/);
+    const row = await within(s).findByTestId("session");
+    expect(row).toHaveAttribute("data-method", "app_profile");
+    expect(row).toHaveTextContent("In-app sign-in");
+    // Done without an open window says so.
+    await expect(client.finishAppSignIn("vk", ["download"])).rejects.toMatchObject({ domain: { safeDetails: { reason: "session-app-closed" } } });
+  });
+
   it("consent can be narrowed; Clear withdraws it; Reconnect brings a Firefox session back; Remove deletes it", async () => {
     const user = userEvent.setup();
     const client = createFixtureClient(undefined, "login-required");

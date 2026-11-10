@@ -4,6 +4,9 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
+- **10 Kas: VK takipçilere özel video ertelendi (Cuma'nın kararı).** yt-dlp tek başına da çerezle `Video only available to followers` diyor; VK giriş çerezleri yalnızca `vkvideo.ru`'da. Bilinen kısıt olarak `docs/platform-support.md`'ye yazıldı; VK-01…10 not run. F5.3 ✅ için gerçek çerez dosyası testi Reddit cookies.txt ile yapılabilir. Sıradaki aday F5.7 (uygulama içi giriş PoC).
+- **10 Kas: F5.7 uygulama içi giriş yazıldı (🟨, ADR-0025).** Sessions → Connect → "Sign in here, in a VideoVault window": özel bir pencerede sitenin giriş sayfası açılır, Cuma giriş yapar, "Done, I'm signed in" ile yalnızca o sitenin çerezleri saklanır. Bekleyen: Cuma'nın Windows'ta gerçek testi (Reddit, sonra VK takipçilere özel video, VK-04).
+
 - **9 Kas akşamı, Cuma'nın VK çerez dosyası testinde durduk (PR #37, açık):** PR #37'de üç düzeltme var:
   - Check now düğmesi izin yokken de görünür (devre dışı ve açıklamalı).
   - Sessions ve Downloads ekranları pencereye sığmayınca kayar; daha önce Facebook satırı yarıda kesiliyordu.
@@ -28,7 +31,8 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 1. PR #37 CI'ı Windows ve Linux'ta yeşil mi bak, sonra Cuma merge eder.
 2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
 3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
-4. Sıradaki: VK canlı matrisi F5.6, sonra F5.7 (uygulamaya ait profil PoC).
+4. F5.7 elle test (Cuma, release exe): Sessions → Reddit → Connect → "Sign in here" → pencerede giriş → Done → Reddit gönderisi iner. Sonra aynısı VK için (`vk.com` girişi) ve takipçilere özel videoda Try again (VK-04). Sonuç `docs/platform-support.md`'ye.
+5. Sıradaki faz: F6 (transkript ve zaman kodlu arama).
 
 ## Bilinmesi gerekenler
 
