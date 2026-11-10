@@ -585,7 +585,28 @@ pub async fn start_app_sign_in<R: Runtime>(
             ))
             .inner_size(520.0, 760.0)
             .incognito(true)
-            .on_navigation(|u| u.scheme() == "https");
+            // https pages, plus the blank and blob frames sign-in and
+            // captcha pages use while they load. Never file, http or an
+            // app's own scheme.
+            .on_navigation(|u| matches!(u.scheme(), "https" | "about" | "blob"))
+            // Sign-in pages open "Sign in with ..." and captcha steps in a
+            // popup. Popups are opened in this same window instead (an https
+            // page only), so the cookies stay in one private store and the
+            // flow does not dead-end on a blocked popup.
+            .on_new_window({
+                let app = app.clone();
+                move |u, _| {
+                    if u.scheme() == "https" {
+                        let app = app.clone();
+                        std::thread::spawn(move || {
+                            if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
+                                let _ = w.navigate(u);
+                            }
+                        });
+                    }
+                    tauri::webview::NewWindowResponse::Deny
+                }
+            });
     if let Some(main) = app.get_webview_window("main") {
         b = b.parent(&main).map_err(|_| internal("sign-in-window"))?;
     }
