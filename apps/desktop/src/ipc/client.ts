@@ -46,6 +46,9 @@ import type {
   VerifyDto,
   ModelClient,
   ModelOverview,
+  TranscriptClient,
+  ItemTranscripts,
+  TranscriptDetail,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -53,6 +56,7 @@ import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type Fixtur
 import { createFixtureData } from "./fixtureData";
 import { createFixtureDownloads } from "./fixtureDownloads";
 import { createFixtureModels } from "./fixtureModels";
+import { createFixtureTranscripts } from "./fixtureTranscripts";
 
 export { IpcError } from "./errors";
 
@@ -104,6 +108,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...downloads.client,
     ...downloads.sessions,
     ...createFixtureModels(scenario),
+    ...createFixtureTranscripts(recs),
     downloads,
     kind: "fixture",
     listItems: (q) => library.listItems(q),
@@ -247,6 +252,14 @@ const modelCommands: ModelClient = {
   removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),
 };
 
+/** Transcripts (F6.2). */
+const transcriptCommands: TranscriptClient = {
+  listTranscripts: (itemId) => call<ItemTranscripts>("list_transcripts", { itemId }),
+  getTranscript: (transcriptId) => call<TranscriptDetail>("get_transcript", { transcriptId }),
+  fetchCaptions: (itemId) => call<ItemTranscripts>("fetch_captions", { itemId }),
+  deleteTranscript: (transcriptId) => call<ItemTranscripts>("delete_transcript", { transcriptId }),
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -262,6 +275,7 @@ export function createTauriClient(): BackendClient {
     ...downloadCommands,
     ...sessionCommands,
     ...modelCommands,
+    ...transcriptCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));

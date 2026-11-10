@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, ItemDetail, JobDto, LibraryClient, TagRef } from "../ipc/types";
+import type { CollectionDto, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient } from "../ipc/types";
+import { Transcripts } from "./Transcripts";
 import { ItemDownload } from "./DownloadsView";
 import { errorCode } from "../ipc/errors";
 import { formatBytes, formatDate, formatDuration } from "../format";
@@ -60,6 +61,7 @@ export function Inspector({
   actions,
   emptyHint,
   downloadJob = null,
+  transcripts,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -73,6 +75,8 @@ export function Inspector({
   emptyHint?: string;
   /** The item's latest open or failed download (F3.8). */
   downloadJob?: JobDto | null;
+  /** Transcripts of the item (F6.2); without it the section is not shown. */
+  transcripts?: TranscriptClient;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -107,7 +111,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -149,6 +153,7 @@ function Details({
   collections,
   actions,
   downloadJob,
+  transcripts,
   onSaved,
 }: {
   detail: ItemDetail;
@@ -156,6 +161,7 @@ function Details({
   collections: CollectionDto[];
   actions?: InspectorActions;
   downloadJob: JobDto | null;
+  transcripts?: TranscriptClient;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -269,6 +275,7 @@ function Details({
           </section>
         )
       )}
+      {transcripts && <Transcripts key={item.id} client={transcripts} itemId={item.id} />}
       {detail.assets.length > 0 && (
         <section data-testid="inspector-media">
           <h4>Media</h4>

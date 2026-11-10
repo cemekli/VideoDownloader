@@ -280,6 +280,10 @@ fn main_capability_grants_only_app_commands() {
         "allow-download-model",
         "allow-verify-model",
         "allow-remove-model",
+        "allow-list-transcripts",
+        "allow-get-transcript",
+        "allow-fetch-captions",
+        "allow-delete-transcript",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1445,5 +1449,99 @@ fn model_commands_match_contract_and_need_consent() {
         let r = ok(&w, "remove_model", json!({ "modelId": "whisper-tiny" }));
         assert_eq!(r["models"][0]["status"], "not_installed");
         assert_eq!(r["models"][0]["job"]["status"], "canceled");
+    }
+}
+
+#[test]
+fn transcript_commands_match_contract_and_queue_captions() {
+    // STATE.md F6.2, AI-A01: site captions are a transcript of their own.
+    use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+
+    let l = ok(&w, "list_transcripts", json!({ "itemId": id }));
+    assert_eq!(l["transcripts"], json!([]));
+    assert!(l["captionsJob"].is_null());
+    assert_eq!(l["canFetchCaptions"], true);
+
+    let mut db =
+        Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+    let tx = db.writer().transaction().unwrap();
+    let origin = Origin {
+        item_id: id.clone(),
+        asset_id: None,
+        language: "tr".into(),
+        provenance: Provenance::SourceCaptions,
+        provider: "source_captions".into(),
+        model_id: None,
+        model_version: None,
+        source_fingerprint: "tr:manual:sha256:00".into(),
+        caption_kind: Some(CaptionKind::Manual),
+    };
+    let segs = vec![
+        NewSegment::new(0, 3_200, "Günaydın, deniz kenarındayız."),
+        NewSegment::new(3_200, 6_100, "<b>Bugün</b> sabah yürüyüşü yapıyoruz."),
+    ];
+    let t = transcripts::save(
+        &tx,
+        &origin,
+        Status::Ready,
+        Some(6_100),
+        &segs,
+        Some(372_000),
+        1,
+    )
+    .unwrap();
+    tx.commit().unwrap();
+
+    let r = ok(&w, "fetch_captions", json!({ "itemId": id }));
+    assert_same_shape(&r, &spec("fetch_captions"), "fetch_captions");
+    assert_same_shape(
+        &r["transcripts"][0],
+        &spec("fetch_captions")["transcripts"][0],
+        "fetch_captions.transcripts[0]",
+    );
+    assert_eq!(r["captionsJob"]["kind"], "fetch_captions");
+    assert_eq!(r["transcripts"][0]["captionKind"], "manual");
+    // Asking again while it is open gives the same job.
+    let again = ok(&w, "fetch_captions", json!({ "itemId": id }));
+    assert_eq!(again["captionsJob"]["id"], r["captionsJob"]["id"]);
+
+    let g = ok(&w, "get_transcript", json!({ "transcriptId": t.id }));
+    assert_same_shape(&g, &spec("get_transcript"), "get_transcript");
+    // Text comes back as stored text; the UI renders it as text.
+    assert_eq!(
+        g["segments"][1]["text"],
+        "<b>Bugün</b> sabah yürüyüşü yapıyoruz."
+    );
+    assert_eq!(g["segments"][1]["startMs"], 3_200);
+
+    let e = invoke(
+        &w,
+        "get_transcript",
+        json!({ "transcriptId": "nope" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
+    let e = invoke(
+        &w,
+        "list_transcripts",
+        json!({ "itemId": "nope" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
+
+    let x = ok(&w, "delete_transcript", json!({ "transcriptId": t.id }));
+    assert_same_shape(&x, &spec("delete_transcript"), "delete_transcript");
+    assert_eq!(x["transcripts"], json!([]));
+
+    for v in [&l, &r, &g, &x] {
+        let s = v.to_string();
+        assert!(!s.contains(&*d.path().to_string_lossy()), "no paths: {s}");
     }
 }

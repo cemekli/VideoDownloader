@@ -585,6 +585,7 @@ export function App({ client }: { client?: BackendClient }) {
             drawer={compact}
             onClose={closeInspector}
             refreshKey={org.version + reloadKey * 1000}
+            transcripts={c}
             downloadJob={activeId ? (jobs.find((j) => j.kind === "download" && j.itemId === activeId && (isOpen(j) || j.status === "failed")) ?? null) : null}
             collections={sb?.collections ?? []}
             emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}

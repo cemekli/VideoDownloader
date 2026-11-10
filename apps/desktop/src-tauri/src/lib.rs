@@ -19,6 +19,7 @@ pub mod organize_commands;
 pub mod player_commands;
 mod session_commands;
 pub mod thumb_protocol;
+pub mod transcript_commands;
 
 use tauri::{Builder, DragDropEvent, Manager, Runtime, WindowEvent};
 
@@ -113,7 +114,11 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             model_commands::list_models,
             model_commands::download_model,
             model_commands::verify_model,
-            model_commands::remove_model
+            model_commands::remove_model,
+            transcript_commands::list_transcripts,
+            transcript_commands::get_transcript,
+            transcript_commands::fetch_captions,
+            transcript_commands::delete_transcript
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous
         // handler runs on the window's thread: hundreds of thumbnails (each

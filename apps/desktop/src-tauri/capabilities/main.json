@@ -90,6 +90,10 @@
     "allow-download-model",
     "allow-verify-model",
     "allow-remove-model",
+    "allow-list-transcripts",
+    "allow-get-transcript",
+    "allow-fetch-captions",
+    "allow-delete-transcript",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]
