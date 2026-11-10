@@ -14,6 +14,7 @@ pub mod instance;
 pub mod library;
 pub mod library_commands;
 pub mod media_protocol;
+mod model_commands;
 pub mod organize_commands;
 pub mod player_commands;
 mod session_commands;
@@ -108,7 +109,11 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             session_commands::open_sign_in,
             session_commands::start_app_sign_in,
             session_commands::finish_app_sign_in,
-            session_commands::cancel_app_sign_in
+            session_commands::cancel_app_sign_in,
+            model_commands::list_models,
+            model_commands::download_model,
+            model_commands::verify_model,
+            model_commands::remove_model
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous
         // handler runs on the window's thread: hundreds of thumbnails (each

@@ -13,7 +13,7 @@ const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path", "storage_roo
 export const statusLabel = (s: string) => t(`downloads.status.${s}` as MessageKey);
 export const presetLabel = (p: string | null) => (p ? t(`downloads.preset.${p}` as MessageKey) : "");
 /** Why a blocked job waits; a browser store that could not be read is not a missing login. */
-const blockedText = (job: JobDto) =>
+export const blockedText = (job: JobDto) =>
   job.blockedReason === "auth" && job.errorCode === "COOKIE_ACCESS_FAILED"
     ? t("downloads.blocked.cookie")
     : t((BLOCKED.has(job.blockedReason ?? "") ? `downloads.blocked.${job.blockedReason}` : "downloads.blocked.other") as MessageKey);
@@ -40,7 +40,7 @@ export function ProgressBar({ job }: { job: JobDto }) {
       <div
         className={`bar${known ? "" : " bar-indeterminate"}`}
         role="progressbar"
-        aria-label={job.itemTitle ?? t("downloads.move")}
+        aria-label={job.itemTitle ?? t(job.kind === "model_download" ? "models.job" : "downloads.move")}
         aria-valuemin={known ? 0 : undefined}
         aria-valuemax={known ? 100 : undefined}
         aria-valuenow={pct ?? undefined}

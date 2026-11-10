@@ -328,3 +328,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .queue-failed { color: var(--danger); }
 .item-download { margin: var(--s2) 0; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--radius); }
 .item-download p { margin: var(--s1) 0; }
+
+/* Settings → Transcription (F6.1) */
+.model-list { list-style: none; margin: 0; padding: 0; }
+.model-row { padding: var(--s2) 0; border-bottom: 1px solid var(--border); }
+.model-row p { margin: var(--s1) 0; }
+.model-row .actions { margin-top: var(--s1); }

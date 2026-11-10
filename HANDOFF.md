@@ -1,9 +1,11 @@
-# Devir notu — 9 Kasım 2026
+# Devir notu — 10 Kasım 2026
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
+- **10 Kas: F6 başladı (transkript ve zaman kodlu arama).** Plan beş PR: (1) veri modeli + izinli model indirme (F6.1), (2) site altyazısı + yerel whisper.cpp (F6.2), (3) uzun ses parçalama, checkpoint, iptal (F6.3), (4) transkript araması, panel, zaman koduna gitme, Markdown not (F6.4–F6.5), (5) kaynak sınırları ve AI Processing ekranı (F6.6). F6.7 ölçüm raporu Cuma'nın Windows'ta TR/EN denemesiyle.
+- **F6.1 yazıldı (🟨, ADR-0026).** Settings → Transcription: modeller (Tiny/Base/Small/Medium, çok dilli) listelenir, Download… izin penceresini açar (boyut, boş alan, bellek, kaynak, lisans). Dosya Hugging Face'ten sabit commit'ten iner, SHA-256 ve whisper.cpp'nin yayımladığı SHA-1 ile kontrol edilir. Bekleyen: Cuma'nın Windows'ta Tiny modelini indirmesi (ilerleme, Cancel, yeniden Download kaldığı yerden, Check file, Remove).
 - **10 Kas akşamüstü: F5 bitti, sıradaki F6.** Instagram'da herkese açık olmayan reel'ler oturumla iniyor (PR #39). Uygulama içi giriş çalışıyor (PR #40–#42): robot kontrolü ve Google girişi artık pencerede açılıyor; `freezePrototype` uygulamanın kendi sayfasına taşındı (`public/freeze-prototype.js`). VK takipçilere özel/özel video ertelendi (`docs/platform-support.md`).
 
 - **10 Kas: VK takipçilere özel video ertelendi (Cuma'nın kararı).** yt-dlp tek başına da çerezle `Video only available to followers` diyor; VK giriş çerezleri yalnızca `vkvideo.ru`'da. Bilinen kısıt olarak `docs/platform-support.md`'ye yazıldı; VK-01…10 not run. F5.3 ✅ için gerçek çerez dosyası testi Reddit cookies.txt ile yapılabilir. Sıradaki aday F5.7 (uygulama içi giriş PoC).
@@ -34,7 +36,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
 3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
 4. F5.7 elle test (Cuma, release exe): Sessions → Reddit → Connect → "Sign in here" → pencerede giriş → Done → Reddit gönderisi iner. Sonra aynısı VK için (`vk.com` girişi) ve takipçilere özel videoda Try again (VK-04). Sonuç `docs/platform-support.md`'ye.
-5. Sıradaki faz: F6 (transkript ve zaman kodlu arama).
+5. F6.1 elle test (Cuma, release exe): Settings → Transcription → Tiny → Download… → Download. İner, "Ready" olur; Check file ve Remove çalışır. Sonra F6.2.
 
 ## Bilinmesi gerekenler
 

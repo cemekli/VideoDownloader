@@ -86,6 +86,10 @@
     "allow-start-app-sign-in",
     "allow-finish-app-sign-in",
     "allow-cancel-app-sign-in",
+    "allow-list-models",
+    "allow-download-model",
+    "allow-verify-model",
+    "allow-remove-model",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

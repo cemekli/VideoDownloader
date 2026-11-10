@@ -56,6 +56,14 @@ jobs:
       # yt-dlp's GPG signature, and runs the health checks (ADR-0005, ADR-0006).
       - name: Fetch and check managed tools
         run: node scripts/fetch-tools.mjs
+      # Transcription model pins (F6.1, ADR-0026): the Hugging Face listing at the
+      # pinned commit still gives the pinned SHA-256/size, and the Tiny model
+      # downloaded end to end matches both that and whisper.cpp's published SHA-1.
+      # Informational: a Hugging Face outage must not block the PR.
+      - name: Model pins (Hugging Face, Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: node scripts/model-pins.mjs --download whisper-tiny
       # Real yt-dlp through the network guard: redirects, manifests and
       # segments aimed at a canary server must never reach it (ADR-0007, AC-29).
       - name: Network guard probe (real yt-dlp)

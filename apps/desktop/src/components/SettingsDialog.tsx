@@ -6,6 +6,7 @@ import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
 import { Modal } from "./Modal";
 import { SessionsBlock } from "./Sessions";
+import { TranscriptionBlock } from "./Transcription";
 
 type Notify = (text: string, tone?: "info" | "error") => void;
 
@@ -225,6 +226,11 @@ export function SettingsDialog({
         <section aria-labelledby="set-sessions">
           <h3 id="set-sessions">{t("settings.sessions")}</h3>
           <SessionsBlock onOpen={onOpenSessions} />
+        </section>
+
+        <section aria-labelledby="set-transcription">
+          <h3 id="set-transcription">{t("settings.transcription")}</h3>
+          <TranscriptionBlock client={client} notify={notify} />
         </section>
 
         <section aria-labelledby="set-storage">

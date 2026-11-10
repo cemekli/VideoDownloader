@@ -44,12 +44,15 @@ import type {
   SessionDto,
   SessionOverview,
   VerifyDto,
+  ModelClient,
+  ModelOverview,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
 import { createFixtureData } from "./fixtureData";
 import { createFixtureDownloads } from "./fixtureDownloads";
+import { createFixtureModels } from "./fixtureModels";
 
 export { IpcError } from "./errors";
 
@@ -100,6 +103,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...createFixtureData(recs, scenario, library),
     ...downloads.client,
     ...downloads.sessions,
+    ...createFixtureModels(scenario),
     downloads,
     kind: "fixture",
     listItems: (q) => library.listItems(q),
@@ -235,6 +239,14 @@ const sessionCommands: SessionClient = {
   deleteSession: (id) => call<void>("delete_session", { id }),
 };
 
+/** Transcription models (F6.1). */
+const modelCommands: ModelClient = {
+  listModels: () => call<ModelOverview>("list_models"),
+  downloadModel: (modelId, agreed) => call<ModelOverview>("download_model", { modelId, agreed }),
+  verifyModel: (modelId) => call<ModelOverview>("verify_model", { modelId }),
+  removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),
+};
+
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
 export function createTauriClient(): BackendClient {
   return {
@@ -249,6 +261,7 @@ export function createTauriClient(): BackendClient {
     ...dataCommands,
     ...downloadCommands,
     ...sessionCommands,
+    ...modelCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));

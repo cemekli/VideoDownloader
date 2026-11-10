@@ -15,7 +15,7 @@
 //! and block themselves, waiting ones are blocked by `jobs::set_offline`.
 
 use crate::context::{Context, Store};
-use crate::{download, metadata, storage_move};
+use crate::{download, metadata, models, storage_move};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -28,6 +28,8 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     (&[JobKind::Metadata], 3),
     (&[JobKind::Download], 2),
     (&[JobKind::StorageMove], 1),
+    // One model at a time: they are hundreds of MB to GB (F6.1).
+    (&[JobKind::ModelDownload], 1),
 ];
 
 pub struct Engine<S: Store> {
@@ -64,6 +66,7 @@ impl<S: Store> Engine<S> {
             let _ = jobs::set_offline(c, offline, now);
             let _ = storage_move::retry_cleanups(c, now);
             let _ = metadata::enqueue_pending(c, now, 500);
+            models::reconcile(c, &cx.dirs.models, now);
         });
         self.unblock_tools();
         // Cookie-file working copies left by a crash (§21.1), then secrets
@@ -188,6 +191,7 @@ fn claim_all<S: Store>(cx: &Arc<Context<S>>) -> Vec<std::thread::JoinHandle<()>>
                         JobKind::Metadata => metadata::run(&cx2, lease),
                         JobKind::Download => download::run(&cx2, lease),
                         JobKind::StorageMove => storage_move::run(&cx2, lease),
+                        JobKind::ModelDownload => models::run(&cx2, lease),
                         _ => {}
                     }
                 });

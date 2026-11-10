@@ -1608,6 +1608,149 @@
     "cancel_app_sign_in": {
       "args": {},
       "response": null
+    },
+    "list_models": {
+      "args": {},
+      "response": {
+        "models": [
+          {
+            "id": "whisper-tiny",
+            "label": "Tiny",
+            "languages": "multilingual",
+            "sizeBytes": 77691713,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 273,
+            "status": "not_installed",
+            "consentAt": null,
+            "verifiedAt": null,
+            "job": null
+          },
+          {
+            "id": "whisper-base",
+            "label": "Base",
+            "languages": "multilingual",
+            "sizeBytes": 147951465,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 388,
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "freeBytes": 120000000000
+      }
+    },
+    "download_model": {
+      "args": {
+        "modelId": "whisper-tiny",
+        "agreed": true
+      },
+      "response": {
+        "models": [
+          {
+            "id": "whisper-tiny",
+            "label": "Tiny",
+            "languages": "multilingual",
+            "sizeBytes": 77691713,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 273,
+            "status": "not_installed",
+            "consentAt": null,
+            "verifiedAt": null,
+            "job": null
+          },
+          {
+            "id": "whisper-base",
+            "label": "Base",
+            "languages": "multilingual",
+            "sizeBytes": 147951465,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 388,
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "freeBytes": 120000000000
+      }
+    },
+    "verify_model": {
+      "args": {
+        "modelId": "whisper-base"
+      },
+      "response": {
+        "models": [
+          {
+            "id": "whisper-tiny",
+            "label": "Tiny",
+            "languages": "multilingual",
+            "sizeBytes": 77691713,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 273,
+            "status": "not_installed",
+            "consentAt": null,
+            "verifiedAt": null,
+            "job": null
+          },
+          {
+            "id": "whisper-base",
+            "label": "Base",
+            "languages": "multilingual",
+            "sizeBytes": 147951465,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 388,
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "freeBytes": 120000000000
+      }
+    },
+    "remove_model": {
+      "args": {
+        "modelId": "whisper-base"
+      },
+      "response": {
+        "models": [
+          {
+            "id": "whisper-tiny",
+            "label": "Tiny",
+            "languages": "multilingual",
+            "sizeBytes": 77691713,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 273,
+            "status": "not_installed",
+            "consentAt": null,
+            "verifiedAt": null,
+            "job": null
+          },
+          {
+            "id": "whisper-base",
+            "label": "Base",
+            "languages": "multilingual",
+            "sizeBytes": 147951465,
+            "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+            "source": "https://huggingface.co/ggerganov/whisper.cpp",
+            "upstreamMemoryMb": 388,
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "freeBytes": 120000000000
+      }
     }
   },
   "domainError": {

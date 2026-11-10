@@ -42,6 +42,9 @@ pub struct Dirs {
     pub cache: PathBuf,
     /// Where downloads go when the user picked no folder (`<data>/media`).
     pub default_media: PathBuf,
+    /// `<data>/models/`: transcription models the user agreed to download
+    /// (§14.2, §17.1).
+    pub models: PathBuf,
 }
 
 impl Dirs {
@@ -50,6 +53,7 @@ impl Dirs {
             staging: data.join("staging"),
             cache: data.join("cache"),
             default_media: data.join("media"),
+            models: data.join("models"),
         }
     }
 

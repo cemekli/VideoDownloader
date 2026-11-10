@@ -11,9 +11,11 @@ pub mod jobs;
 pub mod library;
 pub mod lock;
 pub mod migrations;
+pub mod models;
 pub mod portable;
 pub mod restore;
 pub mod settings;
+pub mod transcripts;
 
 use migrations::{recorded_version, Migration, MigrationError, Migrator, MIGRATIONS};
 use rusqlite::{Connection, OpenFlags};

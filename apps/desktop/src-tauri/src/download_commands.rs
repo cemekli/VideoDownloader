@@ -139,7 +139,7 @@ pub struct JobDto {
     pub can_remove_partial: bool,
 }
 
-fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
+pub(crate) fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
     let item = j
         .item_id
         .as_deref()

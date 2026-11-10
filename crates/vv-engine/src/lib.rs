@@ -19,6 +19,7 @@ pub mod cookiefile;
 pub mod download;
 pub mod formats;
 pub mod metadata;
+pub mod models;
 pub mod proc;
 pub mod runtime;
 pub mod storage;
