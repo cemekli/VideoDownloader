@@ -215,6 +215,14 @@ const RULES: &[(ErrorCode, &[&str])] = &[
             "--cookies-from-browser or --cookies",
             "login if you have permissions",
             "login required",
+            // VK: posts and videos limited to a group's members or
+            // followers; yt-dlp passes VK's own text through.
+            "only available to followers",
+            "only available to subscribers",
+            "only available to members",
+            "only available to community members",
+            "available only to community members",
+            "private video. sign in",
         ],
     ),
     (
@@ -318,6 +326,17 @@ mod tests {
             classify("[Reddit] 1abc2de: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ"),
             ErrorCode::LoginRequired
         );
+    }
+
+    #[test]
+    fn vk_follower_only_videos_ask_for_a_login() {
+        for m in [
+            "[vk] -159700045_456248459: Video only available to followers",
+            "[vk] -1_2: This video is available only to community members",
+            "[youtube] abc: Private video. Sign in if you've been granted access to this video",
+        ] {
+            assert_eq!(classify(m), ErrorCode::LoginRequired, "{m}");
+        }
     }
 
     #[test]

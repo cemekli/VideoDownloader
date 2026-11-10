@@ -28,8 +28,12 @@ describe("Sessions screen", () => {
     expect(within(row).getByTestId("session-verified")).toHaveTextContent("Not checked yet");
     expect(within(row).getByTestId("session-allow-download")).toBeChecked();
     expect(within(row).getByTestId("session-allow-verify")).not.toBeChecked();
-    // No "Check now" until checking is allowed.
-    expect(within(row).queryByTestId("session-verify")).toBeNull();
+    // "Check now" stays visible but waits until checking is allowed.
+    expect(within(row).getByTestId("session-verify")).toBeDisabled();
+    expect(within(row).getByTestId("session-verify-hint")).toHaveTextContent("Checking the sign-in");
+    await user.click(within(row).getByTestId("session-allow-verify"));
+    await waitFor(() => expect(within(screenEl).getByTestId("session-verify")).toBeEnabled());
+    expect(within(screenEl).queryByTestId("session-verify-hint")).toBeNull();
     // The other sites can be connected or their sign-in page opened.
     const sites = within(screenEl).getAllByTestId("session-site");
     expect(sites.map((s) => s.dataset.provider)).not.toContain("reddit");

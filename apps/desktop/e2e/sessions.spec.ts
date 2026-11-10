@@ -56,3 +56,19 @@ test("a download that needs a login: connect on the Sessions screen, it finishes
   await row.getByTestId("session-reconnect").click();
   await expect(row).toHaveAttribute("data-state", "needs_verification");
 });
+
+test("the Sessions screen scrolls when its sites do not fit the window", async ({ page }, info) => {
+  await page.setViewportSize({ width: info.project.name === "narrow-800" ? 800 : 1366, height: 480 });
+  await page.goto("/?fixture=login-required");
+  await expect(page.getByTestId("library-card").first()).toBeVisible();
+  await nav(page, info, "nav-sessions");
+  const sessions = page.getByTestId("sessions");
+  const last = sessions.getByTestId("session-site").last();
+  await expect(last).toBeVisible();
+  const fits = await sessions.evaluate((el) => el.scrollHeight <= el.clientHeight);
+  expect(fits).toBe(false);
+  await last.scrollIntoViewIfNeeded();
+  const box = await last.boundingBox();
+  expect(box && box.y + box.height).toBeLessThanOrEqual(480);
+  expect(await sessions.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});

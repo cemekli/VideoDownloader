@@ -201,6 +201,7 @@ export const en = {
   "sessions.cleared": "Cleared: VideoVault won't use this Firefox profile until you reconnect.",
   "sessions.cleared_file": "Cleared: the cookies were deleted. Connect a new cookie file to use this site again.",
   "sessions.verify": "Check now",
+  "sessions.verify_needs_consent": "To use Check now, also allow \"Checking the sign-in\" above.",
   "sessions.reconnect": "Reconnect",
   "sessions.open_sign_in": "Sign in to {site} in your browser",
   "sessions.verify.verified": "Signed in to {site}: the check passed.",

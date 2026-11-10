@@ -4,19 +4,31 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
-- **F5.3–F5.5 (9 Kas, PR açık):** çerez dosyasıyla oturum (yalnızca platformun çerezleri DPAPI'de; her iş için kullanıcıya özel klasörde kopya, iş bitince silinir), `verify_session` ("Check now", §12.1 (a) kanıtı), `ACCESS_DENIED` de kanıt sayılır ve profile dokunmaz (AC-19), kenar çubuğunda Sessions ekranı. ADR-0024. Bekleyen: CI ve Cuma'nın elle testi.
+- **9 Kas akşamı, Cuma'nın VK çerez dosyası testinde durduk (PR #37, açık):** PR #37'de üç düzeltme var:
+  - Check now düğmesi izin yokken de görünür (devre dışı ve açıklamalı).
+  - Sessions ve Downloads ekranları pencereye sığmayınca kayar; daha önce Facebook satırı yarıda kesiliyordu.
+  - VK'nın `Video only available to followers` / "sadece topluluk üyelerine" hataları artık `LOGIN_REQUIRED` sayılıyor. Önceden `EXTRACTOR_FAILED` ("The video couldn't be read from the page") oluyordu, bu yüzden çerezle yeniden deneme hiç çalışmıyordu.
+
+  Bulgular:
+  - VK test videosu `vk.com/video-159700045_456248459` sadece takipçilere açık. yt-dlp tek başına çerezsiz aynı hatayı veriyor.
+  - Çerez dosyasıyla bağlanan ilk VK videosu herkese açıkmış. Metadata girişsiz geldiği için Check now "Nothing to check with yet" dedi; bu doğru davranış (AC-54).
+  - O videonun küçük resmi gelmedi; bu henüz incelenmedi.
+
+- **F5.3–F5.5 (9 Kas, PR #36 merge edildi; F5.4 ve F5.5 ✅, Cuma'nın Reddit'te Check now testi):** çerez dosyasıyla oturum (yalnızca platformun çerezleri DPAPI'de; her iş için kullanıcıya özel klasörde kopya, iş bitince silinir), `verify_session` ("Check now", §12.1 (a) kanıtı), `ACCESS_DENIED` de kanıt sayılır ve profile dokunmaz (AC-19), kenar çubuğunda Sessions ekranı. ADR-0024. Bekleyen yalnızca F5.3'ün gerçek çerez dosyası testi (VK-10).
 - **F5.2 (9 Kas, PR #35, merge edildi, ✅):** Firefox çereziyle oturum. Settings → Sessions'ta site + Firefox profili + izin; giriş bekleyen indirmede "Connect a session". Motor önce profilsiz dener, `LOGIN_REQUIRED` olursa izinli profille yeniden dener (ADR-0023). Cuma Reddit gönderisini Firefox oturumuyla indirip oynattı.
 - **İlk açılış gecikmesi çözüldü (9 Kas):** taze derlemeden sonra thumbnail'lerin geç gelmesi ve pencerenin bir kez küçülmesi Avast Antivirus'ün taramasıymış; Avast kapalıyken hemen geliyor. Kodda değişiklik gerekmiyor; F4.7 bilinen kısıtlarına not düşülecek.
 - **F5.1 (9 Kas, PR #32, merge edildi):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
 - **Son durum (9 Kas, akşam):** F3 tamamlandı (PR #25–#30). Cuma Windows 11'de YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch VOD ve Dailymotion indirdi; sonuçlar `docs/platform-support.md`'de. Reddit girişsiz engelli (yt-dlp tek başına da `Account authentication is required` diyor).
-- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2 (43/74).
+- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5 (45/74).
 - **Sıra değişikliği:** F4 (installer, imzalı güncelleme) ertelendi; sıradaki faz **F5 yetkili oturum** (Cuma'nın kararı, 9 Kas).
 - **Uygulamada şu an:** bookmark kaydedilince başlık, kanal, süre ve küçük resim gelir; Download ile dört önayar; Downloads ekranı; canlı yayınlar reddedilir; yerel import thumbnail'leri arka planda, en yeniden başlayarak, paralel yapılır. Bilinen platformlar: YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion, Twitch, Reddit.
 
 ## Sonraki ilk adımlar
 
-1. F5.3–F5.5 elle test (Cuma, release exe): Sessions ekranında Reddit satırı "Signed in" olmalı; "Check now" → "the check passed". Bir siteyi çerez dosyasıyla bağla (tarayıcıdan cookies.txt dışa aktar, Connect → "A cookie file I export"), giriş isteyen bir videoyu indir; işten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz, STATE F5.3–F5.5 ✅.
-2. Sıradaki: VK canlı matrisi F5.6, sonra F5.7 (uygulamaya ait profil PoC).
+1. PR #37 CI'ı Windows ve Linux'ta yeşil mi bak, sonra Cuma merge eder.
+2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
+3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
+4. Sıradaki: VK canlı matrisi F5.6, sonra F5.7 (uygulamaya ait profil PoC).
 
 ## Bilinmesi gerekenler
 

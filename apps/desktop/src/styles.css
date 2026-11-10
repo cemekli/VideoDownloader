@@ -303,7 +303,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 /* Downloads (F3.8) */
-.downloads { display: flex; flex-direction: column; gap: var(--s5); padding: var(--s3) 0; }
+.downloads { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: var(--s5); padding: var(--s3) 0 var(--s4); }
+.downloads > * { flex: none; }
 .downloads-heading { font-size: 1rem; margin: 0 0 var(--s2); }
 .job-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .job { padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }

@@ -185,10 +185,22 @@ function SessionRow({ s, client, busy, act, notify }: { s: SessionDto; client: S
           ))}
         </fieldset>
       )}
+      {!cleared && !s.consent.includes("verify") && (
+        <p className="muted small" id={`verify-hint-${s.id}`} data-testid="session-verify-hint">
+          {t("sessions.verify_needs_consent")}
+        </p>
+      )}
       {cleared && <p className="muted small">{t(s.method === "cookie_file" ? "sessions.cleared_file" : "sessions.cleared")}</p>}
       <div className="actions">
-        {!cleared && s.consent.includes("verify") && (
-          <button type="button" className="button button-primary" disabled={busy} onClick={() => void verify()} data-testid="session-verify">
+        {!cleared && (
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={busy || !s.consent.includes("verify")}
+            aria-describedby={s.consent.includes("verify") ? undefined : `verify-hint-${s.id}`}
+            onClick={() => void verify()}
+            data-testid="session-verify"
+          >
             {t("sessions.verify")}
           </button>
         )}
