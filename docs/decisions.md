@@ -1030,6 +1030,8 @@ STATE.md F5.7. SPEC §21.3, §20.3, §21.1; DEC-08, DEC-10; VK-04.
 
 **Bilinen kısıtlar.** Google, gömülü webview'lardaki girişi reddedebiliyor ("This browser or app may not be secure"); YouTube için bu yol çalışmayabilir. Bazı siteler girişte captcha ya da uygulama onayı ister; kullanıcı bunları pencerede kendisi tamamlar. Pencere `vv-netguard` arkasından değil doğrudan bağlanır (WebView2 trafiği, NFR-11 istisnası olarak `docs/privacy.md`'ye yazılacak); yalnızca kullanıcı açıkça başlattığında ve Offline Mode kapalıyken açılır. VK'da pencere `vk.com` girişini açar; giriş `vk.com` çerezleri bırakırsa yt-dlp'nin `vk.com` isteği oturumlu gider. Bunun takipçilere özel videoyu açıp açmadığı Cuma'nın Windows testiyle görülecek (VK-04).
 
+**Karar: `freezePrototype` uygulamanın kendi sayfasına taşındı (10 Kas 2026).** Tauri `freezePrototype` betiğini (`Object.freeze(Object.prototype)`) uygulamanın *her* webview'ına, uzak siteyi açan giriş penceresine de ekliyor. Sitelerin kendi scriptleri bununla bozuldu: Cuma'nın Windows testinde VK penceresi boş kaldı, Reddit'in "Prove your humanity" robot kontrolü hiç çizilmedi. `tauri.conf.json`'da `freezePrototype` kapatıldı; aynı koruma uygulamanın sayfasında ilk script olarak `public/freeze-prototype.js` ile yapılıyor (diğer tüm scriptlerden önce çalışır, CSP `script-src 'self'` ile uyumlu). `tests/ipc.rs` bunun ilk script olduğunu, `e2e/library-shell.spec.ts` sayfada `Object.prototype`'un dondurulmuş olduğunu doğrular.
+
 **Komutlar.** `start_app_sign_in(provider)`, `finish_app_sign_in(provider, scope)` (`SessionDto`), `cancel_app_sign_in()`. `SessionOverview.appSignInSupported` eklendi.
 
 **Sonuçlar ve kanıt.**

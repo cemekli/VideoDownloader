@@ -37,7 +37,7 @@ Her satır SPEC §20.1'deki bir varlık/girişe karşılık gelir. "Uygulandı" 
 | Dış binary / model | Sürüm pin, SHA-256, yt-dlp GPG imzası, FFmpeg lisans kontrolü | İmzalı uygulama güncellemesi, model checksum | ADR-0005, ADR-0006; F4.2, F6.1, AC-25 |
 | Medya parser | Protokol ve biçim izin listesi, referanslı girdi reddi (import'ta gerçek ffprobe ile AC-59 testi); iptal ve zaman aşımında süreç ağacı ölür; ffprobe 30 s, thumbnail 60 s sınırı | Kaynak (bellek/CPU) sınırı | ADR-0006, ADR-0008, ADR-0012; F3.1 |
 | Arama sorgusu | Kullanıcı metni FTS5 sözdizimine dönüşmüyor: her terim tırnaklı dize, operatörler kelime; parametreli SQL; vurgulama HTML değil parça listesi | — | ADR-0012, AC-31 |
-| IPC | Least privilege capability, CSP, `freezePrototype`; capability dışı komutlar reddediliyor | Navigasyon/origin negatif testlerinin genişletilmesi | ADR-0001; `tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts`; F4.4 |
+| IPC | Least privilege capability, CSP, sayfanın ilk scripti `Object.prototype`'u dondurur (ADR-0025); capability dışı komutlar reddediliyor | Navigasyon/origin negatif testlerinin genişletilmesi | ADR-0001; `tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts`; F4.4 |
 | Export / import | — | Alan izin listesi, önizleme, şema doğrulama | F2.5, AC-15, AC-16, AC-30 |
 | Tek süreç | İkinci süreç DB'yi açmıyor | — | ADR-0008, AC-38 |
 

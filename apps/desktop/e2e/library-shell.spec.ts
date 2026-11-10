@@ -13,6 +13,11 @@ async function ready(page: Page, url = "/") {
 }
 
 test.describe("library screen", () => {
+  test("the page runs with Object.prototype frozen (prototype-pollution guard, ADR-0025)", async ({ page }) => {
+    await ready(page);
+    expect(await page.evaluate(() => Object.isFrozen(Object.prototype))).toBe(true);
+  });
+
   test("lists fixture items with their local state", async ({ page }) => {
     await ready(page);
     await expect(page.getByRole("heading", { level: 1, name: "All Items" })).toBeVisible();
