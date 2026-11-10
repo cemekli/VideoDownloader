@@ -289,7 +289,18 @@ fn csp_allows_no_remote_sources() {
     // SPEC §18.2: the webview loads no remote images, media, fonts or scripts.
     let conf: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
     let security = &conf["app"]["security"];
-    assert_eq!(security["freezePrototype"], true);
+    // Tauri's freezePrototype would also be injected into the in-app sign-in
+    // window and break the sites there (ADR-0025); the app's own page freezes
+    // Object.prototype itself, in its first script.
+    assert_eq!(security["freezePrototype"], false);
+    let html = include_str!("../../index.html");
+    let first_script = html.find("<script").expect("index.html has scripts");
+    assert!(
+        html[first_script..].starts_with(r#"<script src="/freeze-prototype.js"></script>"#),
+        "freeze-prototype.js must be the first script"
+    );
+    assert!(include_str!("../../public/freeze-prototype.js")
+        .contains("Object.freeze(Object.prototype);"));
     for key in ["csp", "devCsp"] {
         let csp = security[key]
             .as_object()

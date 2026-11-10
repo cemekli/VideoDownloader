@@ -50,7 +50,7 @@ Bağımlılık yönü tek yönlüdür: `vv-domain` hiçbir crate'e bağlı deği
 
 | Sınır | İçeride | Dışarıda | Denetim | Kanıt |
 |---|---|---|---|---|
-| Webview ↔ backend | Rust süreç | Webview içeriği (yerel paket) | Yalnızca `capabilities/main.json`'daki komutlar; CSP; `freezePrototype`; core/plugin komutları kapalı | `tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts` |
+| Webview ↔ backend | Rust süreç | Webview içeriği (yerel paket) | Yalnızca `capabilities/main.json`'daki komutlar; CSP; ilk script `Object.prototype`'u dondurur (`public/freeze-prototype.js`, ADR-0025); core/plugin komutları kapalı | `tests/ipc.rs`, `e2e-desktop/desktop-shell.spec.ts` |
 | Backend ↔ araç süreçleri | Uygulama | yt-dlp, Deno, FFmpeg, ffprobe | Argüman dizisi (kabuk yok), temiz ortam, Job Object, sabit sürüm ve hash | ADR-0005, ADR-0006, ADR-0008 |
 | Araç ↔ ağ | Yerel denetim proxy'si | İnternet | Port 80/443, DNS sonrası tüm adresler public, jeton | ADR-0007, `scripts/netguard-probe.mjs` |
 | Araç ↔ dosya sistemi | Medya kökleri | Kök dışı yollar | FFmpeg yalnızca `file:` ve biçim izin listesi; yol sınırı F1.4/F3.6'da | ADR-0006 |
