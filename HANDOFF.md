@@ -1,11 +1,11 @@
-# Devir notu — 10 Kasım 2026
+# Devir notu — 10 Kasım 2026 (yarın 11 Kasım devam)
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
 - **10 Kas: F6 başladı (transkript ve zaman kodlu arama).** Plan beş PR: (1) veri modeli + izinli model indirme (F6.1), (2) site altyazısı + yerel whisper.cpp (F6.2), (3) uzun ses parçalama, checkpoint, iptal (F6.3), (4) transkript araması, panel, zaman koduna gitme, Markdown not (F6.4–F6.5), (5) kaynak sınırları ve AI Processing ekranı (F6.6). F6.7 ölçüm raporu Cuma'nın Windows'ta TR/EN denemesiyle.
-- **F6.1 yazıldı (🟨, ADR-0026).** Settings → Transcription: modeller (Tiny/Base/Small/Medium, çok dilli) listelenir, Download… izin penceresini açar (boyut, boş alan, bellek, kaynak, lisans). Dosya Hugging Face'ten sabit commit'ten iner, SHA-256 ve whisper.cpp'nin yayımladığı SHA-1 ile kontrol edilir. Bekleyen: Cuma'nın Windows'ta Tiny modelini indirmesi (ilerleme, Cancel, yeniden Download kaldığı yerden, Check file, Remove).
+- **F6.1 bitti (✅, ADR-0026, PR #43).** Settings → Transcription: modeller (Tiny/Base/Small/Medium, çok dilli), izin penceresi, Hugging Face'ten sabit commit, SHA-256 + SHA-1 kontrolü. Cuma Windows'ta test etti, çalışıyor (10 Kas).
 - **F6.2 ilk yarı yazıldı (🟨, ADR-0027): sitenin altyazısı.** Details panelinde "Transcript" bölümü → "Get site captions". Uygulama sitenin altyazı izlerini okur, videonun dilindeki yükleyici altyazısını (yoksa sitenin otomatik altyazısını) alır ve zaman kodlu döküm olarak saklar; başka dile otomatik çeviriler alınmaz. Sonraki PR: whisper.cpp ile yerel transkripsiyon (altyazısı olmayan videolar ve yerel dosyalar).
 - **10 Kas akşamüstü: F5 bitti, sıradaki F6.** Instagram'da herkese açık olmayan reel'ler oturumla iniyor (PR #39). Uygulama içi giriş çalışıyor (PR #40–#42): robot kontrolü ve Google girişi artık pencerede açılıyor; `freezePrototype` uygulamanın kendi sayfasına taşındı (`public/freeze-prototype.js`). VK takipçilere özel/özel video ertelendi (`docs/platform-support.md`).
 
@@ -33,12 +33,13 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
+0. **Yarın buradan devam (11 Kas):** PR #44 (F6.2 ilk yarı, site altyazısı) CI yeşil mi bak; Cuma merge eder ve 5. adımdaki testi yapar. Sonra F6.2 ikinci yarı: whisper.cpp `whisper-cli` aracını `tools/manifest.json`'a ekle (v1.9.2 `whisper-bin-x64.zip`, yanında DLL'ler gelir, manifest ek dosyaları desteklemeli; araç isteğe bağlı, `REQUIRED_TOOLS`'ta değil; Linux'ta hazır ikili yok), sonra `transcription` işi: FFmpeg ile 16 kHz mono WAV → `whisper-cli` JSON → `generated_local` döküm, Details → Transcript'te "Transcribe on this PC".
+
 1. PR #37 CI'ı Windows ve Linux'ta yeşil mi bak, sonra Cuma merge eder.
 2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
 3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
 4. F5.7 elle test (Cuma, release exe): Sessions → Reddit → Connect → "Sign in here" → pencerede giriş → Done → Reddit gönderisi iner. Sonra aynısı VK için (`vk.com` girişi) ve takipçilere özel videoda Try again (VK-04). Sonuç `docs/platform-support.md`'ye.
-5. F6.1 elle test (Cuma, release exe): Settings → Transcription → Tiny → Download… → Download. İner, "Ready" olur; Check file ve Remove çalışır.
-6. F6.2 site altyazısı elle test (Cuma, release exe): Türkçe altyazılı bir YouTube videosu ve İngilizce otomatik altyazılı bir video kaydet → Details → Transcript → Get site captions. Dil, kaynak (uploader/automatic) ve zaman kodlu satırlar doğru mu; altyazısız bir videoda "no captions" mesajı çıkıyor mu.
+5. F6.2 site altyazısı elle test (Cuma, release exe): Türkçe altyazılı bir YouTube videosu ve İngilizce otomatik altyazılı bir video kaydet → Details → Transcript → Get site captions. Dil, kaynak (uploader/automatic) ve zaman kodlu satırlar doğru mu; altyazısız bir videoda "no captions" mesajı çıkıyor mu.
 
 ## Bilinmesi gerekenler
 
