@@ -3,7 +3,7 @@
   "comment": "Transcription models the app may download, only after the user agrees (SPEC §17.1, STATE.md F6.1, ADR-0026). The trust anchor (allowed URL prefix) is in crates/vv-engine/src/models.rs. sha256/size are pinned from the Hugging Face file listing at `revision` (scripts/model-pins.mjs); sha1 is the value the whisper.cpp project publishes in models/README.md, checked as a second, independent source.",
   "provider": "whisper_cpp",
   "repository": "https://huggingface.co/ggerganov/whisper.cpp",
-  "revision": null,
+  "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
   "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
   "models": [
     {
@@ -12,8 +12,8 @@
       "file": "ggml-tiny.bin",
       "languages": "multilingual",
       "sha1": "bd577a113a864445d4c299885e0cb97d4ba92b5f",
-      "sha256": null,
-      "size": null,
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "size": 77691713,
       "upstreamMemoryMb": 273
     },
     {
@@ -22,8 +22,8 @@
       "file": "ggml-base.bin",
       "languages": "multilingual",
       "sha1": "465707469ff3a37a2b9b8d8f89f2f99de7299dac",
-      "sha256": null,
-      "size": null,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "size": 147951465,
       "upstreamMemoryMb": 388
     },
     {
@@ -32,8 +32,8 @@
       "file": "ggml-small.bin",
       "languages": "multilingual",
       "sha1": "55356645c2b361a969dfd0ef2c5a50d530afd8d5",
-      "sha256": null,
-      "size": null,
+      "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+      "size": 487601967,
       "upstreamMemoryMb": 852
     },
     {
@@ -42,8 +42,8 @@
       "file": "ggml-medium.bin",
       "languages": "multilingual",
       "sha1": "fd9727b6e1217c2f614f9b698455c4ffd82463b4",
-      "sha256": null,
-      "size": null,
+      "sha256": "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
+      "size": 1533763059,
       "upstreamMemoryMb": 2100
     }
   ]
