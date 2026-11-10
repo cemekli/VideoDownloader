@@ -222,7 +222,9 @@ function SessionRow({ s, client, busy, act, notify }: { s: SessionDto; client: S
   const verify = () =>
     act(async () => {
       const r = await client.verifySession(s.id);
-      notify(t(`sessions.verify.${r.outcome}` as MessageKey, { site: platformName(s.provider) }), verifyTone(r.outcome));
+      const text = t(`sessions.verify.${r.outcome}` as MessageKey, { site: platformName(s.provider) });
+      // A failed check names its §19 reason, so "network" and "the page couldn't be read" are told apart.
+      notify(r.outcome === "failed" && r.code ? `${text} ${t("sessions.verify.reason", { reason: errorMessage(r.code) })}` : text, verifyTone(r.outcome));
     });
   const toggle = (op: SessionOperation, on: boolean) => act(() => client.setSessionConsent(s.id, on ? OPS.filter((o) => o === op || s.consent.includes(o)) : s.consent.filter((o) => o !== op)));
   return (
