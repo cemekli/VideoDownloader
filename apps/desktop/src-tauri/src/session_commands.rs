@@ -589,21 +589,16 @@ pub async fn start_app_sign_in<R: Runtime>(
             // captcha pages use while they load. Never file, http or an
             // app's own scheme.
             .on_navigation(|u| matches!(u.scheme(), "https" | "about" | "blob"))
-            // Sign-in pages open "Sign in with ..." and captcha steps in a
-            // popup. Popups are opened in this same window instead (an https
-            // page only), so the cookies stay in one private store and the
-            // flow does not dead-end on a blocked popup.
-            .on_new_window({
-                let app = app.clone();
-                move |u, _| {
-                    if u.scheme() == "https" {
-                        let app = app.clone();
-                        std::thread::spawn(move || {
-                            if let Some(w) = app.get_webview_window(SIGN_IN_WINDOW) {
-                                let _ = w.navigate(u);
-                            }
-                        });
-                    }
+            // "Sign in with Google/Apple/..." and some captcha steps open a
+            // popup and hand the result back to this page through
+            // `window.opener`. An https popup is allowed as WebView2's own
+            // window: it shares this window's private store (the cookies stay
+            // in one place) and keeps the opener link. Anything else is
+            // refused. The popup has no access to the app either.
+            .on_new_window(|u, _| {
+                if u.scheme() == "https" {
+                    tauri::webview::NewWindowResponse::Allow
+                } else {
                     tauri::webview::NewWindowResponse::Deny
                 }
             });
