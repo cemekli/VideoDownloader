@@ -273,6 +273,9 @@ fn main_capability_grants_only_app_commands() {
         "allow-reconnect-session",
         "allow-verify-session",
         "allow-open-sign-in",
+        "allow-start-app-sign-in",
+        "allow-finish-app-sign-in",
+        "allow-cancel-app-sign-in",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1311,6 +1314,44 @@ fn session_commands_match_contract_and_never_show_the_folder() {
         "update_settings",
         json!({ "patch": { "offlineMode": false } }),
     );
+
+    // The in-app sign-in window (F5.7): only known platforms, never in
+    // Offline Mode; Done without the window says it was closed; Cancel
+    // without a window does nothing.
+    assert!(invoke(
+        &w,
+        "start_app_sign_in",
+        json!({ "provider": "generic" }),
+        app_origin()
+    )
+    .is_err());
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": true } }),
+    );
+    let e = invoke(
+        &w,
+        "start_app_sign_in",
+        json!({ "provider": "vk" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("OFFLINE_MODE"), "{e}");
+    ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "offlineMode": false } }),
+    );
+    let e = invoke(
+        &w,
+        "finish_app_sign_in",
+        json!({ "provider": "vk", "scope": ["download"] }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("session-app-closed"), "{e}");
+    assert_eq!(ok(&w, "cancel_app_sign_in", json!({})), Value::Null);
 
     // Only Firefox, only known platforms, only a profile that exists.
     for args in [

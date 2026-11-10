@@ -1007,3 +1007,35 @@ Doğrulama `verify` iznini ister (bağlama formunda üç işlem de varsayılan s
 - Windows DACL yolu Windows CI'da derlenir; davranışı Cuma'nın elle testinde (VK-10) görülür.
 
 **Açık noktalar.** Gerçek bir platformla dosya yöntemi (VK-10) ve VK canlı matrisi F5.6'dır. Öğe ayrıntısında erişim durumu (ör. "Login required · Session expired") henüz gösterilmiyor; ayrım şimdilik Downloads ve Sessions ekranlarındadır.
+
+## ADR-0025: Uygulama içi giriş penceresi (uygulamaya ait profil PoC)
+
+STATE.md F5.7. SPEC §21.3, §20.3, §21.1; DEC-08, DEC-10; VK-04.
+
+**Bağlam.** F5.2 (Firefox profili) ve F5.3 (çerez dosyası) çalışıyor, ama ikisi de kullanıcıdan uygulama dışında iş ister: Firefox'ta giriş yapmak ya da bir uzantıyla `cookies.txt` dışa aktarmak. Chrome ve Edge Windows'ta app-bound şifreleme yüzünden doğrudan okunamıyor. VK'da Firefox'taki giriş çerezleri yalnızca `vkvideo.ru` alanında; yt-dlp'nin VK çıkarıcısı `vk.com`'a istek yapıyor (`docs/platform-support.md`, 10 Kas 2026). SPEC §21.3 bu yüzden uygulamaya ait bir tarayıcı oturumunu araştırma olarak ister: kullanıcı giriş yapar, uygulama yalnızca o platformun çerezlerini alır, şifre ve ilgisiz site çerezleri alınmaz.
+
+**Karar: ayrı, özel (InPrivate) bir webview penceresi.** Sessions → Connect → "Sign in here, in a VideoVault window" seçilip izin verildiğinde `start_app_sign_in(provider)` platformun sabit https giriş sayfasını (F5.5'teki `sign_in_url`) `sign-in` etiketli yeni bir pencerede açar. Pencere:
+
+- `incognito(true)` ile açılır (WebView2'de InPrivate): çerezleri ve önbelleği diske yazılmaz, pencere kapanınca hepsi gider. Kalıcı bir "uygulama profili" klasörü yoktur, uzlaştırılacak bir şey kalmaz.
+- Uygulamanın komutlarına erişemez: `capabilities/main.json` yalnızca `main` penceresini kapsar; uzak sayfaya IPC izni verilmez. `tests/ipc.rs` izin listesini sabitler.
+- Yalnızca `https` bağlantılarını izler (`on_navigation`); `http`, `file`, özel şemalar reddedilir.
+- Offline Mode'da ve secret store olmayan sistemde (Windows dışı) açılmaz.
+- Aynı anda tek pencere vardır; başka bir site için açılırsa eskisi kapanır.
+
+**Karar: çerezler Done'da bir kez alınır, çerez dosyası yoluyla saklanır.** Kullanıcı giriş yapıp ana penceredeki "Done, I'm signed in" düğmesine basınca `finish_app_sign_in(provider, scope)` pencerenin çerez deposunu okur (`Webview::cookies()`, async komutta ve ayrı thread'de; WebView2 aksi hâlde kilitlenir, tauri-apps/wry#583). `vv_engine::cookiefile::from_webview` yalnızca platformun alan adlarına ait çerezleri Netscape satırlarına çevirir; alanlarında sekme ya da satır sonu olan çerez atılır (satır enjeksiyonu yok), sonra F5.3'ün süzgecinden (`filter`) aynen geçer. Sonuç F5.3 ile aynı yere gider: DPAPI secret store, `app_profile` yöntemiyle yeni profil, `needs_verification`. Pencere kapatılır. Platformun hiç çerezi yoksa (kullanıcı henüz giriş yapmamış) profil oluşmaz ve pencere açık kalır (`session-app-not-signed-in`); pencere kapatılmışsa `session-app-closed`. Cancel pencereyi kapatır, hiçbir şey saklanmaz.
+
+**Karar: motor `app_profile`'i çerez dosyası gibi çalıştırır.** `Attempt::prepare` ve `runnable` için `app_profile` = `cookie_file`: her yt-dlp çalıştırmasına iş başına çalışma kopyası verilir ve iş sonunda silinir (ADR-0024). Clear çerezleri siler; yeniden kullanmak için yeniden giriş yapılır (Reconnect yok, çerez dosyasındaki gibi).
+
+**Neden bu yol.** Tarayıcının kendi profilini okumaktan (F5.2) farklı olarak hiçbir şifre çözme ya da dosya kilidi sorunu yok: çerezleri uygulamanın kendi webview'ı tutuyor. Kalıcı ayrı bir profil (`data_directory`) daha az giriş isterdi ama oturum çerezlerini korumasız diskte bırakırdı; InPrivate pencere ve DPAPI'deki süzülmüş çerezler §21.3'ün "şifreli, yerel, dar kapsamlı" koşulunu karşılıyor. SPEC'in "WebView2, Playwright ve Chrome çerez depoları birbirinin yerine geçer" varsayımı yapılmıyor: yt-dlp WebView2'nin deposunu okumuyor, ona yalnızca süzülmüş bir çerez dosyası veriliyor.
+
+**Bilinen kısıtlar.** Google, gömülü webview'lardaki girişi reddedebiliyor ("This browser or app may not be secure"); YouTube için bu yol çalışmayabilir. Bazı siteler girişte captcha ya da uygulama onayı ister; kullanıcı bunları pencerede kendisi tamamlar. Pencere `vv-netguard` arkasından değil doğrudan bağlanır (WebView2 trafiği, NFR-11 istisnası olarak `docs/privacy.md`'ye yazılacak); yalnızca kullanıcı açıkça başlattığında ve Offline Mode kapalıyken açılır. VK'da pencere `vk.com` girişini açar; giriş `vk.com` çerezleri bırakırsa yt-dlp'nin `vk.com` isteği oturumlu gider. Bunun takipçilere özel videoyu açıp açmadığı Cuma'nın Windows testiyle görülecek (VK-04).
+
+**Komutlar.** `start_app_sign_in(provider)`, `finish_app_sign_in(provider, scope)` (`SessionDto`), `cancel_app_sign_in()`. `SessionOverview.appSignInSupported` eklendi.
+
+**Sonuçlar ve kanıt.**
+
+- `vv_engine::cookiefile` testi `webview_cookies_keep_only_the_platforms_and_round_trip`: yalnızca platformun ve süresi geçmemiş çerezleri kalır, host-only ve HttpOnly doğru yazılır, satır enjeksiyonu düşer, sonuç `filter`'dan değişmeden geçer, `Debug` değeri göstermez.
+- `session_commands.rs` testi `app_sign_in_keeps_only_the_sites_cookies_and_never_shows_them`: yalnızca o sitenin çerezi saklanır, DTO'da çerez ya da referans yok, profil çalıştırılabilir; giriş yapılmamış, izinsiz, secret store'suz durumlar reddedilir ve geride bir şey kalmaz.
+- `tests/ipc.rs`: sözleşme, izin listesi, bilinmeyen platform ve Offline Mode reddi, pencere yokken Done `session-app-closed`.
+- `apps/desktop/src/Sessions.test.tsx`: bağlama akışı (izin, pencere, Cancel, Done).
+- Gerçek pencere ve WebView2 çerez okuması yalnızca Windows'ta Cuma'nın elle testiyle görülür (Reddit ve VK). ✅ için bu test gerekir.

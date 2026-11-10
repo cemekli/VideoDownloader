@@ -220,7 +220,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F5.4 | Oturum doğrulama kanıtı kuralı ve `verify_session` | §12.1 | AC-19, AC-54 | ✅ PR #36: `ACCESS_DENIED` de (a) kanıtına girer; profille `ACCESS_DENIED` profile dokunmaz (AC-19); `verify_session` giriş gerektirmiş öğeyle (a) kanıtı; (b) yok (`docs/platform-support.md`). ADR-0024. CI [#42682887513](https://github.com/cemekli/VideoDownloader/actions/runs/42682887513) Linux ve Windows yeşil. Elle: Cuma, Windows 11, release exe, Reddit Firefox oturumunda Check now geçti (9 Kas 2026, 22:52). |
 | F5.5 | Sessions ekranı | §9.3 | E2E | ✅ PR #36: kenar çubuğunda Sessions; durum, son doğrulama, izinler, Check now, Reconnect, Clear, Remove, giriş sayfası; `e2e/sessions.spec.ts`, axe taraması. ADR-0024. CI #42682887513 yeşil. Elle: Cuma ekranı Windows'ta kullandı (9 Kas 2026). F5.2'de bağlanmış oturumda doğrulama izni olmadığı için Check now gizliydi; artık izin verilene kadar pasif görünür ve ne yapılacağını söyler. |
 | F5.6 | VK canlı test matrisi | §21.2 | VK-01…10 tarihli kayıt | ⬜ |
-| F5.7 | Uygulamaya ait tarayıcı profili PoC (araştırma) | §21.3, DEC-10 | ADR | ⬜ |
+| F5.7 | Uygulamaya ait tarayıcı profili PoC (araştırma) | §21.3, DEC-10 | ADR | 🟨 yazıldı: Sessions'ta "Sign in here, in a VideoVault window"; özel (InPrivate) giriş penceresi, uygulama komutlarına erişimi yok, yalnızca https; Done'da yalnızca platformun çerezleri DPAPI'ye (`app_profile`), motor çerez dosyası gibi çalıştırır. ADR-0025. ✅ için CI yeşil ve Cuma'nın Windows'ta gerçek girişle indirmesi (Reddit, VK-04). |
 
 **Çıkış kapısı:** SPEC §26.3. “Araştırma tamamlandı” ile “özellik destekleniyor” sonuçları ayrı kaydedilir.
 
@@ -302,6 +302,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 10 Kas 2026 | F5.7 yazıldı (🟨): uygulama içi giriş penceresi (InPrivate WebView2), yalnızca platformun çerezleri secret store'a, `app_profile` yöntemi çalışır hâle geldi; 3 yeni komut. ADR-0025. VK takipçilere özel video bilinen kısıt (yt-dlp tek başına da açamıyor), VK-01…10 not run. |
 | 9 Kas 2026 | F5.4 ve F5.5 ✅: Cuma'nın Reddit oturumunda Check now geçti. Check now artık doğrulama izni yokken gizlenmiyor, pasif görünüp izni gösteriyor. |
 | 9 Kas 2026 | F5.3–F5.5 yazıldı (🟨): çerez dosyası ve iş başına çalışma kopyası, `verify_session` ve `ACCESS_DENIED` kanıtı, Sessions ekranı, 4 yeni komut. ADR-0024. |
 | 9 Kas 2026 | F5.2 ✅: Reddit Firefox oturumuyla indi ve oynadı (Cuma, release exe). Taze derlemeden sonraki ilk açılışta thumbnail'lerin ~10 s gecikmesi ve pencerenin bir kez küçülmesi uygulamadan değil, Avast Antivirus'ün yeni exe'yi ve araçları taramasından; Avast kapalıyken thumbnail'ler hemen geldi (Cuma). F4.7 bilinen kısıtlarına yazılacak. |

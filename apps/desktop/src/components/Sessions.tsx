@@ -6,7 +6,7 @@ import { errorMessage } from "../labels";
 import { Modal } from "./Modal";
 
 type Notify = (text: string, tone?: "info" | "error") => void;
-type ConnectMethod = "firefox" | "file";
+type ConnectMethod = "firefox" | "file" | "app";
 
 const OPS: SessionOperation[] = ["metadata", "download", "verify"];
 const platformName = (p: string) => t(`platform.${p}` as MessageKey);
@@ -15,13 +15,21 @@ const opName = (o: SessionOperation) => t(`sessions.op.${o}` as MessageKey);
 /** A refused cookie file says why (`session-file-*`); everything else is the §19 message. */
 function connectError(e: unknown): string {
   const reason = e instanceof IpcError ? e.domain?.safeDetails?.reason : undefined;
-  if (reason === "session-file-no-cookies" || reason === "session-file-unreadable" || reason === "session-file-too-large") return t(`sessions.${reason}` as MessageKey);
+  if (
+    reason === "session-file-no-cookies" ||
+    reason === "session-file-unreadable" ||
+    reason === "session-file-too-large" ||
+    reason === "session-app-not-signed-in" ||
+    reason === "session-app-closed"
+  )
+    return t(`sessions.${reason}` as MessageKey);
   return errorMessage(errorCode(e));
 }
 
 /**
- * Connect a site (STATE.md F5.2, F5.3; SPEC §20.3, §21.1): with a Firefox
- * profile or a cookie file the user exported. The user sees what is read,
+ * Connect a site (STATE.md F5.2, F5.3, F5.7; SPEC §20.3, §21.1, §21.3):
+ * with a Firefox profile, a cookie file the user exported, or by signing in
+ * inside the app's own private sign-in window. The user sees what is read,
  * for which site and for what, and gives consent explicitly. Nothing is
  * connected until they press Connect.
  */
@@ -45,11 +53,44 @@ export function ConnectSession({
   const [ops, setOps] = useState<SessionOperation[]>(OPS);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The in-app sign-in window is open and waits for the user (F5.7).
+  const [waiting, setWaiting] = useState(false);
   const site = platformName(provider);
+
+  // A sign-in window left open when this form goes away is closed.
+  useEffect(() => {
+    if (!waiting) return;
+    return () => void client.cancelAppSignIn().catch(() => undefined);
+  }, [waiting, client]);
+
+  const finishApp = async () => {
+    setBusy(true);
+    try {
+      const s = await client.finishAppSignIn(provider, ops);
+      setWaiting(false);
+      notify(t("sessions.connected_app", { site: platformName(s.provider) }));
+      onConnected(s);
+    } catch (e) {
+      if (e instanceof IpcError && e.domain?.safeDetails?.reason === "session-app-closed") setWaiting(false);
+      notify(connectError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelApp = async () => {
+    setWaiting(false);
+    await client.cancelAppSignIn().catch(() => undefined);
+  };
 
   const connect = async () => {
     setBusy(true);
     try {
+      if (method === "app") {
+        await client.startAppSignIn(provider);
+        setWaiting(true);
+        return;
+      }
       const s = method === "firefox" ? await client.connectSession(provider, "firefox", profile, ops) : await client.connectSessionFile(provider, ops);
       if (!s) return; // The file dialog was closed.
       notify(t(method === "file" ? "sessions.connected_file" : "sessions.connected", { site: platformName(s.provider) }));
@@ -61,7 +102,21 @@ export function ConnectSession({
     }
   };
 
-  const ready = method === "firefox" ? profiles.length > 0 && !!profile : overview.cookieFileSupported;
+  const ready = method === "firefox" ? profiles.length > 0 && !!profile : method === "file" ? overview.cookieFileSupported : overview.appSignInSupported;
+  if (waiting)
+    return (
+      <div className="session-connect" data-testid="session-app-waiting">
+        <p data-testid="session-app-waiting-text">{t("sessions.app.waiting", { site })}</p>
+        <div className="actions">
+          <button type="button" className="button button-primary" disabled={busy} onClick={() => void finishApp()} data-testid="session-app-done">
+            {t("sessions.app.done")}
+          </button>
+          <button type="button" className="button" disabled={busy} onClick={() => void cancelApp()} data-testid="session-app-cancel">
+            {t("sessions.app.cancel")}
+          </button>
+        </div>
+      </div>
+    );
   return (
     <form
       className="session-connect"
@@ -91,6 +146,10 @@ export function ConnectSession({
           <input type="radio" name="session-method" checked={method === "file"} onChange={() => setMethod("file")} disabled={!overview.cookieFileSupported} data-testid="session-method-file" />
           {t("sessions.method.file")}
         </label>
+        <label className="choice">
+          <input type="radio" name="session-method" checked={method === "app"} onChange={() => setMethod("app")} disabled={!overview.appSignInSupported} data-testid="session-method-app" />
+          {t("sessions.method.app")}
+        </label>
       </fieldset>
       {method === "firefox" ? (
         profiles.length === 0 ? (
@@ -111,9 +170,13 @@ export function ConnectSession({
             </select>
           </label>
         )
-      ) : (
+      ) : method === "file" ? (
         <p className="muted small" data-testid="session-file-help">
           {overview.cookieFileSupported ? t("sessions.file.help", { site }) : t("sessions.file.unsupported")}
+        </p>
+      ) : (
+        <p className="muted small" data-testid="session-app-help">
+          {overview.appSignInSupported ? t("sessions.app.help", { site }) : t("sessions.app.unsupported")}
         </p>
       )}
       <fieldset className="choice-group">
@@ -131,7 +194,7 @@ export function ConnectSession({
         ))}
       </fieldset>
       <p className="muted small" id="session-consent-help">
-        {method === "firefox" ? t("sessions.consent.body", { site, profile }) : t("sessions.consent.file", { site })}
+        {method === "firefox" ? t("sessions.consent.body", { site, profile }) : method === "file" ? t("sessions.consent.file", { site }) : t("sessions.consent.app", { site })}
       </p>
       <label className="choice">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} aria-describedby="session-consent-help" data-testid="session-consent" />
@@ -139,7 +202,7 @@ export function ConnectSession({
       </label>
       <div className="actions">
         <button type="submit" className="button button-primary" disabled={busy || !agreed || ops.length === 0 || !ready} data-testid="session-connect-submit">
-          {method === "file" ? t("sessions.connect_file") : t("sessions.connect")}
+          {method === "file" ? t("sessions.connect_file") : method === "app" ? t("sessions.app.open") : t("sessions.connect")}
         </button>
       </div>
     </form>
@@ -150,6 +213,7 @@ const verifyTone = (o: VerifyOutcome): "info" | "error" => (o === "verified" || 
 
 function methodText(s: SessionDto): string {
   if (s.method === "cookie_file") return t("sessions.method.file_short");
+  if (s.method === "app_profile") return t("sessions.method.app_short");
   return `Firefox (${s.browserProfile ?? "?"})`;
 }
 
@@ -190,7 +254,7 @@ function SessionRow({ s, client, busy, act, notify }: { s: SessionDto; client: S
           {t("sessions.verify_needs_consent")}
         </p>
       )}
-      {cleared && <p className="muted small">{t(s.method === "cookie_file" ? "sessions.cleared_file" : "sessions.cleared")}</p>}
+      {cleared && <p className="muted small">{t(s.method === "cookie_file" ? "sessions.cleared_file" : s.method === "app_profile" ? "sessions.cleared_app" : "sessions.cleared")}</p>}
       <div className="actions">
         {!cleared && (
           <button

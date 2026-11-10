@@ -687,6 +687,8 @@ export interface SessionOverview {
   providers: Platform[];
   /** This system keeps a cookie file's cookies in the OS secret store (Windows). */
   cookieFileSupported: boolean;
+  /** The in-app sign-in window can be used (F5.7; same secret store, so Windows). */
+  appSignInSupported: boolean;
 }
 
 /** What `verifySession` found (F5.4, SPEC §12.1). */
@@ -711,12 +713,17 @@ export interface VerifyDto {
   code: string | null;
 }
 
-/** Sessions (F5.2–F5.5): connect a Firefox profile or a cookie file to a platform with explicit consent. */
+/** Sessions (F5.2–F5.5, F5.7): connect a Firefox profile, a cookie file or the in-app sign-in to a platform with explicit consent. */
 export interface SessionClient {
   listSessions(): Promise<SessionOverview>;
   connectSession(provider: Platform, browser: "firefox", browserProfile: string, scope: SessionOperation[]): Promise<SessionDto>;
   /** Opens a file dialog in the backend; `null` when it was closed. The file's path never reaches the UI. */
   connectSessionFile(provider: Platform, scope: SessionOperation[]): Promise<SessionDto | null>;
+  /** Opens the in-app sign-in window on the site's sign-in page (F5.7). It has no access to the app. */
+  startAppSignIn(provider: Platform): Promise<void>;
+  /** Keeps the site's cookies from the sign-in window as a session and closes the window. */
+  finishAppSignIn(provider: Platform, scope: SessionOperation[]): Promise<SessionDto>;
+  cancelAppSignIn(): Promise<void>;
   reconnectSession(id: string, scope: SessionOperation[]): Promise<SessionDto>;
   verifySession(id: string): Promise<VerifyDto>;
   /** Opens the platform's sign-in page in the user's browser. */

@@ -83,6 +83,9 @@
     "allow-reconnect-session",
     "allow-verify-session",
     "allow-open-sign-in",
+    "allow-start-app-sign-in",
+    "allow-finish-app-sign-in",
+    "allow-cancel-app-sign-in",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

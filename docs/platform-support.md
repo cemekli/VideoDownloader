@@ -57,7 +57,7 @@ VK-01…VK-10 canlı test matrisi SPEC §21.2'de tanımlıdır. Hiçbiri çalı�
 
 **Oturum doğrulama (§12.1, ADR-0024).** Platforma özgü, yalnızca oturum açıkken geçen bir kontrol (kanıt (b)) hiçbir platform için yok: uygulamanın istekleri yalnızca yt-dlp üzerinden gider ve yt-dlp böyle bir kontrol sunmaz. Bu yüzden her platformda oturum yalnızca (a) ile doğrulanır: giriş gerektirmiş bir öğe profilsiz reddedilir, profille açılır. Sessions ekranındaki "Check now" bunu kaydedilmiş en yeni böyle öğeyle yapar; öyle bir öğe yoksa doğrulama yapılamaz.
 
-**Yöntemler.** Firefox profili (F5.2, Reddit'te 9 Kas 2026'da çalıştı) ve dışa aktarılmış çerez dosyası (F5.3, yalnızca Windows; gerçek platformla henüz denenmedi, VK-10). Chrome ve Edge Windows'ta doğrudan okunamaz (app-bound şifreleme); bunlardaki oturum çerez dosyası olarak dışa aktarılarak kullanılabilir.
+**Yöntemler.** Firefox profili (F5.2, Reddit'te 9 Kas 2026'da çalıştı) ve dışa aktarılmış çerez dosyası (F5.3, yalnızca Windows; gerçek platformla henüz denenmedi, VK-10). Chrome ve Edge Windows'ta doğrudan okunamaz (app-bound şifreleme); bunlardaki oturum çerez dosyası olarak dışa aktarılarak kullanılabilir. Üçüncü yol uygulama içi giriş penceresidir (F5.7, ADR-0025): kullanıcı sitenin giriş sayfasına VideoVault'un kendi özel penceresinde giriş yapar, yalnızca o sitenin çerezleri saklanır. Henüz gerçek platformla denenmedi (VK-04); Google gömülü pencerelerde girişi reddedebilir.
 
 ## Kayıt kuralı
 

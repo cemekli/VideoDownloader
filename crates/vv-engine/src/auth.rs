@@ -72,7 +72,10 @@ impl Attempt {
                     copy: None,
                 })
             }
-            Method::CookieFile => {
+            // Both keep the platform's cookies in the secret store: a
+            // cookie file the user exported, or the in-app sign-in window's
+            // cookies (F5.7, ADR-0025).
+            Method::CookieFile | Method::AppProfile => {
                 let op = self.op.ok_or(ErrorCode::CookieAccessFailed)?;
                 let secret = cx
                     .store
@@ -85,7 +88,6 @@ impl Attempt {
                     copy: Some(copy),
                 })
             }
-            Method::AppProfile => Err(ErrorCode::CookieAccessFailed),
         }
     }
 }
@@ -160,12 +162,11 @@ pub fn cookies_source(p: &AuthProfile) -> Option<OsString> {
 }
 
 /// A profile a run can use: a browser profile with its folder, or a cookie
-/// file whose cookies are stored.
+/// file or in-app sign-in whose cookies are stored.
 pub fn runnable(p: &AuthProfile) -> bool {
     match p.method {
         Method::BrowserCookies => cookies_source(p).is_some(),
-        Method::CookieFile => p.has_secret,
-        Method::AppProfile => false,
+        Method::CookieFile | Method::AppProfile => p.has_secret,
     }
 }
 
