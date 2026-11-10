@@ -223,6 +223,12 @@ const RULES: &[(ErrorCode, &[&str])] = &[
             "only available to community members",
             "available only to community members",
             "private video. sign in",
+            // Instagram: posts limited to some audiences (age or
+            // sensitive-content gates); they open for a signed-in account
+            // that may see them. yt-dlp passes Instagram's ruling through.
+            "isn't available to everyone",
+            "can't be seen by certain audiences",
+            "restricted video",
         ],
     ),
     (
@@ -329,11 +335,13 @@ mod tests {
     }
 
     #[test]
-    fn vk_follower_only_videos_ask_for_a_login() {
+    fn member_and_audience_gated_posts_ask_for_a_login() {
         for m in [
             "[vk] -159700045_456248459: Video only available to followers",
             "[vk] -1_2: This video is available only to community members",
             "[youtube] abc: Private video. Sign in if you've been granted access to this video",
+            "[Instagram] DfiGa52tUKf: This content isn't available to everyone: It can't be seen by certain audiences.",
+            "[Instagram] abc: Restricted Video: You must be 18 years old or over to see this reel.",
         ] {
             assert_eq!(classify(m), ErrorCode::LoginRequired, "{m}");
         }
