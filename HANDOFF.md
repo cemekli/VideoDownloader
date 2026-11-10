@@ -4,6 +4,8 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
+- **10 Kas: VK takipçilere özel video ertelendi (Cuma'nın kararı).** yt-dlp tek başına da çerezle `Video only available to followers` diyor; VK giriş çerezleri yalnızca `vkvideo.ru`'da. Bilinen kısıt olarak `docs/platform-support.md`'ye yazıldı; VK-01…10 not run. F5.3 ✅ için gerçek çerez dosyası testi Reddit cookies.txt ile yapılabilir. Sıradaki aday F5.7 (uygulama içi giriş PoC).
+
 - **9 Kas akşamı, Cuma'nın VK çerez dosyası testinde durduk (PR #37, açık):** PR #37'de üç düzeltme var:
   - Check now düğmesi izin yokken de görünür (devre dışı ve açıklamalı).
   - Sessions ve Downloads ekranları pencereye sığmayınca kayar; daha önce Facebook satırı yarıda kesiliyordu.
