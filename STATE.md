@@ -302,6 +302,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 11 Kas 2026 | F6.2 düzeltme: Türkçe altyazıda `&` sonrası çok baytlı harfte panic (iş takılı kalıyordu); iş işleyicilerinde panic artık işi `INTERNAL_ERROR` ile bitiriyor; Transcript paneli işin gerçek durumunu ve Cancel'ı gösteriyor; fuzz testi. ADR-0027. |
 | 10 Kas 2026 | F6.1 ✅: Cuma Windows'ta gerçek model indirmesini test etti, çalışıyor. |
 | 10 Kas 2026 | F6.2 ilk yarı (🟨): site altyazısı `fetch_captions` işi, iz seçimi (yükleyici > konuşulan dilde otomatik; çeviri yok), WebVTT ayrıştırıcı (etiket temizliği, kayan otomatik satırların katlanması), Details → Transcript; `list_transcripts`, `get_transcript`, `fetch_captions`, `delete_transcript`. ADR-0027. |
 | 10 Kas 2026 | F6 başladı. F6.1 yazıldı (🟨): migration 0013 (transkript, segment, arama parçası ve FTS, `model_installation`), whisper.cpp model kataloğu `tools/models.json`, izinli ve sürdürülebilir `model_download` işi (SHA-256 + yayımlanmış SHA-1), Settings → Transcription; 4 yeni komut. ADR-0026. |
