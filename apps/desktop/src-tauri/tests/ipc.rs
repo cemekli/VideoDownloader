@@ -304,7 +304,9 @@ fn csp_allows_no_remote_sources() {
     let html = include_str!("../../index.html");
     let first_script = html.find("<script").expect("index.html has scripts");
     assert!(
-        html[first_script..].starts_with(r#"<script src="/freeze-prototype.js"></script>"#),
+        html.get(first_script..)
+            .unwrap_or_default()
+            .starts_with(r#"<script src="/freeze-prototype.js"></script>"#),
         "freeze-prototype.js must be the first script"
     );
     assert!(include_str!("../../public/freeze-prototype.js")

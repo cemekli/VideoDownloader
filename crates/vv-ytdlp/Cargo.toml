@@ -10,3 +10,9 @@ description = "VideoVault yt-dlp adapter: fixed arguments and parsing of its JSO
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 vv-domain = { path = "../vv-domain" }
+
+[dev-dependencies]
+vv-fuzz = { path = "../vv-fuzz" }
+
+[lints]
+workspace = true

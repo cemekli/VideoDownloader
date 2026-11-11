@@ -344,7 +344,7 @@ fn events_hold_no_paths_or_queries() {
         "{json}"
     );
     assert!(
-        !json.contains(&g.proxy_url()[10..40]),
+        !json.contains(g.proxy_url().get(10..40).unwrap()),
         "token leaked: {json}"
     );
 }

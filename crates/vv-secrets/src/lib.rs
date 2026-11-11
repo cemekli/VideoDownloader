@@ -80,7 +80,7 @@ impl SecretRef {
 
     #[cfg_attr(not(windows), allow(dead_code))]
     fn file_stem(&self) -> &str {
-        &self.0[PREFIX.len()..]
+        self.0.strip_prefix(PREFIX).unwrap_or(&self.0)
     }
 }
 

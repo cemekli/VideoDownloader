@@ -61,10 +61,9 @@ pub fn domains(p: Platform) -> &'static [&'static str] {
 fn domain_matches(domain: &str, bases: &[&str]) -> bool {
     let d = domain.trim_start_matches('.').to_ascii_lowercase();
     !d.is_empty()
-        && bases.iter().any(|b| {
-            d == *b
-                || (d.len() > b.len() && d.ends_with(b) && d[..d.len() - b.len()].ends_with('.'))
-        })
+        && bases
+            .iter()
+            .any(|b| d == *b || d.strip_suffix(b).is_some_and(|sub| sub.ends_with('.')))
 }
 
 /// The platform's cookies from a Netscape file, as a Netscape file.

@@ -40,8 +40,8 @@ fn check_list(table: &str, col: &str) -> Vec<String> {
         .lines()
         .find(|l| l.trim_start().starts_with(&format!("{col} ")))
         .unwrap_or_else(|| panic!("{table}.{col}"));
-    let inner = &line[line.find(" IN (").unwrap() + 5..];
-    let inner = &inner[..inner.find(')').unwrap()];
+    let inner = line.split_once(" IN (").unwrap().1;
+    let inner = inner.split_once(')').unwrap().0;
     inner
         .split(',')
         .map(|v| v.trim().trim_matches('\'').to_owned())
@@ -204,7 +204,7 @@ fn item_round_trips_every_field() {
 fn ids_are_random_uuids() {
     let a = new_id();
     assert_eq!(a.len(), 36);
-    assert_eq!(&a[14..15], "4", "version 4");
+    assert_eq!(a.get(14..15), Some("4"), "version 4");
     assert_ne!(a, new_id());
 }
 

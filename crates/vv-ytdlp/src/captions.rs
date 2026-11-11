@@ -202,6 +202,10 @@ fn timestamp(s: &str) -> Option<i64> {
     Some(((h * 60 + m) * 60 + sec) * 1000 + frac.parse::<i64>().ok()?)
 }
 
+#[expect(
+    clippy::string_slice,
+    reason = "offsets are where an ASCII `&` or `;` is; the fuzz tests check this"
+)]
 fn decode_entities(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;

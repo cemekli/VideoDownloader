@@ -14,3 +14,6 @@ vv-domain = { path = "../vv-domain" }
 
 [dev-dependencies]
 vv-ytdlp = { path = "../vv-ytdlp" }
+
+[lints]
+workspace = true
