@@ -178,6 +178,15 @@ export async function checkFfmpeg({ ffmpeg, ffprobe, update = false, log = conso
     log(`  existing output with -n: exit ${again.code}, file ${statSync(out).size === sizeBefore ? "unchanged" : "CHANGED"}`);
     if (statSync(out).size !== sizeBefore) bad("-n overwrote an existing output");
 
+    // Transcription audio (F6.2, ADR-0028): first audio stream as 16 kHz mono PCM WAV.
+    const wav = join(work, "audio.wav");
+    const ex = await run(ffmpeg, [...args.common, "-nostdin", ...args.input, "-i", fileArg(join(root, "tests", "fixtures", "media", "mp4-h264-aac.mp4")), ...args.audioWavOutput, fileArg(wav)]);
+    const pw = ex.code === 0 ? await run(ffprobe, probeArgv(fileArg(wav))) : null;
+    const wj = pw?.code === 0 ? JSON.parse(pw.stdout) : null;
+    const ws = wj?.streams ?? [];
+    if (wj?.format.format_name !== "wav" || ws.length !== 1 || ws[0].codec_name !== "pcm_s16le" || ws[0].channels !== 1) bad(`audio WAV: exit ${ex.code}, got ${JSON.stringify(wj)}: ${ex.stderr}`);
+    else ok("MP4 -> 16 kHz mono PCM WAV for transcription");
+
     // A 20-minute file: the 3 s fixture looped 400 times, stream copy.
     const long = join(work, "long.mkv");
     const mk = await run(ffmpeg, [...args.common, "-nostdin", "-stream_loop", "399", "-i", fileArg(join(root, "tests", "fixtures", "media", "mkv-h264-aac.mkv")), "-c", "copy", fileArg(long)]);

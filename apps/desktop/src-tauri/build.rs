@@ -89,6 +89,7 @@ const COMMANDS: &[&str] = &[
     "list_transcripts",
     "get_transcript",
     "fetch_captions",
+    "transcribe_locally",
     "delete_transcript",
 ];
 

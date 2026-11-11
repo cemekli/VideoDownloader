@@ -283,6 +283,7 @@ fn main_capability_grants_only_app_commands() {
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
+        "allow-transcribe-locally",
         "allow-delete-transcript",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
@@ -1468,6 +1469,35 @@ fn transcript_commands_match_contract_and_queue_captions() {
     assert_eq!(l["transcripts"], json!([]));
     assert!(l["captionsJob"].is_null());
     assert_eq!(l["canFetchCaptions"], true);
+    assert_same_shape(
+        &l,
+        &with_nulls_of(&l, &spec("list_transcripts")),
+        "list_transcripts",
+    );
+    // A bookmark has no file to transcribe on this PC (F6.2, ADR-0028).
+    assert!(l["transcribeJob"].is_null());
+    assert!(l["transcribeModel"].is_null());
+    assert!(l["transcribeElapsedMs"].is_null());
+    assert_eq!(l["local"]["ready"], false);
+    assert_eq!(l["local"]["reason"], "no-media");
+    assert_eq!(l["local"]["models"], json!([]));
+    assert_eq!(l["local"]["languages"], json!(["auto", "tr", "en"]));
+    let e = invoke(
+        &w,
+        "transcribe_locally",
+        json!({ "itemId": id, "modelId": "whisper-base", "language": "auto" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "FILE_MISSING");
+    let e = invoke(
+        &w,
+        "transcribe_locally",
+        json!({ "itemId": id, "modelId": "whisper-base", "language": "de; rm -rf" }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
 
     let mut db =
         Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();

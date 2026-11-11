@@ -11,6 +11,12 @@
 //!    quarantine, policy) the state is `TOOL_BLOCKED`.
 //! 4. The version it prints is the pinned one (`TOOL_MISSING` otherwise).
 //!
+//! A tool with companion libraries (whisper.cpp's DLLs, ADR-0028) is not
+//! started unless each of them is there with its pinned hash too: Windows
+//! loads a DLL from the executable's folder first, so an unchecked one there
+//! would run inside a checked executable. An optional tool with no build for
+//! this platform is `unavailable`, which never blocks anything else.
+//!
 //! The report holds versions, sources and licences for Diagnostics and
 //! never a path (§18.3).
 
@@ -20,8 +26,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use vv_domain::error::ErrorCode;
 use vv_tools::{
-    check_version, parse_deno_version, parse_ffmpeg_banner, parse_ytdlp_version, verify_file,
-    Manifest, Provenance, ToolId, VerifyError, Version, VersionCheck, DENO_MIN_FOR_YTDLP,
+    check_version, parse_deno_version, parse_ffmpeg_banner, parse_whisper_version,
+    parse_ytdlp_version, verify_file, Companion, Manifest, Provenance, ToolId, VerifyError,
+    Version, VersionCheck, DENO_MIN_FOR_YTDLP,
 };
 
 /// How long a version query may take before the tool counts as broken.
@@ -44,6 +51,7 @@ pub struct ToolPaths {
     pub deno: PathBuf,
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
+    pub whisper: PathBuf,
 }
 
 impl ToolPaths {
@@ -63,6 +71,7 @@ impl ToolPaths {
             deno: exe(ToolId::Deno),
             ffmpeg: exe(ToolId::Ffmpeg),
             ffprobe: exe(ToolId::Ffprobe),
+            whisper: exe(ToolId::WhisperCli),
         }
     }
 
@@ -72,6 +81,7 @@ impl ToolPaths {
             ToolId::Deno => &self.deno,
             ToolId::Ffmpeg => &self.ffmpeg,
             ToolId::Ffprobe => &self.ffprobe,
+            ToolId::WhisperCli => &self.whisper,
         }
     }
 }
@@ -83,6 +93,9 @@ pub enum ToolState {
     Missing,
     Blocked,
     ChecksumMismatch,
+    /// An optional tool with no build for this platform (whisper-cli on
+    /// Linux).
+    Unavailable,
 }
 
 /// One tool as Diagnostics shows it (DL-09, MT-11).
@@ -90,6 +103,8 @@ pub enum ToolState {
 #[serde(rename_all = "camelCase")]
 pub struct ToolHealth {
     pub id: &'static str,
+    /// Nothing but its own feature needs it (whisper-cli).
+    pub optional: bool,
     /// The pinned version (`tools/manifest.json`).
     pub version: String,
     /// What the tool reported, when it ran.
@@ -140,6 +155,7 @@ impl ToolReport {
                 .iter()
                 .map(|t| ToolHealth {
                     id: t.id.as_str(),
+                    optional: t.id.is_optional(),
                     version: t.version.clone(),
                     reported_version: None,
                     state: ToolState::Missing,
@@ -169,6 +185,7 @@ pub fn check_tools(manifest: &Manifest, paths: &ToolPaths, now: i64) -> ToolRepo
         .map(|t| {
             let mut h = ToolHealth {
                 id: t.id.as_str(),
+                optional: t.id.is_optional(),
                 version: t.version.clone(),
                 reported_version: None,
                 state: ToolState::Ok,
@@ -178,15 +195,22 @@ pub fn check_tools(manifest: &Manifest, paths: &ToolPaths, now: i64) -> ToolRepo
                 provenance: provenance_name(&t.provenance),
             };
             let result = match manifest.artifact(t.id, platform()) {
+                None if t.id.is_optional() => {
+                    h.state = ToolState::Unavailable;
+                    h.code = Some(ErrorCode::ToolMissing);
+                    return h;
+                }
                 None => Err(ErrorCode::ToolMissing),
-                Some(a) => check_one(
-                    t.id,
-                    &t.version,
-                    t.build.as_deref(),
-                    &a.executable_sha256,
-                    paths.get(t.id),
-                    &mut h.reported_version,
-                ),
+                Some(a) => check_companions(paths.get(t.id), &a.companions).and_then(|()| {
+                    check_one(
+                        t.id,
+                        &t.version,
+                        t.build.as_deref(),
+                        &a.executable_sha256,
+                        paths.get(t.id),
+                        &mut h.reported_version,
+                    )
+                }),
             };
             if let Err(code) = result {
                 h.state = match code {
@@ -214,6 +238,17 @@ fn verify_code(e: &VerifyError) -> ErrorCode {
         }
         other => other.code(),
     }
+}
+
+/// Every companion library next to `exe`, with its pinned hash.
+fn check_companions(exe: &Path, companions: &[Companion]) -> Result<(), ErrorCode> {
+    let Some(dir) = exe.parent() else {
+        return Err(ErrorCode::ToolMissing);
+    };
+    for c in companions {
+        verify_file(&dir.join(&c.file), &c.sha256, None).map_err(|e| verify_code(&e))?;
+    }
+    Ok(())
 }
 
 fn check_one(
@@ -252,6 +287,11 @@ fn check_one(
                 },
                 _ => check_version(pinned, v),
             }
+        }
+        ToolId::WhisperCli => {
+            let v = parse_whisper_version(&stdout);
+            *reported = v.map(|v| v.to_string());
+            check_version(pinned, v)
         }
         ToolId::Ffmpeg | ToolId::Ffprobe => match parse_ffmpeg_banner(&stdout) {
             None => VersionCheck::Unrecognised,

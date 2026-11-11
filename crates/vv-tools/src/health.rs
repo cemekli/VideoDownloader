@@ -55,6 +55,15 @@ pub fn parse_deno_version(stdout: &str) -> Option<Version> {
     Version::parse(v)
 }
 
+/// `whisper-cli --version` prints `whisper.cpp version: 1.9.2` on stdout
+/// (whisper.cpp `examples/cli/cli.cpp`) and exits 0.
+pub fn parse_whisper_version(stdout: &str) -> Option<Version> {
+    let line = stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("whisper.cpp version:"))?;
+    Version::parse(line.trim())
+}
+
 /// The `[debug] JS runtimes:` line of `yt-dlp -v`, which says what yt-dlp
 /// actually picked. Used in diagnostics and the compatibility check.
 #[derive(Debug, Clone, PartialEq, Eq)]

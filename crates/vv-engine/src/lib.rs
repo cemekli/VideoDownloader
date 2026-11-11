@@ -7,6 +7,7 @@
 //! - [`formats`]: quality presets from real format data (F3.5).
 //! - [`download`]: download, merge, verification, staging → final (F3.6).
 //! - [`captions`]: the site's own captions as a transcript (F6.2).
+//! - [`transcribe`]: local transcription with whisper.cpp (F6.2).
 //! - [`storage`], [`storage_move`]: quota, usage and moving a root (F3.9).
 //! - [`runtime`]: the scheduler and its worker pools.
 //!
@@ -27,9 +28,10 @@ pub mod runtime;
 pub mod storage;
 pub mod storage_move;
 pub mod toolset;
+pub mod transcribe;
 pub mod verify;
 pub mod worker;
 pub mod ytdlp;
 
-pub use context::{Context, Dirs, Events, NoEvents, Store, Tools};
+pub use context::{Context, Dirs, Events, NoEvents, Store, Tools, WhisperTool};
 pub use runtime::Engine;

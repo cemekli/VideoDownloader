@@ -82,6 +82,28 @@ pub const THUMBNAIL_OUTPUT: &[&str] = &[
     "-n",
 ];
 
+/// The first audio stream as 16 kHz mono 16-bit WAV, what whisper.cpp reads
+/// (F6.2, ADR-0028). Video, subtitles and data streams are dropped; `-n`
+/// never overwrites.
+pub const AUDIO_WAV_OUTPUT: &[&str] = &[
+    "-map",
+    "0:a:0",
+    "-vn",
+    "-sn",
+    "-dn",
+    "-ac",
+    "1",
+    "-ar",
+    "16000",
+    "-c:a",
+    "pcm_s16le",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "wav",
+    "-n",
+];
+
 /// `file:` + the path, one argv entry.
 pub fn file_arg(path: &Path) -> OsString {
     let mut v = OsString::from("file:");
@@ -143,6 +165,20 @@ pub fn thumbnail_args(input: &Path, output: &Path, at_ms: u64) -> Result<Vec<OsS
     v.push("-i".into());
     v.push(file_arg(input));
     v.extend(strs(THUMBNAIL_OUTPUT));
+    v.push(file_arg(output));
+    Ok(v)
+}
+
+/// Full ffmpeg argv for the transcription audio of one local file.
+pub fn audio_wav_args(input: &Path, output: &Path) -> Result<Vec<OsString>, ArgsError> {
+    absolute(input)?;
+    absolute(output)?;
+    let mut v: Vec<OsString> = strs(COMMON).collect();
+    v.push("-nostdin".into());
+    v.extend(strs(INPUT));
+    v.push("-i".into());
+    v.push(file_arg(input));
+    v.extend(strs(AUDIO_WAV_OUTPUT));
     v.push(file_arg(output));
     Ok(v)
 }

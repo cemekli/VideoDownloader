@@ -1,9 +1,13 @@
-# Devir notu — 10 Kasım 2026 (yarın 11 Kasım devam)
+# Devir notu — 11 Kasım 2026
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
+- **11 Kas: F6.2 ikinci yarı yazıldı (🟨, ADR-0028): yerel transkripsiyon.** Details → Transcript → "Transcribe on this PC": dil (otomatik/Türkçe/İngilizce), model (indirilmiş olanlar, varsayılan en büyük), ilerleme yüzdesi, iptal. İş: FFmpeg öğenin dosyasını 16 kHz mono WAV yapar → `whisper-cli` (CPU) JSON yazar → `generated_local` döküm. Çevrimdışı çalışır. Dosyası olmayan öğede düğme yok.
+  - Paket bulguları: whisper.cpp v1.9.2 `whisper-bin-x64.zip` (8 194 445 bayt, SHA-256 `49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a`). `whisper-cli.exe` yanında `whisper.dll`, `ggml.dll`, `ggml-base.dll` ve 9 `ggml-cpu-*.dll` gerekir (CPU'ya göre biri yüklenir); hepsi `tools/manifest.json` → `companions` altında hash'li. SDL2/parakeet alınmaz.
+  - İkili Visual C++ çalışma zamanını ister (MSVCP140, VCRUNTIME140, VCOMP140); zip'te yok. Cuma'nın makinesinde (Visual Studio Build Tools kurulu) ve GitHub Windows imajında var. Yoksa Diagnostics'te whisper-cli "Missing" görünür. F4 kurulumu bunu çözmeli.
+  - whisper.cpp Linux ikilisi yayımlamıyor: araç isteğe bağlı, Linux'ta "Not available on this system"; Linux CI sahte `whisper-cli` (`crates/vv-engine/src/bin/vv-fake-whisper.rs`) kullanır. Windows CI gerçek ikiliyi Tiny modelle bir kez çalıştırır (Hugging Face erişilebilirse).
 - **10 Kas: F6 başladı (transkript ve zaman kodlu arama).** Plan beş PR: (1) veri modeli + izinli model indirme (F6.1), (2) site altyazısı + yerel whisper.cpp (F6.2), (3) uzun ses parçalama, checkpoint, iptal (F6.3), (4) transkript araması, panel, zaman koduna gitme, Markdown not (F6.4–F6.5), (5) kaynak sınırları ve AI Processing ekranı (F6.6). F6.7 ölçüm raporu Cuma'nın Windows'ta TR/EN denemesiyle.
 - **F6.1 bitti (✅, ADR-0026, PR #43).** Settings → Transcription: modeller (Tiny/Base/Small/Medium, çok dilli), izin penceresi, Hugging Face'ten sabit commit, SHA-256 + SHA-1 kontrolü. Cuma Windows'ta test etti, çalışıyor (10 Kas).
 - **F6.2 ilk yarı yazıldı (🟨, ADR-0027): sitenin altyazısı.** Details panelinde "Transcript" bölümü → "Get site captions". Uygulama sitenin altyazı izlerini okur, videonun dilindeki yükleyici altyazısını (yoksa sitenin otomatik altyazısını) alır ve zaman kodlu döküm olarak saklar; başka dile otomatik çeviriler alınmaz. Sonraki PR: whisper.cpp ile yerel transkripsiyon (altyazısı olmayan videolar ve yerel dosyalar).
@@ -33,13 +37,15 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
-0. **Yarın buradan devam (11 Kas):** PR #44 (F6.2 ilk yarı, site altyazısı) CI yeşil mi bak; Cuma merge eder ve 5. adımdaki testi yapar. Sonra F6.2 ikinci yarı: whisper.cpp `whisper-cli` aracını `tools/manifest.json`'a ekle (v1.9.2 `whisper-bin-x64.zip`, yanında DLL'ler gelir, manifest ek dosyaları desteklemeli; araç isteğe bağlı, `REQUIRED_TOOLS`'ta değil; Linux'ta hazır ikili yok), sonra `transcription` işi: FFmpeg ile 16 kHz mono WAV → `whisper-cli` JSON → `generated_local` döküm, Details → Transcript'te "Transcribe on this PC".
+0. **F6.2 yerel transkripsiyon elle test (Cuma, release exe).** `git pull`, sonra `node scripts/fetch-tools.mjs` (yeni: whisper-cli ve DLL'leri iner), `npm run desktop:exe`, `tools\bin`'i `target\release\tools`'a yeniden kopyala (whisper-cli klasörü dahil). Settings → Diagnostics'te `whisper-cli` "OK" olmalı. Settings → Transcription'da bir model (Base ya da Small) indir. Türkçe konuşmalı indirilmiş bir video seç → Details → Transcript → Language: Turkish → "Transcribe on this PC". Yüzde ilerlemeli, sonunda "Transcribed on this PC (whisper-…)" satırı ve zaman kodlu Türkçe metin gelmeli. Aynısını İngilizce bir video ve "Detect automatically" ile dene; bir kez de Cancel'a bas. Sonuç ve süre (video uzunluğu, model, geçen süre) F6.7 için not edilsin.
+
+1. PR #44 (F6.2 ilk yarı) merge edildi (11 Kas). Site altyazısı testi (aşağıda 5. adım) hâlâ bekliyor.
 
 1. PR #37 CI'ı Windows ve Linux'ta yeşil mi bak, sonra Cuma merge eder.
 2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
 3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
 4. F5.7 elle test (Cuma, release exe): Sessions → Reddit → Connect → "Sign in here" → pencerede giriş → Done → Reddit gönderisi iner. Sonra aynısı VK için (`vk.com` girişi) ve takipçilere özel videoda Try again (VK-04). Sonuç `docs/platform-support.md`'ye.
-5. F6.2 site altyazısı elle test (Cuma, release exe): Türkçe altyazılı bir YouTube videosu ve İngilizce otomatik altyazılı bir video kaydet → Details → Transcript → Get site captions. Dil, kaynak (uploader/automatic) ve zaman kodlu satırlar doğru mu; altyazısız bir videoda "no captions" mesajı çıkıyor mu.
+5. ~~F6.2 site altyazısı elle test~~ — yapıldı (11 Kas, Cuma): TR otomatik altyazı, EN video, sil/yeniden al çalışıyor.
 
 ## Bilinmesi gerekenler
 

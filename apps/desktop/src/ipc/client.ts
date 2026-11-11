@@ -103,12 +103,15 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   const recs = records ?? scenarioRecords(scenario);
   const library = createFixtureLibrary(recs, scenario);
   const downloads = createFixtureDownloads(recs, scenario);
+  const transcripts = createFixtureTranscripts(recs);
   return {
     ...createFixtureData(recs, scenario, library),
     ...downloads.client,
     ...downloads.sessions,
     ...createFixtureModels(scenario),
-    ...createFixtureTranscripts(recs),
+    ...transcripts,
+    // Transcription jobs live with the fixture transcripts; the rest are downloads.
+    cancelJob: async (jobId) => transcripts.cancelOwnJob(jobId) ?? downloads.client.cancelJob(jobId),
     downloads,
     kind: "fixture",
     listItems: (q) => library.listItems(q),
@@ -257,6 +260,7 @@ const transcriptCommands: TranscriptClient = {
   listTranscripts: (itemId) => call<ItemTranscripts>("list_transcripts", { itemId }),
   getTranscript: (transcriptId) => call<TranscriptDetail>("get_transcript", { transcriptId }),
   fetchCaptions: (itemId) => call<ItemTranscripts>("fetch_captions", { itemId }),
+  transcribeLocally: (itemId, modelId, language) => call<ItemTranscripts>("transcribe_locally", { itemId, modelId, language }),
   deleteTranscript: (transcriptId) => call<ItemTranscripts>("delete_transcript", { transcriptId }),
 };
 
