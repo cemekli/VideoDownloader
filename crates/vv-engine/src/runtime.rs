@@ -256,16 +256,23 @@ fn clean_staging<S: Store>(cx: &Context<S>) {
     };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
-        let job_id = name.strip_prefix("meta-").map_or(name.as_str(), |rest| {
-            // `meta-<job-id>-<generation>`
-            rest.rsplit_once('-').map_or(rest, |(id, _)| id)
-        });
+        let job_id = if let Some(id) = name.strip_prefix("asr-") {
+            id // `asr-<job-id>` (transcribe::staging_dir)
+        } else {
+            name.strip_prefix("meta-").map_or(name.as_str(), |rest| {
+                // `meta-<job-id>-<generation>`
+                rest.rsplit_once('-').map_or(rest, |(id, _)| id)
+            })
+        };
         let status = cx
             .store
             .read(|c| jobs::get(c, job_id).ok().map(|j| j.status));
         let keep = match status {
             None => false,
             Some(JobStatus::Succeeded) => false,
+            // A transcription's WAV and checkpoint matter only to the job
+            // that runs again (F6.3); an ended one keeps nothing.
+            Some(s) if name.starts_with("asr-") => !s.is_terminal(),
             Some(_) => !name.starts_with("meta-"),
         };
         if !keep {

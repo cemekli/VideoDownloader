@@ -4,21 +4,34 @@
 //! 1. The item's own media file (original first, then a preview) is read
 //!    by the pinned FFmpeg with the fixed input allowlists and written as
 //!    16 kHz mono WAV into the job's staging folder.
-//! 2. The checked `whisper-cli` runs on it with the model the user agreed
-//!    to download (`ready`, same file and size as on record), on the CPU,
-//!    writing JSON next to the WAV. Its progress lines become job progress;
-//!    nothing it prints is stored or logged, because it prints the text.
-//! 3. The JSON is read into segments ([`parse_output`]): times are
+//! 2. A long recording is split into parts of about ten minutes, cut at
+//!    the quietest moment near each even split ([`plan_chunks`]; F6.3,
+//!    AI-A03). Parts touch and never overlap: no text twice, no shifted
+//!    times.
+//! 3. For each part, the checked `whisper-cli` runs on it with the model
+//!    the user agreed to download (`ready`, same file and size as on
+//!    record), on the CPU, writing JSON. Its progress lines become job
+//!    progress; nothing it prints is stored or logged, because it prints
+//!    the text. With `auto`, the first part's language is used for the rest.
+//! 4. The JSON is read into segments ([`parse_output`]): times are
 //!    whisper's own, empty and zero-length segments and whole-segment
 //!    markers such as `[BLANK_AUDIO]` are dropped, the rest is checked
-//!    against §11.5 with the WAV's length as the duration.
-//! 4. Saved as a `generated_local` transcript (provider `whisper_cpp`,
-//!    model id and pinned revision) in the transaction that ends the job.
-//!    No speech at all: the job succeeds without a transcript.
+//!    against §11.5 with the part's length, then moved to the recording's
+//!    time.
+//! 5. After each part but the last, a [`Checkpoint`] (fingerprint of
+//!    media, model, transcriber and language; parts; segments so far) is
+//!    written in the job's staging folder and the text so far is saved as a
+//!    `partial` transcript with the part's end as `covered_ms` (AI-A04,
+//!    AC-23). A run of the same job after a restart continues after the
+//!    last finished part; a checkpoint that does not fit is not used and
+//!    the job starts over. Cancel keeps the partial transcript.
+//! 6. The whole is saved as a `generated_local` transcript (provider
+//!    `whisper_cpp`, model id and pinned revision) in the transaction that
+//!    ends the job, replacing the partial one. No speech at all: the job
+//!    succeeds without a transcript.
 //!
-//! Nothing here uses the network. The staging folder is removed afterwards
-//! whatever happened. Long files run in one piece; parts and checkpoints
-//! come with F6.3.
+//! Nothing here uses the network. The staging folder is removed when the
+//! job ends; it stays only when the lease was lost (the job runs again).
 
 use crate::context::{Context, Store, WhisperTool};
 use crate::proc::{run_streaming, spawn_error_code, StdoutMode};
@@ -294,25 +307,189 @@ pub fn parse_output(raw: &[u8], asked: &str) -> Result<Output, String> {
     Ok(Output { language, segments })
 }
 
-/// Length of a 16 kHz mono 16-bit PCM WAV from its `data` chunk.
-pub fn wav_duration_ms(bytes: &[u8]) -> Option<i64> {
-    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+/// Where the `data` chunk of a WAV starts and how many bytes it has.
+fn wav_data(head: &[u8], file_len: u64) -> Option<(u64, u64)> {
+    if head.len() < 12 || &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {
         return None;
     }
     let mut i = 12;
-    while i + 8 <= bytes.len() {
-        let id = &bytes[i..i + 4];
-        let len = u32::from_le_bytes(bytes[i + 4..i + 8].try_into().ok()?) as usize;
+    while i + 8 <= head.len() {
+        let id = &head[i..i + 4];
+        let len = u32::from_le_bytes(head[i + 4..i + 8].try_into().ok()?) as u64;
         if id == b"data" {
             // FFmpeg leaves the size at 0xFFFFFFFF only when writing to a
             // pipe; we write a file, but take what is really there.
-            let avail = bytes.len().saturating_sub(i + 8);
-            let n = len.min(avail);
-            return Some((n as i64) * 1000 / 32_000);
+            let start = (i + 8) as u64;
+            let avail = file_len.saturating_sub(start);
+            return Some((start, len.min(avail)));
         }
-        i += 8 + len + (len & 1);
+        i += 8 + len as usize + (len & 1) as usize;
     }
     None
+}
+
+/// Length of a 16 kHz mono 16-bit PCM WAV from its `data` chunk.
+pub fn wav_duration_ms(bytes: &[u8]) -> Option<i64> {
+    let (_, n) = wav_data(bytes, bytes.len() as u64)?;
+    Some(n as i64 / BYTES_PER_MS)
+}
+
+/// 16 kHz × 16-bit mono.
+const BYTES_PER_MS: i64 = 32;
+
+/// The job's WAV, read a piece at a time (a two-hour file is 230 MB).
+pub struct Wav {
+    file: std::fs::File,
+    data_start: u64,
+    /// Whole milliseconds of audio.
+    pub ms: i64,
+}
+
+impl Wav {
+    pub fn open(path: &Path) -> Option<Wav> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(path).ok()?;
+        let len = file.metadata().ok()?.len();
+        let mut head = vec![0u8; 4096.min(len as usize)];
+        file.read_exact(&mut head).ok()?;
+        let (data_start, n) = wav_data(&head, len)?;
+        Some(Wav {
+            file,
+            data_start,
+            ms: n as i64 / BYTES_PER_MS,
+        })
+    }
+
+    /// The samples from `from` to `to` ms, as little-endian bytes.
+    pub fn read(&mut self, from: i64, to: i64) -> std::io::Result<Vec<u8>> {
+        use std::io::{Read, Seek, SeekFrom};
+        let (from, to) = (from.clamp(0, self.ms), to.clamp(0, self.ms));
+        let mut buf = vec![0u8; ((to - from).max(0) * BYTES_PER_MS) as usize];
+        self.file.seek(SeekFrom::Start(
+            self.data_start + (from * BYTES_PER_MS) as u64,
+        ))?;
+        self.file.read_exact(&mut buf)?;
+        Ok(buf)
+    }
+}
+
+/// Writes `pcm` (16 kHz mono s16le) as a WAV file.
+fn write_wav(path: &Path, pcm: &[u8]) -> std::io::Result<()> {
+    let n = pcm.len() as u32;
+    let mut out = Vec::with_capacity(44 + pcm.len());
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + n).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&16_000u32.to_le_bytes());
+    out.extend_from_slice(&32_000u32.to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&n.to_le_bytes());
+    out.extend_from_slice(pcm);
+    std::fs::write(path, out)
+}
+
+/// Default length of one part of a long recording (F6.3, AI-A03). Each
+/// part is a separate whisper-cli run and a checkpoint: a restart loses at
+/// most one part (about 5 minutes with Medium on a laptop CPU).
+pub const DEFAULT_CHUNK_MS: i64 = 10 * 60_000;
+/// How far a cut may move from its even spot to find a pause.
+const MAX_SHIFT_MS: i64 = 30_000;
+/// The span whose loudness decides where the quietest moment is.
+const QUIET_SPAN_MS: i64 = 400;
+const QUIET_STEP_MS: i64 = 50;
+
+/// Splits `total_ms` of audio into parts of about `chunk_ms`, cutting at the
+/// quietest moment near each even split so a word is rarely cut in two.
+/// Parts touch and never overlap, so no text comes twice and no time is
+/// shifted (AI-A03). Up to 1.5 parts' worth stays one part. `audio(from,
+/// to)` gives the samples of a span; unreadable spans keep the even cut.
+pub fn plan_chunks(
+    total_ms: i64,
+    chunk_ms: i64,
+    mut audio: impl FnMut(i64, i64) -> Option<Vec<u8>>,
+) -> Vec<(i64, i64)> {
+    if chunk_ms <= 0 || total_ms <= chunk_ms * 3 / 2 {
+        return vec![(0, total_ms.max(0))];
+    }
+    let n = (total_ms + chunk_ms - 1) / chunk_ms;
+    let shift = MAX_SHIFT_MS.min(chunk_ms / 4);
+    let mut cuts = vec![0];
+    for i in 1..n {
+        let even = total_ms * i / n;
+        let (lo, hi) = (even - shift, even + shift);
+        let cut = audio(lo, hi)
+            .map(|pcm| quietest(&pcm, lo, even))
+            .unwrap_or(even);
+        cuts.push(cut);
+    }
+    cuts.push(total_ms);
+    cuts.windows(2).map(|w| (w[0], w[1])).collect()
+}
+
+/// The middle of the quietest span in `pcm` (which starts at `start` ms);
+/// on a tie the one nearest `even`.
+fn quietest(pcm: &[u8], start: i64, even: i64) -> i64 {
+    let span = (QUIET_SPAN_MS * BYTES_PER_MS) as usize;
+    let step = (QUIET_STEP_MS * BYTES_PER_MS) as usize;
+    let mut best: Option<(i64, i64, i64)> = None; // (energy, distance, ms)
+    let mut at = 0usize;
+    while at + span <= pcm.len() {
+        let energy: i64 = pcm[at..at + span]
+            .chunks_exact(2)
+            .map(|b| {
+                let s = i16::from_le_bytes([b[0], b[1]]) as i64;
+                s * s
+            })
+            .sum();
+        let ms = start + (at + span / 2) as i64 / BYTES_PER_MS;
+        let key = (energy, (ms - even).abs(), ms);
+        if best.is_none_or(|b| (key.0, key.1) < (b.0, b.1)) {
+            best = Some(key);
+        }
+        at += step;
+    }
+    best.map_or(even, |b| b.2)
+}
+
+/// What a transcription has done so far, kept next to its WAV in the
+/// job's staging folder after every part (AI-A04). It is used again only
+/// for the same job and when it says the same input, model, transcriber,
+/// language and parts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Checkpoint {
+    pub version: u32,
+    /// [`fingerprint_of`]: media, model file, whisper.cpp, language asked.
+    pub fingerprint: String,
+    pub wav_ms: i64,
+    pub chunks: Vec<(i64, i64)>,
+    /// Parts finished, from the start.
+    pub done: usize,
+    /// The language found in the first part (with `auto`), used for the rest.
+    pub language: Option<String>,
+    /// Segments of the finished parts, in whole-recording time.
+    pub segments: Vec<(i64, i64, String)>,
+}
+
+const CHECKPOINT_FILE: &str = "checkpoint.json";
+
+fn read_checkpoint(dir: &Path) -> Option<Checkpoint> {
+    let raw = std::fs::read(dir.join(CHECKPOINT_FILE)).ok()?;
+    serde_json::from_slice::<Checkpoint>(&raw)
+        .ok()
+        .filter(|c| c.version == TRANSCRIBE_CONFIG_VERSION && c.done <= c.chunks.len())
+}
+
+/// Written beside and renamed over, so a crash leaves the old or the new.
+fn write_checkpoint(dir: &Path, cp: &Checkpoint) -> std::io::Result<()> {
+    let tmp = dir.join("checkpoint.json.tmp");
+    std::fs::write(&tmp, serde_json::to_vec(cp).map_err(std::io::Error::other)?)?;
+    std::fs::rename(tmp, dir.join(CHECKPOINT_FILE))
 }
 
 /// `done` is a percentage; a new phase is recorded at once (`force`).
@@ -326,6 +503,12 @@ fn phase<S: Store>(w: &Work<'_, S>, name: &str, done: Option<i64>, force: bool) 
         },
         force,
     );
+}
+
+/// The job's staging folder: one per job, so a run after a restart finds
+/// the checkpoint of the run before it.
+pub fn staging_dir(staging: &Path, job_id: &str) -> PathBuf {
+    staging.join(format!("asr-{job_id}"))
 }
 
 pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
@@ -378,11 +561,7 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         w.end_error(ErrorCode::ToolMissing, None);
         return;
     };
-    let dir = cx
-        .dirs
-        .staging
-        .join(format!("asr-{}-{}", w.id(), w.generation()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = staging_dir(&cx.dirs.staging, w.id());
     if std::fs::create_dir_all(&dir).is_err() {
         w.end_error(ErrorCode::PathNotWritable, None);
         return;
@@ -397,8 +576,11 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         language: &p.language,
         dir: &dir,
     };
-    run_in(&w, &job);
-    let _ = std::fs::remove_dir_all(&dir);
+    // A lost lease means the job runs again (after a restart or a reclaim):
+    // its folder and checkpoint stay for that run. Otherwise it ended.
+    if run_in(&w, &job) != End::Lost {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     cx.events.item_changed(&item_id);
 }
 
@@ -413,6 +595,30 @@ struct Job<'a> {
     dir: &'a Path,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum End {
+    /// Finished, failed or cancelled.
+    Ended,
+    /// The lease went away mid-run; another run continues.
+    Lost,
+}
+
+/// Ends the attempt for the stop the worker saw.
+fn stopped<S: Store>(w: &Work<'_, S>) -> End {
+    let s = w.stopped().unwrap_or(Stop::Cancel);
+    w.end_stopped(s);
+    if s == Stop::Lost {
+        End::Lost
+    } else {
+        End::Ended
+    }
+}
+
+fn fail<S: Store>(w: &Work<'_, S>, code: ErrorCode, msg: Option<&str>) -> End {
+    w.end_error(code, msg);
+    End::Ended
+}
+
 /// Runs one tool to the end; `Err` when the job was ended here.
 fn run_tool<S: Store>(
     w: &Work<'_, S>,
@@ -420,7 +626,7 @@ fn run_tool<S: Store>(
     args: Vec<OsString>,
     dir: &Path,
     mut on_err_line: impl FnMut(&str),
-) -> Result<Exit, ()> {
+) -> Result<Exit, End> {
     let mut cmd = ManagedCommand::new(exe);
     cmd.args(&args).current_dir(dir);
     let r = run_streaming(
@@ -435,123 +641,260 @@ fn run_tool<S: Store>(
         || w.should_stop(),
     );
     match r {
-        Err(e) => {
-            w.end_error(spawn_error_code(&e), None);
-            Err(())
-        }
-        Ok(s) if s.stopped => {
-            w.end_stopped(w.stopped().unwrap_or(Stop::Cancel));
-            Err(())
-        }
+        Err(e) => Err(fail(w, spawn_error_code(&e), None)),
+        Ok(s) if s.stopped => Err(stopped(w)),
         Ok(s) => Ok(s.exit),
     }
 }
 
-fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) {
-    // 1. Audio.
-    phase(w, "transcribe_audio", None, true);
-    let wav = j.dir.join("audio.wav");
-    let Ok(args) = vv_ffmpeg::args::audio_wav_args(j.input, &wav) else {
-        w.end_error(ErrorCode::InternalError, Some("media path is not absolute"));
-        return;
+/// FFmpeg writes the job's WAV; its length, or the job is ended.
+fn make_wav<S: Store>(w: &Work<'_, S>, j: &Job<'_>, wav: &Path) -> Result<i64, End> {
+    let Ok(args) = vv_ffmpeg::args::audio_wav_args(j.input, wav) else {
+        return Err(fail(
+            w,
+            ErrorCode::InternalError,
+            Some("media path is not absolute"),
+        ));
     };
     let mut no_audio = false;
-    let Ok(exit) = run_tool(w, j.ffmpeg, args, j.dir, |l| {
+    let exit = run_tool(w, j.ffmpeg, args, j.dir, |l| {
         // "Stream map '0:a:0' matches no streams."
         no_audio |= l.contains("matches no streams");
-    }) else {
-        return;
-    };
-    let wav_ms = std::fs::read(&wav).ok().and_then(|b| wav_duration_ms(&b));
-    let wav_ms = match (exit, wav_ms) {
-        (Exit::Code(0), Some(ms)) if ms > 0 => ms,
+    })?;
+    match (exit, Wav::open(wav).map(|v| v.ms)) {
+        (Exit::Code(0), Some(ms)) if ms > 0 => Ok(ms),
         _ => {
             let msg = if no_audio {
                 "the media has no audio"
             } else {
                 "audio could not be read"
             };
-            w.end_error(ErrorCode::MediaCorrupt, Some(msg));
-            return;
+            Err(fail(w, ErrorCode::MediaCorrupt, Some(msg)))
+        }
+    }
+}
+
+/// The checkpoint of an earlier run of this job, if it fits this run and
+/// its WAV is still there.
+fn resumable(j: &Job<'_>, wav: &Path) -> Option<Checkpoint> {
+    let cp = read_checkpoint(j.dir)?;
+    let ms = Wav::open(wav)?.ms;
+    (cp.fingerprint == fingerprint(j) && cp.wav_ms == ms).then_some(cp)
+}
+
+fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) -> End {
+    let wav_path = j.dir.join("audio.wav");
+    // 1. Audio and parts, or what an earlier run of this job left.
+    let mut cp = match resumable(j, &wav_path) {
+        Some(cp) => cp,
+        None => {
+            let _ = std::fs::remove_file(j.dir.join(CHECKPOINT_FILE));
+            phase(w, "transcribe_audio", None, true);
+            let wav_ms = match make_wav(w, j, &wav_path) {
+                Ok(ms) => ms,
+                Err(end) => return end,
+            };
+            let Some(mut wav) = Wav::open(&wav_path) else {
+                return fail(w, ErrorCode::MediaCorrupt, Some("audio could not be read"));
+            };
+            let chunks = plan_chunks(wav_ms, j.whisper.chunk_ms, |a, b| wav.read(a, b).ok());
+            Checkpoint {
+                version: TRANSCRIBE_CONFIG_VERSION,
+                fingerprint: fingerprint(j),
+                wav_ms,
+                chunks,
+                done: 0,
+                language: None,
+                segments: Vec::new(),
+            }
         }
     };
-    // 2. Transcribe.
-    phase(w, "transcribe", Some(0), true);
-    let out_base = j.dir.join("out");
+    let Some(mut wav) = Wav::open(&wav_path) else {
+        return fail(w, ErrorCode::MediaCorrupt, Some("audio could not be read"));
+    };
     let model_file = crate::models::model_path(&w.cx.dirs.models, j.model);
-    let args = whisper_args(&model_file, &wav, &out_base, j.language, threads());
-    let Ok(exit) = run_tool(w, &j.whisper.exe, args, j.dir, |l| {
-        if let Some(n) = parse_progress(l) {
-            phase(w, "transcribe", Some(n), n == 100);
+    let total = cp.wav_ms.max(1);
+    // 2. Each part not done yet.
+    while cp.done < cp.chunks.len() {
+        if w.should_stop() {
+            return stopped(w);
         }
-    }) else {
-        return;
-    };
-    match exit {
-        Exit::Code(0) => {}
-        Exit::Code(WIN_DLL_NOT_FOUND) => {
-            w.end_error(
-                ErrorCode::ToolMissing,
-                Some("whisper-cli could not load a library (Visual C++ runtime?)"),
-            );
-            return;
+        let (from, to) = cp.chunks[cp.done];
+        phase(w, "transcribe", Some(from * 100 / total), true);
+        let part = j.dir.join("part.wav");
+        let written = wav.read(from, to).and_then(|pcm| write_wav(&part, &pcm));
+        if written.is_err() {
+            return fail(w, ErrorCode::PathNotWritable, None);
         }
-        Exit::Code(n) => {
-            w.end_error(
+        // With `auto`, the first part's language holds for the rest so the
+        // transcript has one language.
+        let asked = match (j.language, cp.language.as_deref()) {
+            ("auto", Some(l)) if l != "und" => l,
+            (l, _) => l,
+        };
+        let out_base = j.dir.join("out");
+        let _ = std::fs::remove_file(out_base.with_extension("json"));
+        let args = whisper_args(&model_file, &part, &out_base, asked, threads());
+        let exit = match run_tool(w, &j.whisper.exe, args, j.dir, |l| {
+            if let Some(n) = parse_progress(l) {
+                let pct = (from + (to - from) * n / 100) * 100 / total;
+                phase(w, "transcribe", Some(pct.min(100)), n == 100);
+            }
+        }) {
+            Ok(e) => e,
+            Err(end) => return end,
+        };
+        match exit {
+            Exit::Code(0) => {}
+            Exit::Code(WIN_DLL_NOT_FOUND) => {
+                return fail(
+                    w,
+                    ErrorCode::ToolMissing,
+                    Some("whisper-cli could not load a library (Visual C++ runtime?)"),
+                );
+            }
+            Exit::Code(n) => {
+                return fail(
+                    w,
+                    ErrorCode::InternalError,
+                    Some(&format!("whisper-cli exited {n}")),
+                );
+            }
+            _ => return fail(w, ErrorCode::InternalError, Some("whisper-cli was killed")),
+        }
+        let json = out_base.with_extension("json");
+        let raw = match std::fs::metadata(&json) {
+            Ok(m) if m.len() <= MAX_OUTPUT_BYTES => std::fs::read(&json).ok(),
+            _ => None,
+        };
+        let Some(raw) = raw else {
+            return fail(
+                w,
                 ErrorCode::InternalError,
-                Some(&format!("whisper-cli exited {n}")),
+                Some("transcriber wrote no result"),
             );
-            return;
+        };
+        let out = match parse_output(&raw, asked) {
+            Ok(o) => o,
+            Err(e) => return fail(w, ErrorCode::InternalError, Some(&e)),
+        };
+        // Checked against the part's own length (ends just past it are cut
+        // to it), then moved to the recording's time.
+        let segs = match transcripts::validate(&out.segments, Some(to - from)) {
+            Ok(s) => s,
+            Err(e) => return fail(w, ErrorCode::InternalError, Some(&e.to_string())),
+        };
+        if cp.language.is_none() {
+            cp.language = Some(out.language);
         }
-        _ => {
-            w.end_error(ErrorCode::InternalError, Some("whisper-cli was killed"));
-            return;
-        }
-    }
-    let json = out_base.with_extension("json");
-    let raw = match std::fs::metadata(&json) {
-        Ok(m) if m.len() <= MAX_OUTPUT_BYTES => std::fs::read(&json).ok(),
-        _ => None,
-    };
-    let Some(raw) = raw else {
-        w.end_error(
-            ErrorCode::InternalError,
-            Some("transcriber wrote no result"),
+        cp.segments.extend(
+            segs.into_iter()
+                .map(|s| (s.start_ms + from, s.end_ms + from, s.text)),
         );
-        return;
-    };
-    // 3. Check.
-    phase(w, "transcribe_save", None, true);
-    let out = match parse_output(&raw, j.language) {
-        Ok(o) => o,
-        Err(e) => {
-            w.end_error(ErrorCode::InternalError, Some(&e));
-            return;
+        cp.done += 1;
+        let _ = std::fs::remove_file(&part);
+        let _ = std::fs::remove_file(&json);
+        if cp.done < cp.chunks.len() {
+            if let Err(end) = save_part(w, j, &cp) {
+                return end;
+            }
         }
-    };
-    if out.segments.is_empty() {
-        finish(w, j, None);
-        return;
     }
-    let segs = match transcripts::validate(&out.segments, Some(wav_ms)) {
+    // 3. Check and save.
+    phase(w, "transcribe_save", None, true);
+    let segs: Vec<NewSegment> = cp
+        .segments
+        .iter()
+        .map(|(a, b, t)| NewSegment::new(*a, *b, t.clone()))
+        .collect();
+    if segs.is_empty() {
+        finish(w, j, None);
+        return End::Ended;
+    }
+    let segs = match transcripts::validate(&segs, Some(cp.wav_ms)) {
         Ok(s) => s,
-        Err(e) => {
-            w.end_error(ErrorCode::InternalError, Some(&e.to_string()));
-            return;
-        }
+        Err(e) => return fail(w, ErrorCode::InternalError, Some(&e.to_string())),
     };
-    let origin = Origin {
+    finish(w, j, Some((origin(j, &cp), segs, cp.wav_ms)));
+    End::Ended
+}
+
+fn origin(j: &Job<'_>, cp: &Checkpoint) -> Origin {
+    Origin {
         item_id: j.item.id.clone(),
         asset_id: Some(j.asset.id.clone()),
-        language: out.language,
+        language: cp
+            .language
+            .clone()
+            .unwrap_or_else(|| language_tag(Some(j.language))),
         provenance: Provenance::GeneratedLocal,
         provider: "whisper_cpp".into(),
         model_id: Some(j.model.spec.id.clone()),
         model_version: Some(j.model.spec.version.clone()),
         source_fingerprint: fingerprint(j),
         caption_kind: None,
-    };
-    finish(w, j, Some((origin, segs, wav_ms)));
+    }
+}
+
+/// After a part that is not the last: the checkpoint file, then in one
+/// transaction the job's checkpoint reference and the text so far as a
+/// `partial` transcript (AC-23), unless a finished transcript of the same
+/// model and language is there (a re-run never hides it behind a partial).
+fn save_part<S: Store>(w: &Work<'_, S>, j: &Job<'_>, cp: &Checkpoint) -> Result<(), End> {
+    if write_checkpoint(j.dir, cp).is_err() {
+        return Err(fail(w, ErrorCode::PathNotWritable, None));
+    }
+    let o = origin(j, cp);
+    let covered = cp.chunks[cp.done - 1].1;
+    let segs: Vec<NewSegment> = cp
+        .segments
+        .iter()
+        .map(|(a, b, t)| NewSegment::new(*a, *b, t.clone()))
+        .collect();
+    let cx = w.cx;
+    let now = cx.now();
+    let reference = format!("{}/{}", CHECKPOINT_FILE, cp.done);
+    let r = cx.store.write(|c| {
+        jobs::checkpoint_with(c, w.id(), w.generation(), Some(&reference), now, |tx| {
+            let finished = transcripts::list_for_item(tx, &o.item_id)
+                .map_err(|_| jobs::JobError::Invalid("transcript"))?
+                .iter()
+                .any(|t| {
+                    t.status == Status::Ready
+                        && t.origin.provenance == o.provenance
+                        && t.origin.language == o.language
+                        && t.origin.model_id == o.model_id
+                });
+            if !segs.is_empty() && !finished {
+                transcripts::save(
+                    tx,
+                    &o,
+                    Status::Partial,
+                    Some(covered),
+                    &segs,
+                    Some(cp.wav_ms),
+                    now,
+                )
+                .map_err(|e| match e {
+                    transcripts::TranscriptError::Sqlite(e) => jobs::JobError::Sqlite(e),
+                    _ => jobs::JobError::Invalid("transcript"),
+                })?;
+            }
+            Ok(())
+        })
+    });
+    match r {
+        Ok(()) => {
+            cx.events.item_changed(&o.item_id);
+            Ok(())
+        }
+        Err(jobs::JobError::Stale) => Err(End::Lost),
+        Err(_) => Err(fail(
+            w,
+            ErrorCode::InternalError,
+            Some("checkpoint not saved"),
+        )),
+    }
 }
 
 /// What the text was made from: the media file, the model file and the
@@ -626,6 +969,81 @@ fn finish<S: Store>(w: &Work<'_, S>, j: &Job<'_>, found: Option<Found>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `ms` of a loud tone with silence over `quiet` (ms spans).
+    fn pcm(ms: i64, quiet: &[(i64, i64)]) -> Vec<u8> {
+        (0..ms * 16)
+            .flat_map(|i| {
+                let t = i / 16;
+                let silent = quiet.iter().any(|&(a, b)| t >= a && t < b);
+                let v: i16 = if silent {
+                    0
+                } else if i % 2 == 0 {
+                    8000
+                } else {
+                    -8000
+                };
+                v.to_le_bytes()
+            })
+            .collect()
+    }
+
+    fn plan(audio: &[u8], chunk: i64) -> Vec<(i64, i64)> {
+        let total = audio.len() as i64 / BYTES_PER_MS;
+        plan_chunks(total, chunk, |a, b| {
+            let (a, b) = (a.clamp(0, total), b.clamp(0, total));
+            Some(audio[(a * BYTES_PER_MS) as usize..(b * BYTES_PER_MS) as usize].to_vec())
+        })
+    }
+
+    #[test]
+    fn short_recordings_are_one_part() {
+        assert_eq!(plan_chunks(0, 1000, |_, _| None), vec![(0, 0)]);
+        assert_eq!(plan_chunks(1500, 1000, |_, _| None), vec![(0, 1500)]);
+        assert_eq!(plan_chunks(9000, 0, |_, _| None), vec![(0, 9000)]);
+    }
+
+    #[test]
+    fn parts_touch_cover_everything_and_cut_at_a_pause() {
+        // 40 s, parts of 10 s: even cuts at 10, 20, 30 s; pauses near two.
+        let audio = pcm(40_000, &[(11_000, 12_000), (28_500, 29_000)]);
+        let p = plan(&audio, 10_000);
+        assert_eq!(p.len(), 4);
+        assert_eq!(p[0].0, 0);
+        assert_eq!(p.last().unwrap().1, 40_000);
+        for w in p.windows(2) {
+            assert_eq!(w[0].1, w[1].0, "parts touch, no overlap: {p:?}");
+        }
+        // Within 2.5 s (a quarter part) of the even cut, at the pause.
+        assert!((11_000..12_000).contains(&p[0].1), "{p:?}");
+        assert_eq!(p[1].1, 20_000, "no pause near: the even cut");
+        assert!((28_500..29_000).contains(&p[2].1), "{p:?}");
+        // Without audio to look at, the even cuts.
+        assert_eq!(
+            plan_chunks(40_000, 10_000, |_, _| None),
+            vec![
+                (0, 10_000),
+                (10_000, 20_000),
+                (20_000, 30_000),
+                (30_000, 40_000)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_written_part_reads_back() {
+        let dir = std::env::temp_dir().join(format!("vv-wav-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.wav");
+        let audio = pcm(2_000, &[(500, 1_000)]);
+        write_wav(&path, &audio).unwrap();
+        let mut w = Wav::open(&path).unwrap();
+        assert_eq!(w.ms, 2_000);
+        assert_eq!(w.read(500, 1_000).unwrap(), audio[16_000..32_000].to_vec());
+        assert_eq!(w.read(1_900, 9_999).unwrap().len(), 100 * 32);
+        assert_eq!(wav_duration_ms(&std::fs::read(&path).unwrap()), Some(2_000));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn progress_lines() {

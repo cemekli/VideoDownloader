@@ -1127,3 +1127,34 @@ STATE.md F6.2 (ikinci yarı). SPEC AI-A02, §8.4 adım 3, §11.5, §14.1, §17, 
 - `ffmpeg-probe.mjs`: MP4 → 16 kHz mono PCM WAV.
 - `apps/desktop/src-tauri/tests/ipc.rs`, `apps/desktop/src/Transcripts.test.tsx`.
 - Türkçe/İngilizce gerçek konuşmada kalite ve hız Cuma'nın Windows testine (F6.2 ✅) ve F6.7 ölçüm raporuna kalır.
+
+## ADR-0029: Uzun sesi parçalara bölme, checkpoint ve kısmi döküm
+
+STATE.md F6.3. SPEC AI-A03, AI-A04, AC-23, §13.2; ADR-0028'in "uzun dosyalar tek parça" kısıtını kaldırır.
+
+**Bağlam.** Cuma'nın ölçümünde 21:44'lük video Medium ile 10:29 sürdü (CPU). İki saatlik bir derste bu bir saati aşar. Uygulama kapanırsa ya da kullanıcı iptal ederse o ana kadarki iş kayboluyordu, çünkü whisper-cli bütün dosyayı tek seferde işliyordu. İki yol vardı: (a) tek WAV'da `whisper-cli --offset-t/--duration` ile parça parça çalıştırmak, (b) WAV'ı gerçekten parça dosyalara bölmek. whisper.cpp v1.9.2'nin kaynağına bakıldı (`whisper_full_with_state`): `--duration` yalnızca arama döngüsünü sınırlıyor, son pencere yine 30 sn kodlanıyor. Yani parça sonundan sonraki konuşma da yazıya dökülebilir ve bir sonraki parçayla tekrar eder.
+
+**Karar: (b), dokunan ve örtüşmeyen parçalar, sessiz yerden kesilir.**
+
+- **Parça planı** (`transcribe::plan_chunks`). Hedef parça 10 dakika (`DEFAULT_CHUNK_MS`). 15 dakikaya kadar olan ses tek parçadır. Daha uzunu eşit bölünür; her kesim, eşit noktanın ±30 sn (en çok parçanın dörtte biri) çevresinde 400 ms'lik en sessiz ana kaydırılır. Eşitlikte eşit noktaya en yakın olan seçilir. Parçalar birbirine değer, örtüşmez: aynı metin iki kez gelmez, zaman kodu kaymaz (AI-A03). Her parça WAV'dan 16 kHz mono PCM olarak `part.wav`'a yazılır. WAV tümüyle belleğe alınmaz; yalnızca kesim çevreleri ve sıradaki parça okunur.
+- **Zamanlar.** whisper'ın parça içi `offsets` değerleri önce parçanın kendi uzunluğuyla §11.5'ten geçer (1 sn tolerans içinde kesilir), sonra parçanın başlangıcı eklenir. En sonda bütün döküm WAV'ın uzunluğuyla bir kez daha denetlenir.
+- **Dil.** `auto` ile ilk parçanın algılanan dili sonraki parçalara `-l` olarak verilir; döküm tek dilli kalır.
+- **Checkpoint** (AI-A04). Her parçadan sonra (sonuncusu hariç) işin staging klasörüne (`asr-<iş>`, artık nesilsiz) `checkpoint.json` yazılır. İçinde sürüm, parmak izi (medya hash'i, model SHA-256, whisper.cpp sürümü, istenen dil), WAV uzunluğu, parça listesi, biten parça sayısı, dil ve o ana kadarki segmentler bulunur. Yazım geçici dosya + rename ile yapılır. Aynı iş yeniden çalıştığında (uygulama yeniden açıldı ve `recover` işi kuyruğa geri koydu ya da lease geri alındı) checkpoint ancak parmak izi ve WAV uzunluğu tutarsa kullanılır ve iş sıradaki parçadan devam eder. Tutmazsa dosya silinir ve iş baştan başlar. Kayıp en çok bir parçadır.
+- **Kısmi döküm** (AC-23). Aynı adımda tek transaction içinde (`jobs::checkpoint_with`: lease hâlâ bu işçideyse) işin `checkpoint_ref` alanı ve o ana kadarki metin `partial` döküm olarak yazılır; `covered_ms` son biten parçanın sonudur. Kullanıcı iş sürerken ilk parçaların metnini görür. Arayüz satırı "partial, up to 10:00" diye etiketler. İş bitince aynı kimlikle `ready` döküm yazılır ve kısmi olanın yerini alır; tekrar eden segment olmaz. Aynı model ve dilde bitmiş (`ready`) bir döküm zaten varsa yeniden çalıştırma ara sonuç yazmaz, bitmiş döküm kısmi bir dökümün arkasına saklanmaz.
+- **İptal ve hata.** İptalde ve bir parçanın hatasında o ana kadarki `partial` döküm kalır, staging klasörü silinir. Bir sonraki "Transcribe on this PC" yeni bir iştir ve baştan başlar. Staging yalnızca lease kaybında (iş yeniden çalışacak) kalır. Açılıştaki `clean_staging`, `asr-` klasörünü işi bitmemişse tutar, bitmişse siler.
+- **İlerleme.** Yüzde bütün kayda göredir: biten parçaların süresi + çalışan parçanın yüzdesi. Her parça ayrı bir whisper-cli sürecidir; model her parçada yeniden yüklenir (Medium için birkaç saniye, 10 dakikalık parçaya göre küçük).
+- **Duraklatma** yok: `transcription` `pausable` değil. Checkpoint bunu mümkün kılıyor, ama arayüzde pause zaten yok (F6.6 ile birlikte düşünülecek).
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-engine/src/transcribe.rs` birim testleri:
+  - Kısa kayıt tek parça.
+  - Parçalar birbirine değer ve kaydın tamamını kaplar; kesim yakındaki sessizliğe kayar, sessizlik yoksa eşit noktada kalır.
+  - Yazılan parça WAV'ı geri okunur.
+- `crates/vv-engine/tests/transcribe.rs` (gerçek FFmpeg + sahte whisper, testte parça 1 sn):
+  - Parçalı çalışma: tekrar yok, sıra doğru, ilk parça `auto`, sonrakiler `tr`.
+  - Çalışma ortasında `jobs::recover` (yeniden açılış): iş kuyruğa döner, checkpoint `done = 1`, `partial` döküm ilk parçayı kapsar. İkinci çalışma yalnızca kalan parçaları işler; döküm `ready` olur ve segment sayısı tam.
+  - Başka ayarlardan kalan checkpoint kullanılmaz.
+  - İptal ve parça hatası `partial` dökümü bırakır, staging temizlenir.
+  - Bitmiş döküm, iptal edilen yeniden çalıştırmadan sonra aynen kalır.
+- `apps/desktop/src/Transcripts.test.tsx`: kısmi döküm satırı "partial, up to 10:00".

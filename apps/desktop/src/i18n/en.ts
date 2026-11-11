@@ -512,6 +512,7 @@ export const en = {
   "transcripts.lines.one": "{count} line",
   "transcripts.lines.other": "{count} lines",
   "transcripts.lines_label": "{language} transcript",
+  "transcripts.partial": "partial, up to {covered}",
   "transcripts.show": "Show",
   "transcripts.hide": "Hide",
   "transcripts.delete": "Delete",
