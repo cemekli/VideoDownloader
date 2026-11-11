@@ -235,7 +235,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
 | F6.1 | Model kaydı, izinli indirme, checksum | §17.1 | AC-20 | ✅ migration 0013 (transkript, segment, arama parçası, `model_installation`), `tools/models.json` kataloğu (whisper.cpp çok dilli modelleri, sabitlenmiş commit, SHA-256 + yayımlanmış SHA-1), Settings → Transcription ve izin penceresi, `model_download` işi (sürdürme, ağ koruması politikası, yalnızca Hugging Face). ADR-0026. PR #43 (CI yeşil); Cuma'nın Windows'ta gerçek model indirme testi çalıştı (10 Kas 2026). |
-| F6.2 | Mevcut altyazıyı tercih etme ve yerel Whisper sağlayıcısı (CPU) | AI-A01, AI-A02, DEC-11 | AC-21 | 🟨 ilk yarı yazıldı: sitenin kendi altyazısı `fetch_captions` işiyle (guarded yt-dlp, yalnızca konuşulan dilde; otomatik çeviri asla), WebVTT → `source_captions` döküm, Details → Transcript bölümü; 4 yeni komut. ADR-0027. Site altyazısı yarısı Cuma'nın Windows testiyle doğrulandı (11 Kas 2026, PR #44 + düzeltme #46): Türkçe otomatik altyazı (26 dk, ~684 satır), İngilizce video, sil ve yeniden al. Kalan: whisper.cpp aracı ve yerel transkripsiyon işi; ✅ onunla. |
+| F6.2 | Mevcut altyazıyı tercih etme ve yerel Whisper sağlayıcısı (CPU) | AI-A01, AI-A02, DEC-11 | AC-21 | 🟨 iki yarı da yazıldı. (1) Sitenin kendi altyazısı `fetch_captions` işiyle (guarded yt-dlp, yalnızca konuşulan dilde; otomatik çeviri asla), WebVTT → `source_captions` döküm, Details → Transcript; ADR-0027, PR #44 + düzeltme #46; Cuma'nın Windows testiyle doğrulandı (11 Kas 2026: TR otomatik altyazı, EN video, sil ve yeniden al). (2) Yerel transkripsiyon: whisper.cpp v1.9.2 `whisper-cli` isteğe bağlı araç (12 DLL'i hash'li, yalnız Windows), `transcription` işi (FFmpeg 16 kHz WAV → whisper-cli JSON → `generated_local` döküm), `transcribe_locally` komutu, "Transcribe on this PC" (dil, model, ilerleme, iptal); ADR-0028. ✅ için kalan: Cuma'nın Windows'ta yerel transkripsiyon TR/EN testi. |
 | F6.3 | Ses parçalama, checkpoint ve iptal | AI-A03, AI-A04 | AC-23 | ⬜ |
 | F6.4 | Segment doğrulama, transkript FTS, gruplanmış sonuçlar | SEA-06, §16.2 | AC-22, NFR-04 | ⬜ |
 | F6.5 | Transkript paneli, zaman koduna gitme, not dışa aktarma | PLAY-06, DATA-11 | AC-22, NFR-10 | ⬜ |
@@ -291,6 +291,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | 6 Kas 2026 | `verify` Windows'ta CI'da geçti, yerel makinede çalıştırılmadı | Geliştirici makinesinde kurulum doğrulanmadı | Yerelde `npm run setup`, `npm run verify` ve `npm run desktop` |
 | 7 Kas 2026 | Oynatma matrisi yalnızca CI'da (GPU'suz) ölçüldü | HEVC'nin GPU'lu makinede durumu bilinmiyor; karar etkilenmez | Windows 11'de `npm run desktop:e2e-exe` + `npm run e2e:desktop` |
 | 6 Kas 2026 | Uygulama simgesi geçici (otomatik üretilmiş) | Görsel kimlik yok | F4 öncesi gerçek simge |
+| 11 Kas 2026 | whisper.cpp Windows ikilisi Microsoft Visual C++ çalışma zamanını (MSVCP140, VCRUNTIME140, VCOMP140) ister, zip'te yok | Çalışma zamanı olmayan bir PC'de yerel transkripsiyon "missing" görünür; geri kalan uygulama etkilenmez | F4 kurulum paketi VC++ yeniden dağıtılabilir paketini eklemeli ya da kontrol etmeli (ADR-0028) |
 
 ## Sonraki adım
 
@@ -302,6 +303,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 11 Kas 2026 | F6.2 ikinci yarı (🟨): whisper.cpp `whisper-cli` 1.9.2 manifestte isteğe bağlı araç, `companions` ile 12 DLL'in hash'i; `transcription` işi ve `transcribe_locally` komutu; Details → Transcript'te "Transcribe on this PC". Windows CI gerçek whisper-cli'yi Tiny modelle bir kez çalıştırır. ADR-0028. |
 | 11 Kas 2026 | F6.2 site altyazısı Cuma'nın Windows testinden geçti (TR otomatik + EN, sil/yeniden al). |
 | 11 Kas 2026 | F6.2 düzeltme: Türkçe altyazıda `&` sonrası çok baytlı harfte panic (iş takılı kalıyordu); iş işleyicilerinde panic artık işi `INTERNAL_ERROR` ile bitiriyor; Transcript paneli işin gerçek durumunu ve Cancel'ı gösteriyor; fuzz testi. ADR-0027. |
 | 10 Kas 2026 | F6.1 ✅: Cuma Windows'ta gerçek model indirmesini test etti, çalışıyor. |

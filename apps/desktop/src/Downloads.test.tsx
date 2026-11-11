@@ -142,7 +142,7 @@ describe("Downloads", () => {
     await waitFor(() => expect(within(usage).getByTestId("storage-quota")).toHaveValue("10"));
     expect(within(settings).queryByTestId("storage-quota-exceeded")).toBeNull();
     const tools = await within(settings).findByTestId("tool-health");
-    expect(within(tools).getAllByTestId("tool")).toHaveLength(4);
+    expect(within(tools).getAllByTestId("tool")).toHaveLength(5);
     expect(tools).toHaveTextContent("All tools passed their check.");
   });
 });

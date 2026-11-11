@@ -539,10 +539,12 @@ export interface DataClient {
 // ---- Downloads, jobs and storage (F3.2–F3.10) ----
 
 export type PresetId = "best" | "1080" | "720" | "audio";
-export type ToolState = "ok" | "missing" | "blocked" | "checksum_mismatch";
+export type ToolState = "ok" | "missing" | "blocked" | "checksum_mismatch" | "unavailable";
 
 export interface ToolHealth {
   id: string;
+  /** Only its own feature needs it (whisper-cli). */
+  optional: boolean;
   /** Pinned version from the tool manifest. */
   version: string;
   reportedVersion: string | null;
@@ -562,7 +564,7 @@ export interface ToolStatus {
   checkedAt: number | null;
 }
 
-export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions";
+export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions" | "transcription";
 export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
 
 export interface JobDto {
@@ -811,6 +813,21 @@ export interface ItemTranscripts {
   captionsJob: JobDto | null;
   /** The item has a link, so the site's captions can be fetched. */
   canFetchCaptions: boolean;
+  /** The item's last local transcription job (F6.2, ADR-0028). */
+  transcribeJob: JobDto | null;
+  local: LocalTranscription;
+}
+
+/** Why "Transcribe on this PC" cannot run: no media file, no ready model, or whisper-cli missing. */
+export type LocalBlocker = "no-media" | "no-model" | "no-tool";
+export type TranscribeLanguage = "auto" | "tr" | "en";
+
+export interface LocalTranscription {
+  ready: boolean;
+  reason: LocalBlocker | null;
+  /** Models the user agreed to and that passed their check, smallest first. */
+  models: { id: string; label: string }[];
+  languages: TranscribeLanguage[];
 }
 
 /** Transcripts (F6.2, AI-A01): the site's own captions first. */
@@ -819,6 +836,8 @@ export interface TranscriptClient {
   getTranscript(transcriptId: string): Promise<TranscriptDetail>;
   /** Queues the site-captions job; one open job per item. */
   fetchCaptions(itemId: string): Promise<ItemTranscripts>;
+  /** Queues a transcription of the item's file on this PC (AI-A02); works offline. */
+  transcribeLocally(itemId: string, modelId: string, language: TranscribeLanguage): Promise<ItemTranscripts>;
   deleteTranscript(transcriptId: string): Promise<ItemTranscripts>;
 }
 

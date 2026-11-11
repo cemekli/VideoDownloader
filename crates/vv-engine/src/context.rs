@@ -76,6 +76,16 @@ pub struct Tools {
     pub media: Option<MediaTools>,
     /// The pinned yt-dlp version, recorded in provenance.
     pub ytdlp_version: String,
+    /// whisper.cpp's `whisper-cli`, with its libraries checked (ADR-0028).
+    pub whisper: Option<WhisperTool>,
+}
+
+/// The local transcriber as a job sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WhisperTool {
+    pub exe: PathBuf,
+    /// The pinned whisper.cpp version, recorded with each transcript.
+    pub version: String,
 }
 
 impl Tools {
@@ -87,6 +97,7 @@ impl Tools {
         dirs: &Dirs,
         ffmpeg_build: &str,
         ytdlp_version: &str,
+        whisper_version: &str,
     ) -> Tools {
         use vv_tools::ToolId;
         let media = (report.is_ok(ToolId::Ffmpeg) && report.is_ok(ToolId::Ffprobe))
@@ -97,11 +108,16 @@ impl Tools {
             ffmpeg: paths.ffmpeg.clone(),
             deno_dir: dirs.deno_dir(),
         });
+        let whisper = report.is_ok(ToolId::WhisperCli).then(|| WhisperTool {
+            exe: paths.whisper.clone(),
+            version: whisper_version.to_owned(),
+        });
         Tools {
             report,
             ytdlp,
             media,
             ytdlp_version: ytdlp_version.to_owned(),
+            whisper,
         }
     }
 }

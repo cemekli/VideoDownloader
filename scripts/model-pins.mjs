@@ -9,6 +9,9 @@
 //                                         # also download one model and check
 //                                         # its SHA-1 (published by whisper.cpp)
 //                                         # and SHA-256 (pinned) end to end
+//   node scripts/model-pins.mjs --download whisper-tiny --save test-models
+//                                         # and keep it there (the real
+//                                         # whisper-cli test in CI, ADR-0028)
 //
 // The listing gives each LFS file's SHA-256 and size at one commit. The app
 // downloads from that commit only, so a later push to the repository cannot
@@ -16,7 +19,7 @@
 // source (whisper.cpp models/README.md); --download checks both agree.
 
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +30,8 @@ const repo = catalog.repository.replace("https://huggingface.co/", "");
 const write = process.argv.includes("--write");
 const dlIdx = process.argv.indexOf("--download");
 const downloadId = dlIdx > 0 ? process.argv[dlIdx + 1] : null;
+const saveIdx = process.argv.indexOf("--save");
+const saveDir = saveIdx > 0 ? process.argv[saveIdx + 1] : null;
 
 const fail = (m) => {
   console.error(`✗ ${m}`);
@@ -79,4 +84,9 @@ if (downloadId) {
   if (sha1 !== m.sha1) fail(`${m.id}: SHA-1 ${sha1} is not the published ${m.sha1}`);
   if (sha256 !== m.sha256 || buf.length !== m.size) fail(`${m.id}: download does not match the pin`);
   console.log(`✓ ${m.id} matches both the published SHA-1 and the pinned SHA-256`);
+  if (saveDir) {
+    mkdirSync(saveDir, { recursive: true });
+    writeFileSync(join(saveDir, m.file), buf);
+    console.log(`✓ saved as ${join(saveDir, m.file)}`);
+  }
 }

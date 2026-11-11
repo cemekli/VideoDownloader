@@ -29,11 +29,25 @@ pub enum ToolId {
     Ffmpeg,
     #[serde(rename = "ffprobe")]
     Ffprobe,
+    /// whisper.cpp's command-line transcriber (F6.2, ADR-0028). Optional:
+    /// without it only local transcription is unavailable.
+    #[serde(rename = "whisper-cli")]
+    WhisperCli,
 }
 
 /// Every tool the app needs; a manifest without one of them is rejected.
 pub const REQUIRED_TOOLS: &[ToolId] =
     &[ToolId::YtDlp, ToolId::Deno, ToolId::Ffmpeg, ToolId::Ffprobe];
+
+/// Tools the manifest may name but need not, and that may have no build
+/// for some platforms (whisper.cpp publishes no Linux binary).
+pub const OPTIONAL_TOOLS: &[ToolId] = &[ToolId::WhisperCli];
+
+/// The whisper.cpp release `whisper-bin-x64.zip` is built with MSVC and
+/// loads its libraries from its own folder; only `.dll` companions exist.
+const COMPANION_EXTENSION: &str = ".dll";
+/// More companions than a release could plausibly need is a broken entry.
+const MAX_COMPANIONS: usize = 32;
 
 /// BtbN/FFmpeg-Builds release tags look like `autobuild-2026-10-31-12-59`.
 const FFMPEG_TAG_PREFIX: &str = "autobuild-";
@@ -45,7 +59,12 @@ impl ToolId {
             ToolId::Deno => "deno",
             ToolId::Ffmpeg => "ffmpeg",
             ToolId::Ffprobe => "ffprobe",
+            ToolId::WhisperCli => "whisper-cli",
         }
+    }
+
+    pub fn is_optional(self) -> bool {
+        OPTIONAL_TOOLS.contains(&self)
     }
 
     /// FFmpeg and ffprobe come from the same BtbN archive.
@@ -61,6 +80,7 @@ impl ToolId {
             ToolId::Ffmpeg | ToolId::Ffprobe => {
                 "https://github.com/BtbN/FFmpeg-Builds/releases/download/"
             }
+            ToolId::WhisperCli => "https://github.com/ggml-org/whisper.cpp/releases/download/",
         }
     }
 }
@@ -100,6 +120,22 @@ pub struct Artifact {
     pub executable: String,
     /// SHA-256 of the executable itself; checked before every first run.
     pub executable_sha256: String,
+    /// Libraries the executable loads from its own folder (whisper.cpp:
+    /// `whisper.dll`, `ggml*.dll`). Each is unpacked next to it and checked
+    /// by hash like the executable; a tool whose companion is missing or
+    /// different is not run.
+    #[serde(default)]
+    pub companions: Vec<Companion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Companion {
+    /// `/`-separated path inside the archive; its last part is `file`.
+    pub archive_path: String,
+    /// Name it is installed under, next to the executable.
+    pub file: String,
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -198,6 +234,15 @@ impl Manifest {
             if self.tool(id).is_none() {
                 return Err(ManifestError::Missing(id.as_str()));
             }
+            // A required tool runs everywhere the app does.
+            for p in PLATFORMS {
+                if self.artifact(id, p).is_none() {
+                    return Err(ManifestError::Invalid {
+                        tool: id.as_str(),
+                        reason: format!("no artifact for {p}"),
+                    });
+                }
+            }
         }
         // One archive, one build: ffprobe must be the same download as ffmpeg.
         let (ff, fp) = (
@@ -268,7 +313,10 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
                 "yt-dlp must be verified through its signed checksum file".into(),
             ))
         }
-        (ToolId::Deno | ToolId::Ffmpeg | ToolId::Ffprobe, Provenance::PublishedSha256) => {}
+        (
+            ToolId::Deno | ToolId::Ffmpeg | ToolId::Ffprobe | ToolId::WhisperCli,
+            Provenance::PublishedSha256,
+        ) => {}
         (_, _) => return Err(bad("unexpected provenance kind".into())),
     }
     if t.artifacts.is_empty() {
@@ -334,16 +382,61 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
             }
         }
         if let Some(p) = &a.archive_path {
-            let parts: Vec<&str> = p.split('/').collect();
-            if parts.len() > 4
-                || !parts.iter().all(|c| is_plain_file_name(c))
-                || parts.last() != Some(&a.executable.as_str())
-            {
+            if !is_archive_path(p, &a.executable) {
                 return Err(bad(format!(
                     "{}: archive path {p:?} is not a plain relative path ending in the executable",
                     a.platform
                 )));
             }
+        }
+        validate_companions(a).map_err(bad)?;
+    }
+    Ok(())
+}
+
+/// A `/`-separated relative path of at most four plain parts ending in `last`.
+fn is_archive_path(p: &str, last: &str) -> bool {
+    let parts: Vec<&str> = p.split('/').collect();
+    parts.len() <= 4 && parts.iter().all(|c| is_plain_file_name(c)) && parts.last() == Some(&last)
+}
+
+fn validate_companions(a: &Artifact) -> Result<(), String> {
+    if a.companions.is_empty() {
+        return Ok(());
+    }
+    let pf = &a.platform;
+    if a.archive.is_none() {
+        return Err(format!("{pf}: companions need an archive"));
+    }
+    if a.companions.len() > MAX_COMPANIONS {
+        return Err(format!("{pf}: more than {MAX_COMPANIONS} companions"));
+    }
+    let mut names: Vec<String> = vec![a.executable.to_ascii_lowercase()];
+    for c in &a.companions {
+        // Windows file names are case-insensitive: two entries that differ
+        // only in case would be one file.
+        let lower = c.file.to_ascii_lowercase();
+        if !is_plain_file_name(&c.file) || !lower.ends_with(COMPANION_EXTENSION) {
+            return Err(format!(
+                "{pf}: companion {:?} is not a plain .dll name",
+                c.file
+            ));
+        }
+        if names.contains(&lower) {
+            return Err(format!("{pf}: companion {:?} listed twice", c.file));
+        }
+        names.push(lower);
+        if !is_archive_path(&c.archive_path, &c.file) {
+            return Err(format!(
+                "{pf}: companion path {:?} is not a plain relative path ending in {:?}",
+                c.archive_path, c.file
+            ));
+        }
+        if !is_sha256(&c.sha256) {
+            return Err(format!(
+                "{pf}: companion {:?} SHA-256 must be 64 lowercase hex characters",
+                c.file
+            ));
         }
     }
     Ok(())

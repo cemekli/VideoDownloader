@@ -133,6 +133,7 @@ fn no_tools() -> Tools {
         ytdlp: None,
         media: None,
         ytdlp_version: String::new(),
+        whisper: None,
     }
 }
 
@@ -189,11 +190,15 @@ pub fn recheck_tools(engine: &Engine<AppStore>) {
         (Some(m), Some(dir)) => {
             let paths = ToolPaths::in_dir(&dir, &m);
             let report = check_tools(&m, &paths, now);
-            let version = m
-                .tool(vv_tools::ToolId::YtDlp)
-                .map(|t| t.version.clone())
-                .unwrap_or_default();
-            Tools::from_report(report, &paths, &cx.dirs, &ffmpeg_build(), &version)
+            let version = |id| m.tool(id).map(|t| t.version.clone()).unwrap_or_default();
+            Tools::from_report(
+                report,
+                &paths,
+                &cx.dirs,
+                &ffmpeg_build(),
+                &version(vv_tools::ToolId::YtDlp),
+                &version(vv_tools::ToolId::WhisperCli),
+            )
         }
         (Some(m), None) => Tools {
             report: ToolReport::all_missing(&m, now),
