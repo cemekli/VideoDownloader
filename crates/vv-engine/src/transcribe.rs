@@ -440,9 +440,11 @@ fn quietest(pcm: &[u8], start: i64, even: i64) -> i64 {
     let mut at = 0usize;
     while at + span <= pcm.len() {
         let energy: i64 = pcm[at..at + span]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| {
-                let s = i16::from_le_bytes([b[0], b[1]]) as i64;
+                let s = i16::from_le_bytes(*b) as i64;
                 s * s
             })
             .sum();
