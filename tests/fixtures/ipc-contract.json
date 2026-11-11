@@ -1751,6 +1751,186 @@
         ],
         "freeBytes": 120000000000
       }
+    },
+    "list_transcripts": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "transcripts": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c101",
+            "itemId": "00000000-0000-4000-8000-000000000001",
+            "language": "tr",
+            "provenance": "source_captions",
+            "provider": "source_captions",
+            "captionKind": "manual",
+            "modelId": null,
+            "status": "ready",
+            "coveredMs": 9500,
+            "segmentCount": 3,
+            "createdAt": 1794000065000,
+            "updatedAt": 1794000065000
+          }
+        ],
+        "captionsJob": {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "fetch_captions",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
+          "status": "succeeded",
+          "phase": null,
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": null,
+          "unitsTotal": null,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 5,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000000000,
+          "updatedAt": 1794000060000,
+          "finishedAt": 1794000065000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "canFetchCaptions": true
+      }
+    },
+    "get_transcript": {
+      "args": {
+        "transcriptId": "00000000-0000-4000-8000-00000000c101"
+      },
+      "response": {
+        "transcript": {
+          "id": "00000000-0000-4000-8000-00000000c101",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "language": "tr",
+          "provenance": "source_captions",
+          "provider": "source_captions",
+          "captionKind": "manual",
+          "modelId": null,
+          "status": "ready",
+          "coveredMs": 9500,
+          "segmentCount": 3,
+          "createdAt": 1794000065000,
+          "updatedAt": 1794000065000
+        },
+        "segments": [
+          {
+            "startMs": 0,
+            "endMs": 3200,
+            "text": "Günaydın, deniz kenarındayız."
+          },
+          {
+            "startMs": 3200,
+            "endMs": 6100,
+            "text": "Bugün sabah yürüyüşü yapıyoruz."
+          },
+          {
+            "startMs": 6100,
+            "endMs": 9500,
+            "text": "Martılar ve dalgalar eşlik ediyor."
+          }
+        ],
+        "truncated": false
+      }
+    },
+    "fetch_captions": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "transcripts": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c101",
+            "itemId": "00000000-0000-4000-8000-000000000001",
+            "language": "tr",
+            "provenance": "source_captions",
+            "provider": "source_captions",
+            "captionKind": "manual",
+            "modelId": null,
+            "status": "ready",
+            "coveredMs": 9500,
+            "segmentCount": 3,
+            "createdAt": 1794000065000,
+            "updatedAt": 1794000065000
+          }
+        ],
+        "captionsJob": {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "fetch_captions",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
+          "status": "succeeded",
+          "phase": null,
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": null,
+          "unitsTotal": null,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 5,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000000000,
+          "updatedAt": 1794000060000,
+          "finishedAt": 1794000065000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "canFetchCaptions": true
+      }
+    },
+    "delete_transcript": {
+      "args": {
+        "transcriptId": "00000000-0000-4000-8000-00000000c101"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "transcripts": [],
+        "captionsJob": {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "fetch_captions",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
+          "status": "succeeded",
+          "phase": null,
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": null,
+          "unitsTotal": null,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 5,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000000000,
+          "updatedAt": 1794000060000,
+          "finishedAt": 1794000065000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "canFetchCaptions": true
+      }
     }
   },
   "domainError": {

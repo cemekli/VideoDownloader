@@ -15,7 +15,7 @@
 //! and block themselves, waiting ones are blocked by `jobs::set_offline`.
 
 use crate::context::{Context, Store};
-use crate::{download, metadata, models, storage_move};
+use crate::{captions, download, metadata, models, storage_move};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -30,6 +30,8 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     (&[JobKind::StorageMove], 1),
     // One model at a time: they are hundreds of MB to GB (F6.1).
     (&[JobKind::ModelDownload], 1),
+    // Small text files; two runs of yt-dlp each (F6.2).
+    (&[JobKind::FetchCaptions], 2),
 ];
 
 pub struct Engine<S: Store> {
@@ -192,6 +194,7 @@ fn claim_all<S: Store>(cx: &Arc<Context<S>>) -> Vec<std::thread::JoinHandle<()>>
                         JobKind::Download => download::run(&cx2, lease),
                         JobKind::StorageMove => storage_move::run(&cx2, lease),
                         JobKind::ModelDownload => models::run(&cx2, lease),
+                        JobKind::FetchCaptions => captions::run(&cx2, lease),
                         _ => {}
                     }
                 });

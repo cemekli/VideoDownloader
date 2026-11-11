@@ -36,6 +36,8 @@ pub struct VideoMetadata {
     pub is_live: Option<bool>,
     pub has_drm: bool,
     pub formats: Vec<Format>,
+    /// Caption track names the site offers (no URLs; F6.2).
+    pub captions: crate::captions::CaptionTracks,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -62,6 +64,8 @@ pub struct Format {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+// One value per yt-dlp run, moved once: boxing the video would gain nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum Extracted {
     Video(VideoMetadata),
     /// Playlist/channel URL: not processed in bulk (SPEC §6, `PLAYLIST_UNSUPPORTED`).
@@ -141,6 +145,7 @@ fn video(o: &Map<String, Value>) -> Result<VideoMetadata, MetadataError> {
         is_live: o.get("is_live").and_then(Value::as_bool),
         has_drm: o.get("_has_drm").and_then(Value::as_bool).unwrap_or(false)
             || formats.iter().any(|f| f.has_drm),
+        captions: crate::captions::tracks(o),
         id,
         title,
         formats,

@@ -31,7 +31,7 @@ Her satır SPEC §20.1'deki bir varlık/girişe karşılık gelir. "Uygulandı" 
 | Varlık / giriş | Uygulandı | Açık | Kanıt / plan |
 |---|---|---|---|
 | URL ve redirect | Yakalamada şema, kimlik bilgisi ve yerel adres reddi; araç trafiğinde bağlantı başına port, DNS sonrası IP ve rebinding denetimi; her yt-dlp çalışması kendi proxy'si arkasında, redirect'ler dahil (AC-29, gerçek yt-dlp testi); uzak küçük resim de aynı proxy'den iner; uygulamanın kendi HTTP istemcisi yalnızca izinli model indirmesinde (F6.1, aynı politika, Hugging Face dışına yönlendirme yok) | Gerçek platformlarda doğrulama | F0.7, ADR-0007; F3.3, ADR-0021; F3.11 |
-| Metadata / altyazı | — | Güvenli render, alan ve çıktı limitleri | F3.4, AC-28 |
+| Metadata / altyazı | Altyazı: yalnızca iz adları okunur (URL'ler tutulmaz), iz adı `--sub-langs` için harf/rakam/`-`/`_` ile sınırlı, dosya staging içinde ve en çok 16 MiB, etiketler atılır, metin React'ta düz metin (HTML değil), segmentler §11.5 kurallarıyla denetlenir | Metadata alanlarında güvenli render ve limitlerin genişletilmesi | F3.4, AC-28; ADR-0027, `crates/vv-engine/tests/captions.rs`, `Transcripts.test.tsx` |
 | Dosya adı / yolu | FFmpeg'e yalnızca `file:<mutlak yol>`; medya protokolü kök dışına çıkmıyor (test derlemesi); import'ta yollar canonical, kök göreli yol bileşen bazlı (string prefix değil), klasörde symlink/junction izlenmiyor, bulut yer tutucu dosyalar okunmuyor | Güvenli create/rename (indirme hedefi) | ADR-0004, ADR-0006, ADR-0012; F3.6, AC-30 |
 | CLI girdisi | Argüman dizisi (kabuk yok), sabit bayraklar, temiz ortam | Kötü niyetli metadata ile metakarakter testleri | ADR-0003, ADR-0008; F4.4 |
 | Cookie / profile | — | İzin akışı, OS secret store (DPAPI, ADR-0022), redaksiyon | F5.1, F3.10, AC-18, AC-55 |

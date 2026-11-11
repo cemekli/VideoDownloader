@@ -86,6 +86,10 @@ const COMMANDS: &[&str] = &[
     "download_model",
     "verify_model",
     "remove_model",
+    "list_transcripts",
+    "get_transcript",
+    "fetch_captions",
+    "delete_transcript",
 ];
 
 fn main() {

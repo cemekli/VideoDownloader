@@ -56,6 +56,14 @@ pub enum Mode {
         selector: String,
         merge_format: Option<String>,
     },
+    /// Writes one caption track into `dir` as `caps.<track>.vtt` and
+    /// nothing else (F6.2). `track` must pass
+    /// [`vv_ytdlp::captions::valid_track`]: `--sub-langs` reads regexes.
+    Captions {
+        dir: PathBuf,
+        track: String,
+        automatic: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,6 +145,41 @@ pub fn build_args(tools: &YtdlpTools, mode: &Mode) -> Vec<OsString> {
             a.push("--ffmpeg-location".into());
             a.push(tools.ffmpeg.clone().into());
         }
+        Mode::Captions {
+            dir,
+            track,
+            automatic,
+        } => {
+            let (manual_flag, auto_flag) = if *automatic {
+                ("--no-write-subs", "--write-auto-subs")
+            } else {
+                ("--write-subs", "--no-write-auto-subs")
+            };
+            for s in [
+                "--quiet",
+                "--no-playlist",
+                "--skip-download",
+                "--no-write-thumbnail",
+                manual_flag,
+                auto_flag,
+                "--sub-format",
+                "vtt/best",
+                "--convert-subs",
+                "vtt",
+                "-o",
+                "subtitle:caps.%(ext)s",
+                "-o",
+                "vv-captions",
+                "--sub-langs",
+            ] {
+                a.push(s.into());
+            }
+            a.push(track.into());
+            a.push("-P".into());
+            a.push(dir.into());
+            a.push("--ffmpeg-location".into());
+            a.push(tools.ffmpeg.clone().into());
+        }
     }
     a
 }
@@ -206,12 +249,12 @@ pub fn run_as(
 
     let mut cmd = ManagedCommand::new(&tools.ytdlp);
     cmd.args(&args).env("DENO_DIR", &tools.deno_dir);
-    if let Mode::Download { dir, .. } = mode {
+    if let Mode::Download { dir, .. } | Mode::Captions { dir, .. } = mode {
         cmd.current_dir(dir);
     }
     let stdout_mode = match mode {
         Mode::Metadata { .. } => StdoutMode::Raw(vv_ytdlp::metadata::MAX_METADATA_BYTES),
-        Mode::Download { .. } => StdoutMode::Lines,
+        Mode::Download { .. } | Mode::Captions { .. } => StdoutMode::Lines,
     };
     let mut observer = RunObserver::new();
     let mut files = Vec::new();

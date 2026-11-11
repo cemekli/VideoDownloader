@@ -1071,3 +1071,31 @@ STATE.md F6.1 (F6.4'ün veri kısmı). SPEC §11.5, §16.2, §17.1, §20.2; AC-2
 - `crates/vv-engine/tests/models.rs` (yerel HTTP sunucusu): izinsiz iş yok, yönlendirme + doğrulama + kurulum, `Range` ile sürdürme, SHA-256 ve SHA-1 uyuşmazlığı, Hugging Face dışına yönlendirme reddi, eski izinle yeni dosya reddi, eksik/bozuk model tespiti ve kaldırma, Offline Mode'da bağlantısız bloklama.
 - `apps/desktop/src-tauri/tests/ipc.rs` `model_commands_match_contract_and_need_consent`; `apps/desktop/src/Transcription.test.tsx` (izin penceresi, Cancel, ilerleme, yer yetersizliği).
 - Gerçek indirme (Hugging Face'ten) Cuma'nın Windows testiyle görülür; ✅ için CI yeşil ve bu test gerekir.
+
+## ADR-0027: Sitenin kendi altyazısı transkript olarak
+
+STATE.md F6.2 (ilk yarı). SPEC AI-A01, §8.4 adım 2, §11.5, §20.2.
+
+**Bağlam.** §8.4 "izinli mevcut altyazı varsa kaynağı gösterilerek önerilir" der; AI-A01 kaynak ile üretilen dökümün ayrı tutulmasını ister. YouTube gibi siteler çoğu videoda altyazı verir: yükleyicinin kendi altyazısı ya da sitenin konuşma tanıma ile ürettiği otomatik altyazı. Bunlar yerel modelden çok daha hızlıdır ve model indirmeyi gerektirmez.
+
+**Karar: iki guarded yt-dlp çalışması, tek iş (`fetch_captions`).**
+
+1. `-J` ile sayfa yeniden okunur; `vv_ytdlp::captions::tracks` yalnızca iz adlarını (`tr`, `en`, `en-orig`) tutar, altyazı URL'lerini (imzalı olabilir) hiç tutmaz. Sohbet tekrarları (`live_chat`, `danmaku`, ...) konuşma sayılmaz.
+2. `captions::choose` tek izi seçer: (a) konuşulan dildeki yükleyici altyazısı; (b) konuşulan dildeki otomatik iz (YouTube'da `-orig` ekli olan, dil bilinmiyorsa tek `-orig` iz); (c) yükleyici altyazısı tercih sırasıyla (`tr`, `en`), sonra herhangi biri. **Başka dile otomatik çeviriler asla seçilmez**: aramada makine çevirisi metin konuşulmamış sözleri bulurdu. Uygun iz yoksa iş başarıyla biter, döküm yazılmaz; arayüz "sitenin altyazısı yok, yerel transkripsiyon sonraki güncellemede" der.
+3. Aynı oturumla (F5 auth denemesi ilk çalışmadan aynen) ikinci çalışma yalnızca o izi yazar: `--skip-download --write-subs|--write-auto-subs --sub-langs <iz> --sub-format vtt/best --convert-subs vtt -o subtitle:caps.%(ext)s -P <staging>`. `--sub-langs` değeri yt-dlp'de düzenli ifade listesidir ve `-` ile başlayan dışlar; bu yüzden iz adı yalnızca harf/rakam/`-`/`_` içerebilir ve harf/rakamla başlamalıdır (`valid_track`), aksi iz hiç seçilmez. Dosya staging klasörü içinde olmalı (`ytdlp::inside`) ve en çok 16 MiB'tır.
+4. `parse_vtt` WebVTT'yi düz metin işaretlerine çevirir: etiketler (`<c>`, `<v>`, satır içi zaman damgaları) atılır, HTML varlıkları çözülür, kontrol karakterleri silinir, `NOTE/STYLE/REGION` blokları atlanır, zamanı okunamayan ya da süresi sıfır olan işaret alınmaz (zaman uydurulmaz). Otomatik altyazı "kayar": her işaret bir önceki satırı tekrar gösterir; bir önceki işarette ekranda olan satır tekrar yazılmaz, böylece her söz bir kez kalır. Sonuç `transcripts::validate` (§11.5) ile denetlenir; medya süresini aşan döküm `MEDIA_CORRUPT` ile reddedilir, hiçbir şey yazılmaz.
+5. Döküm `source_captions` provenance, `source_captions` sağlayıcı, dil (`-orig` atılmış), `manual|automatic` türü ve `iz:tür:sha256:<dosya hash'i>` parmak iziyle, işi bitiren transaction içinde yazılır (§13.2 yayımlama kuralı). Aynı dil için tekrar çalıştırma aynı dökümü yeniler (ADR-0026 kimliği). Staging klasörü her durumda silinir.
+
+İş ağ kullanır (Offline Mode'da bloklanır), ayrı havuzda en çok 2 eş zamanlı çalışır, `metadata` ile aynı zaman aşımına (180 sn) sahiptir.
+
+**Karar: metin her zaman metin.** Altyazı satırları React'ta düz metin olarak gösterilir (`dangerouslySetInnerHTML` yok); `<img onerror>` gibi içerik ekranda yazı olarak görünür (threat model "Metadata / altyazı").
+
+**Komutlar.** `list_transcripts(itemId)`, `get_transcript(transcriptId)` (en çok 20 000 satır), `fetch_captions(itemId)` (öğe başına tek açık iş; bağlantısız öğe ve Offline Mode reddedilir), `delete_transcript(transcriptId)`. Yol ve URL dönmez. Details panelinde "Transcript" bölümü: dil adı + kaynak ("Site captions (uploader)" / "(automatic)"), satır sayısı, zaman kodlu satırlar, sil, "Get site captions". Zaman koduna tıklayıp oynatma ve tam panel F6.5'te.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-ytdlp/src/captions.rs` birim testleri: iz adı kuralı, iz okuma (URL yok, sohbet yok), seçim sırası, çevirilerin hiç seçilmemesi, zaman damgaları, etiket/varlık temizliği, kayan otomatik altyazının katlanması, WebVTT olmayan ve çok büyük dosya.
+- `crates/vv-engine/tests/captions.rs` (sahte yt-dlp): yükleyici altyazısı → döküm, otomatik `-orig` → `en` + `automatic`, yalnız çeviri → döküm yok + iş başarılı, süreyi aşan işaret → `MEDIA_CORRUPT` + hiçbir şey yazılmaz, eksik dosya → `EXTRACTOR_FAILED`, imzalı altyazı URL'si veritabanına girmez, staging temizlenir, yeniden çalıştırma aynı dökümü yeniler.
+- `crates/vv-engine/tests/real_ytdlp.rs` `real_site_captions_from_a_local_page_become_a_transcript`: sabitlenmiş gerçek yt-dlp, yerel bir sayfadaki HTML5 `<track>` altyazısını bu bayraklarla indirir ve döküm olur.
+- `apps/desktop/src-tauri/tests/ipc.rs` `transcript_commands_match_contract_and_queue_captions`; `apps/desktop/src/Transcripts.test.tsx`.
+- Gerçek YouTube videosunda (TR ve EN) Cuma'nın Windows testi gerekir; ✅ bunu ve F6.2'nin ikinci yarısını (whisper.cpp) bekler.

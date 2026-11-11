@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-captions"
+description = "Enables the fetch_captions command without any pre-configured scope."
+commands.allow = ["fetch_captions"]
+
+[[permission]]
+identifier = "deny-fetch-captions"
+description = "Denies the fetch_captions command without any pre-configured scope."
+commands.deny = ["fetch_captions"]

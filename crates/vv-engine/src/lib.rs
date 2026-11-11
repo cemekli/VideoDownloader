@@ -6,6 +6,7 @@
 //! - [`metadata`]: remote metadata and thumbnail jobs (F3.4).
 //! - [`formats`]: quality presets from real format data (F3.5).
 //! - [`download`]: download, merge, verification, staging → final (F3.6).
+//! - [`captions`]: the site's own captions as a transcript (F6.2).
 //! - [`storage`], [`storage_move`]: quota, usage and moving a root (F3.9).
 //! - [`runtime`]: the scheduler and its worker pools.
 //!
@@ -14,6 +15,7 @@
 
 pub mod auth;
 pub mod browsers;
+pub mod captions;
 pub mod context;
 pub mod cookiefile;
 pub mod download;

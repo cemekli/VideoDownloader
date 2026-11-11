@@ -470,6 +470,26 @@ export const en = {
   "models.consent.check": "The file is checked against its published checksums before it is used.",
   "models.consent.no_space": "There is not enough free space for this model.",
   "models.consent.agree": "Download",
+  // Transcripts in the details panel (STATE.md F6.2, SPEC §8.4, AI-A01)
+  "transcripts.title": "Transcript",
+  "transcripts.empty": "No transcript yet. If the site has captions for this video, VideoVault can keep them as searchable text.",
+  "transcripts.fetch": "Get site captions",
+  "transcripts.fetch_again": "Check site captions again",
+  "transcripts.fetching": "Getting the site's captions…",
+  "transcripts.none_found": "The site has no captions in the video's language. Local transcription comes in a later update.",
+  "transcripts.failed": "Could not get the captions: {reason}",
+  "transcripts.offline": "Offline Mode is on.",
+  "transcripts.source.manual": "Site captions (uploader)",
+  "transcripts.source.automatic": "Site captions (automatic)",
+  "transcripts.source.local": "Transcribed on this PC ({model})",
+  "transcripts.source.imported": "Imported",
+  "transcripts.lines.one": "{count} line",
+  "transcripts.lines.other": "{count} lines",
+  "transcripts.lines_label": "{language} transcript",
+  "transcripts.show": "Show",
+  "transcripts.hide": "Hide",
+  "transcripts.delete": "Delete",
+  "transcripts.truncated": "Only the first lines are shown.",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -324,3 +324,50 @@ fn a_real_download_from_a_local_page_is_fetched_verified_and_playable() {
         "the published file is the served file"
     );
 }
+
+/// F6.2: the real yt-dlp lists an HTML5 `<track>` as an uploader caption
+/// track and writes it with the flags of `Mode::Captions`; it becomes a
+/// `source_captions` transcript.
+#[test]
+fn real_site_captions_from_a_local_page_become_a_transcript() {
+    let Some(paths) = real() else { return };
+    let clip = std::fs::read(repo_root().join("tests/fixtures/media/mp4-h264-aac.mp4")).unwrap();
+    let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nYerel <i>altyazı</i>\n\n00:00:01.000 --> 00:00:02.000\nikinci satır\n";
+    let origin = serve(move |path| {
+        match path {
+        "/page.html" => (
+            200,
+            vec![("Content-Type".into(), "text/html".into())],
+            b"<html><head><title>Captioned clip</title></head><body><video src=\"/clip.mp4\" controls><track kind=\"captions\" srclang=\"tr\" label=\"T\xc3\xbcrk\xc3\xa7e\" src=\"/caps.tr.vtt\"></video></body></html>".to_vec(),
+        ),
+        "/clip.mp4" => (200, vec![("Content-Type".into(), "video/mp4".into())], clip.clone()),
+        "/caps.tr.vtt" => (200, vec![("Content-Type".into(), "text/vtt".into())], vtt.as_bytes().to_vec()),
+        _ => (404, vec![], vec![]),
+    }
+    });
+    let lib = real_lib(&paths, origin.addr);
+    let item = remote_item(&lib, &format!("http://{}/page.html", origin.addr));
+    let now = lib.clock.now_ms();
+    let job = lib.write(|c| vv_engine::captions::enqueue(c, &item, now).unwrap().id);
+    lib.run();
+    let j = lib.job(&job);
+    assert_eq!(
+        j.status,
+        JobStatus::Succeeded,
+        "{:?} {:?}",
+        j.error_code,
+        j.redacted_error_message
+    );
+    let ts = lib.write(|c| vv_persistence::transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1, "one transcript from the page's track");
+    assert_eq!(ts[0].origin.language, "tr");
+    let segs = lib.write(|c| vv_persistence::transcripts::segments(c, &ts[0].id).unwrap());
+    let got: Vec<_> = segs
+        .iter()
+        .map(|s| (s.start_ms, s.end_ms, s.text.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![(0, 1_000, "Yerel altyazı"), (1_000, 2_000, "ikinci satır")]
+    );
+}

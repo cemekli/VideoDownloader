@@ -15,6 +15,7 @@
 //! run on captured output in `tests/fixtures/ytdlp/`.
 
 pub mod args;
+pub mod captions;
 pub mod lines;
 pub mod metadata;
 pub mod outcome;

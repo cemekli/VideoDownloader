@@ -562,7 +562,7 @@ export interface ToolStatus {
   checkedAt: number | null;
 }
 
-export type JobKind = "download" | "metadata" | "storage_move" | "model_download";
+export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions";
 export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
 
 export interface JobDto {
@@ -769,4 +769,57 @@ export interface ModelClient {
   removeModel(modelId: string): Promise<ModelOverview>;
 }
 
-export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient;
+/** Where a transcript came from (SPEC §11.5). */
+export type TranscriptProvenance = "source_captions" | "generated_local" | "imported";
+export type TranscriptStatus = "pending" | "processing" | "partial" | "ready" | "failed" | "canceled" | "stale";
+
+/** One transcript of an item (F6.2). No paths, no caption URLs. */
+export interface TranscriptDto {
+  id: string;
+  itemId: string;
+  /** As the source names it: `tr`, `en`, `en-US`. */
+  language: string;
+  provenance: TranscriptProvenance;
+  provider: string;
+  /** Site captions: `manual` (the uploader's) or `automatic` (the site's speech recognition). */
+  captionKind: "manual" | "automatic" | null;
+  modelId: string | null;
+  status: TranscriptStatus;
+  coveredMs: number | null;
+  segmentCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TranscriptSegmentDto {
+  startMs: number;
+  endMs: number;
+  /** Plain text from the source; always rendered as text, never as HTML. */
+  text: string;
+}
+
+export interface TranscriptDetail {
+  transcript: TranscriptDto;
+  segments: TranscriptSegmentDto[];
+  truncated: boolean;
+}
+
+export interface ItemTranscripts {
+  itemId: string;
+  transcripts: TranscriptDto[];
+  /** The item's last site-captions job. */
+  captionsJob: JobDto | null;
+  /** The item has a link, so the site's captions can be fetched. */
+  canFetchCaptions: boolean;
+}
+
+/** Transcripts (F6.2, AI-A01): the site's own captions first. */
+export interface TranscriptClient {
+  listTranscripts(itemId: string): Promise<ItemTranscripts>;
+  getTranscript(transcriptId: string): Promise<TranscriptDetail>;
+  /** Queues the site-captions job; one open job per item. */
+  fetchCaptions(itemId: string): Promise<ItemTranscripts>;
+  deleteTranscript(transcriptId: string): Promise<ItemTranscripts>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient;

@@ -105,6 +105,10 @@ fn main() {
     {
         fail("usage: a cookie file is only for the login-file scenarios");
     }
+    if !metadata && args.iter().any(|a| a == "--sub-langs") {
+        captions(&args, &scenario, &dir);
+        return;
+    }
     if metadata {
         if scenario == "playlist" {
             println!("{{\"_type\":\"playlist\",\"id\":\"pl\",\"title\":\"A list\",\"entries\":[{{}},{{}}]}}");
@@ -117,7 +121,7 @@ fn main() {
                 [0xFF, 0xD8, 0xFF, 0xE0, 0, 16, b'J', b'F', b'I', b'F'],
             );
         }
-        let doc = serde_json::json!({
+        let mut doc = serde_json::json!({
             "id": format!("fake-{scenario}"),
             "title": format!("Fake video {scenario}"),
             "extractor_key": "Generic",
@@ -133,6 +137,35 @@ fn main() {
             "http_headers": {"Cookie": format!("s={CANARY}")},
             "description": format!("secret {CANARY}")
         });
+        let track = |ext: &str| serde_json::json!([{"ext": ext, "url": format!("https://cdn.example.com/sub?sig={CANARY}")}]);
+        let (lang, subs, auto) = match scenario.as_str() {
+            "captions-manual" => (
+                "tr",
+                serde_json::json!({"tr": track("vtt"), "live_chat": track("json")}),
+                serde_json::json!({"tr-orig": track("vtt"), "en": track("vtt")}),
+            ),
+            "captions-auto" => (
+                "en",
+                serde_json::json!({}),
+                serde_json::json!({"en-orig": track("vtt"), "de": track("vtt")}),
+            ),
+            "captions-bad" | "captions-missing" => (
+                "en",
+                serde_json::json!({"en": track("srv3")}),
+                serde_json::json!({}),
+            ),
+            "captions-none" => (
+                "en",
+                serde_json::json!({}),
+                serde_json::json!({"de": track("vtt")}),
+            ),
+            _ => ("", serde_json::json!({}), serde_json::json!({})),
+        };
+        if !lang.is_empty() {
+            doc["language"] = lang.into();
+            doc["subtitles"] = subs;
+            doc["automatic_captions"] = auto;
+        }
         println!("{doc}");
         return;
     }
@@ -198,4 +231,24 @@ fn main() {
         "vv-file {}",
         serde_json::to_string(&out.to_string_lossy()).unwrap()
     );
+}
+
+/// Caption mode (F6.2): writes `caps.<track>.vtt` like
+/// `-o subtitle:caps.%(ext)s` does, after checking the engine asked for the
+/// right kind of track.
+fn captions(args: &[String], scenario: &str, dir: &std::path::Path) {
+    let track = arg_after(args, "--sub-langs").unwrap_or_default();
+    let auto = args.iter().any(|a| a == "--write-auto-subs");
+    let manual = args.iter().any(|a| a == "--write-subs");
+    if !args.iter().any(|a| a == "--skip-download") || auto == manual {
+        fail("usage: captions need --skip-download and one kind of track");
+    }
+    let body = match (scenario, track.as_str(), auto) {
+        ("captions-manual", "tr", false) => "WEBVTT\n\n00:00:00.000 --> 00:00:01.200\nMerhaba <b>dünya</b>\n\n00:00:01.200 --> 00:00:02.900\nİkinci satır &amp; son\n".to_owned(),
+        ("captions-auto", "en-orig", true) => "WEBVTT\nKind: captions\nLanguage: en\n\n00:00:00.100 --> 00:00:01.000 align:start position:0%\n \nhello<00:00:00.400><c> world</c>\n\n00:00:01.000 --> 00:00:01.010 align:start position:0%\nhello world\n \n\n00:00:01.010 --> 00:00:02.500 align:start position:0%\nhello world\nthis<00:00:01.300><c> is</c><c> fine</c>\n".to_owned(),
+        ("captions-bad", "en", false) => "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nfine\n\n00:00:10.000 --> 00:00:12.000\nafter the end\n".to_owned(),
+        ("captions-missing", "en", false) => return,
+        _ => fail(&format!("usage: unexpected caption track {track} for {scenario}")),
+    };
+    std::fs::write(dir.join(format!("caps.{track}.vtt")), body).expect("write captions");
 }
