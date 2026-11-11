@@ -1475,6 +1475,7 @@ fn transcript_commands_match_contract_and_queue_captions() {
     // A bookmark has no file to transcribe on this PC (F6.2, ADR-0028).
     assert!(l["transcribeJob"].is_null());
     assert!(l["transcribeModel"].is_null());
+    assert!(l["transcribeElapsedMs"].is_null());
     assert_eq!(l["local"]["ready"], false);
     assert_eq!(l["local"]["reason"], "no-media");
     assert_eq!(l["local"]["models"], json!([]));

@@ -75,6 +75,9 @@ pub struct ItemTranscripts {
     pub transcribe_job: Option<JobDto>,
     /// The label of the model that job uses (`Base`, `Medium`, ...).
     pub transcribe_model: Option<String>,
+    /// How long that job has run (to now while open, to its end once done),
+    /// from when a worker took it; `None` while it waits in the queue.
+    pub transcribe_elapsed_ms: Option<i64>,
     /// Whether "Transcribe on this PC" can run, and with what.
     pub local: LocalTranscription,
 }
@@ -152,6 +155,12 @@ fn last_job(c: &Connection, staging: &Path, item_id: &str, kind: JobKind) -> Opt
     last_raw_job(c, item_id, kind).map(|j| job_dto(c, staging, &j))
 }
 
+/// Run time of a job from its latest attempt's start to its end (or `now`).
+fn job_elapsed_ms(c: &Connection, job: &jobs::Job, now: i64) -> Option<i64> {
+    let started = jobs::last_attempt_started_at(c, &job.id).ok().flatten()?;
+    Some((job.finished_at.unwrap_or(now) - started).max(0))
+}
+
 /// The catalog label of the model a transcription job runs with.
 fn job_model_label(job: &jobs::Job) -> Option<String> {
     let p = serde_json::from_value::<transcribe::Payload>(job.payload.clone()).ok()?;
@@ -225,6 +234,7 @@ pub fn for_item(
         can_fetch_captions: it.canonical_url.is_some() && it.removed_at.is_none(),
         transcribe_job: asr.as_ref().map(|j| job_dto(c, &dirs.staging, j)),
         transcribe_model: asr.as_ref().and_then(job_model_label),
+        transcribe_elapsed_ms: asr.as_ref().and_then(|j| job_elapsed_ms(c, j, now())),
         local: local(c, dirs, item_id, whisper && it.removed_at.is_none()),
     })
 }

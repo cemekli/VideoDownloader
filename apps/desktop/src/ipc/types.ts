@@ -817,6 +817,8 @@ export interface ItemTranscripts {
   transcribeJob: JobDto | null;
   /** Label of the model that job uses ("Base", "Medium", ...). */
   transcribeModel: string | null;
+  /** How long that job has run (to now while open), from when it started; null while queued. */
+  transcribeElapsedMs: number | null;
   local: LocalTranscription;
 }
 

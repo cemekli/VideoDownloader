@@ -1819,6 +1819,7 @@
         "canFetchCaptions": true,
         "transcribeJob": null,
         "transcribeModel": null,
+        "transcribeElapsedMs": null,
         "local": {
           "ready": true,
           "reason": null,
@@ -1927,6 +1928,7 @@
         "canFetchCaptions": true,
         "transcribeJob": null,
         "transcribeModel": null,
+        "transcribeElapsedMs": null,
         "local": {
           "ready": true,
           "reason": null,
@@ -2024,6 +2026,7 @@
           "canRemovePartial": false
         },
         "transcribeModel": "Base",
+        "transcribeElapsedMs": 65000,
         "local": {
           "ready": true,
           "reason": null,
@@ -2078,6 +2081,7 @@
         "canFetchCaptions": true,
         "transcribeJob": null,
         "transcribeModel": null,
+        "transcribeElapsedMs": null,
         "local": {
           "ready": true,
           "reason": null,

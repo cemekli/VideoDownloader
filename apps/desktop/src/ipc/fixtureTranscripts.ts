@@ -29,12 +29,13 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
   let seq = 0;
   const now = () => (clock += 1_000);
 
+  const elapsed = (j: JobDto | undefined) => (j && j.status !== "queued" ? (j.finishedAt ?? j.updatedAt) - j.createdAt : null);
   const item = (id: string, cmd: string) => records.find((r) => r.id === id && !r.removed) ?? (() => { throw err("INPUT_REJECTED", cmd); })();
   const view = (id: string): ItemTranscripts => {
     const r = item(id, "list_transcripts");
     const hasMedia = r.localState === "local_ready";
     const local: LocalTranscription = { ready: hasMedia, reason: hasMedia ? null : "no-media", models: FIXTURE_MODELS, languages: ["auto", "tr", "en"] };
-    return structuredClone({ itemId: id, transcripts: byItem.get(id) ?? [], captionsJob: jobs.get(id) ?? null, canFetchCaptions: r.canonicalUrl !== null, transcribeJob: asr.get(id) ?? null, transcribeModel: asrModel.get(id) ?? null, local });
+    return structuredClone({ itemId: id, transcripts: byItem.get(id) ?? [], captionsJob: jobs.get(id) ?? null, canFetchCaptions: r.canonicalUrl !== null, transcribeJob: asr.get(id) ?? null, transcribeModel: asrModel.get(id) ?? null, transcribeElapsedMs: elapsed(asr.get(id)), local });
   };
   const isOpen = (j: JobDto | undefined) => j !== undefined && !["succeeded", "failed", "canceled"].includes(j.status);
   const step = (r: FixtureRecord, modelId: string, language: string, pct: number) => {

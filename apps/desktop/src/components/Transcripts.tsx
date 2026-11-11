@@ -38,6 +38,16 @@ export function captionsJobText(j: JobDto): string {
   return j.attempts > 1 ? t("transcripts.job.running_attempt", { attempt: j.attempts, max: j.maxAttempts }) : t("transcripts.fetching");
 }
 
+/** "2:10 elapsed, about 6:30 left": the time left is a straight-line
+ *  guess from whisper's percentage, shown once it reaches 5%. */
+function timing(j: JobDto, elapsedMs: number | null): string | null {
+  if (elapsedMs === null) return null;
+  const done = t("transcripts.local.elapsed", { elapsed: formatDuration(elapsedMs) });
+  const pct = j.phase === "transcribe" ? j.unitsDone : null;
+  if (pct === null || pct < 5 || pct >= 100) return done;
+  return t("transcripts.local.elapsed_left", { elapsed: formatDuration(elapsedMs), left: formatDuration((elapsedMs * (100 - pct)) / pct) });
+}
+
 /**
  * The item's transcripts in the details panel (STATE.md F6.2, SPEC §8.4,
  * AI-A01, AI-A02). The site's own captions come first; an item with a file
@@ -119,6 +129,7 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
   // Default: the largest model installed (the list is smallest first).
   const model = local.models.find((m) => m.id === modelId) ?? local.models[local.models.length - 1] ?? null;
   const noSpeech = asr?.status === "succeeded" && !view.transcripts.some((x) => x.provenance === "generated_local");
+  const asrTiming = asrActive && asr ? timing(asr, view.transcribeElapsedMs) : null;
   const asrStopped = asr !== null && (asr.status === "failed" || asr.status === "blocked");
   return (
     <section data-testid="inspector-transcripts">
@@ -227,7 +238,8 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
               ? t("transcripts.local.running_pct", { pct: asr.unitsDone, model: asrModel })
               : asr.status === "queued"
                 ? t("transcripts.local.queued", { model: asrModel })
-                : t("transcripts.local.preparing", { model: asrModel })}{" "}
+                : t("transcripts.local.preparing", { model: asrModel })}
+            {asrTiming && <span data-testid="transcribe-timing"> · {asrTiming}</span>}{" "}
             {asr.canCancel && client.cancelJob && (
               <button
                 type="button"
@@ -239,6 +251,11 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
                 {t("transcripts.local.cancel")}
               </button>
             )}
+          </p>
+        )}
+        {asr?.status === "succeeded" && !asrActive && view.transcribeElapsedMs !== null && (
+          <p className="muted small" data-testid="transcribe-last-run">
+            {t("transcripts.local.last_run", { model: asrModel, elapsed: formatDuration(view.transcribeElapsedMs) })}
           </p>
         )}
         {noSpeech && !asrActive && (

@@ -375,6 +375,16 @@ pub fn attempts(c: &Connection, id: &str) -> Result<Vec<AttemptRow>> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// When the job's latest attempt started (a worker took it), if one has.
+pub fn last_attempt_started_at(c: &Connection, id: &str) -> Result<Option<i64>> {
+    Ok(c.query_row(
+        "SELECT started_at FROM job_attempt WHERE job_id = ?1 ORDER BY attempt DESC LIMIT 1",
+        [id],
+        |r| r.get(0),
+    )
+    .optional()?)
+}
+
 fn load(tx: &Transaction<'_>, id: &str) -> Result<Job> {
     get(tx, id)
 }
