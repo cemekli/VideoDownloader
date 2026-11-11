@@ -114,6 +114,7 @@ Elle yazılan fixture'lar kısa ve çoğunlukla ASCII'dir. 11 Kasım 2026'daki a
 | `tests/fixtures/ffmpeg/version-output.json` | Sabitlenen build'in ve GPL'li dağıtım build'inin gerçek `-version` çıktısı | `vv-tools` |
 | `tests/fixtures/media/*` + `manifest.json` | 14 adet 3 sn'lik test videosu (MP4/WebM/MKV/MOV × H.264/HEVC/VP8/VP9/AV1, AAC/Opus/Vorbis), sha256 ve ffprobe özetiyle | `media_protocol.rs`, oynatma matrisi |
 | `tests/fixtures/ytdlp/errors-source.json` | Yerelde üretilemeyen 20 hata satırı (giriş, bölge, DRM, araç eksik, Windows ağ hataları, CANARY redaksiyon vakası); her biri yt-dlp kaynak dosyasıyla | `vv-ytdlp` integration testleri |
+| `tests/fixtures/captions/*.vtt` + `expected.json` | Kendi yazdığımız, YouTube'un yt-dlp ile inen biçimini taklit eden altyazılar: `&gt;&gt;` konuşmacı işaretli Türkçe yükleyici izi (ş, ğ, ı, İ, varlıklar, emoji), kayan İngilizce otomatik iz (`<c>` zamanlama etiketleri, 10 ms'lik tekrar işaretleri) ve elle uç durumlar (BOM, CRLF, NFD, saatli zaman, bozuk varlık). Gerçek videodan metin yok (repo herkese açık). Beklenen işaretler `expected.json`'da | `vv-ytdlp` `captions_fixture.rs` ve fuzz tohumları, sahte yt-dlp (`captions-youtube-tr`, `captions-youtube-en`), `real_ytdlp.rs` (gerçek yt-dlp, yerel sayfa), arayüz fixture'ı `?fixture=captions-error` + `e2e/transcripts.spec.ts` |
 | `tests/fixtures/library-small.json` | 7 sentetik öğe: karışık platform, uzun başlık, Türkçe, emoji, bilinmeyen süre, eksik dosya, bağlı olmayan disk; inspector alanları | Arayüz fixture istemcisi, Vitest, Playwright |
 
 ## Benchmark

@@ -103,7 +103,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   const recs = records ?? scenarioRecords(scenario);
   const library = createFixtureLibrary(recs, scenario);
   const downloads = createFixtureDownloads(recs, scenario);
-  const transcripts = createFixtureTranscripts(recs);
+  const transcripts = createFixtureTranscripts(recs, undefined, scenario);
   return {
     ...createFixtureData(recs, scenario, library),
     ...downloads.client,
@@ -293,9 +293,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error"];
 
-/** `?fixture=empty|many|error|slow|first-run|download-error|login-required` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

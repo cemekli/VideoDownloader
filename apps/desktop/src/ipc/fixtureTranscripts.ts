@@ -5,9 +5,15 @@
 // PC" works for items with a local file (`local_ready`), with the Base
 // model as if the user had installed it, and makes a `generated_local`
 // transcript after a few progress steps.
+//
+// `captions-error`: the first fetch of every item ends `failed` with
+// INTERNAL_ERROR, as a handler panic does since the 11 Nov 2026 fix (the job
+// must end, never hang on "Getting…"); the next one succeeds with the cues of
+// the self-authored Turkish YouTube-like file (`tests/fixtures/captions/`).
 import contract from "@fixtures/ipc-contract.json";
+import realCaptions from "@fixtures/captions/expected.json";
 import { IpcError } from "./errors";
-import type { FixtureRecord } from "./fixture";
+import type { FixtureRecord, FixtureScenario } from "./fixture";
 import type { ItemTranscripts, JobDto, LocalTranscription, TranscriptClient, TranscriptDetail, TranscriptDto } from "./types";
 
 /** Transcripts plus the cancel the fixture client routes here for transcription jobs. */
@@ -18,8 +24,15 @@ const FIXTURE_MODELS = [{ id: "whisper-base", label: "Base" }];
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
 
-export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400): FixtureTranscripts {
+const realTurkish: TranscriptDetail["segments"] = realCaptions.files["youtube-tr-manual.vtt"].map(([startMs, endMs, text]) => ({
+  startMs: startMs as number,
+  endMs: endMs as number,
+  text: text as string,
+}));
+
+export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400, scenario: FixtureScenario = "default"): FixtureTranscripts {
   const sample = contract.commands.get_transcript.response as TranscriptDetail;
+  const fetches = new Map<string, number>();
   const byItem = new Map<string, TranscriptDto[]>();
   const segments = new Map<string, TranscriptDetail["segments"]>();
   const jobs = new Map<string, JobDto>();
@@ -75,17 +88,26 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
   const finish = (r: FixtureRecord) => {
     const j = jobs.get(r.id);
     if (!j || j.status !== "running") return;
-    j.status = "succeeded";
-    j.phase = "captions_save";
     j.finishedAt = j.updatedAt = now();
     j.canCancel = false;
+    const failing = scenario === "captions-error" && fetches.get(r.id) === 1;
+    if (failing) {
+      j.status = "failed";
+      j.errorCode = "INTERNAL_ERROR";
+      return;
+    }
+    j.status = "succeeded";
+    j.phase = "captions_save";
     if (r.platform !== "youtube") return;
+    const segs = scenario === "captions-error" ? realTurkish : sample.segments;
     const existing = byItem.get(r.id)?.find((t) => t.provenance === "source_captions" && t.language === "tr");
     const t: TranscriptDto = existing ?? { ...sample.transcript, id: `00000000-0000-4000-8000-${String(0xc100 + ++seq).padStart(12, "0")}`, itemId: r.id };
     t.createdAt = existing?.createdAt ?? j.finishedAt;
     t.updatedAt = j.finishedAt;
+    t.segmentCount = segs.length;
+    t.coveredMs = segs.at(-1)?.endMs ?? null;
     if (!existing) byItem.set(r.id, [...(byItem.get(r.id) ?? []), t]);
-    segments.set(t.id, sample.segments);
+    segments.set(t.id, segs);
   };
 
   return {
@@ -105,6 +127,7 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
       const open = jobs.get(itemId);
       if (open && !["succeeded", "failed", "canceled"].includes(open.status)) return view(itemId);
       const t = now();
+      fetches.set(itemId, (fetches.get(itemId) ?? 0) + 1);
       jobs.set(itemId, {
         ...(contract.commands.start_download.response as JobDto),
         id: `00000000-0000-4000-8000-${String(0xc000 + ++seq).padStart(12, "0")}`,

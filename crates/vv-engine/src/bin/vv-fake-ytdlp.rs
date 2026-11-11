@@ -11,6 +11,10 @@ use std::time::Duration;
 
 const MEDIA: &[u8] = include_bytes!("../../../../tests/fixtures/media/mp4-h264-aac.mp4");
 const CANARY: &str = "VVCANARY-7f3a91";
+// Self-authored YouTube-like caption files (tests/fixtures/captions/).
+const YOUTUBE_TR: &str = include_str!("../../../../tests/fixtures/captions/youtube-tr-manual.vtt");
+const YOUTUBE_EN_AUTO: &str =
+    include_str!("../../../../tests/fixtures/captions/youtube-en-auto.vtt");
 
 fn arg_after(args: &[String], flag: &str) -> Option<String> {
     args.iter()
@@ -144,6 +148,16 @@ fn main() {
                 serde_json::json!({"tr": track("vtt"), "live_chat": track("json")}),
                 serde_json::json!({"tr-orig": track("vtt"), "en": track("vtt")}),
             ),
+            "captions-youtube-tr" => (
+                "tr",
+                serde_json::json!({"tr": track("vtt"), "en": track("vtt")}),
+                serde_json::json!({"tr-orig": track("vtt"), "de": track("vtt")}),
+            ),
+            "captions-youtube-en" => (
+                "en",
+                serde_json::json!({"live_chat": track("json")}),
+                serde_json::json!({"en-orig": track("vtt"), "tr": track("vtt"), "en": track("vtt")}),
+            ),
             "captions-auto" => (
                 "en",
                 serde_json::json!({}),
@@ -161,6 +175,10 @@ fn main() {
             ),
             _ => ("", serde_json::json!({}), serde_json::json!({})),
         };
+        if scenario.starts_with("captions-youtube") {
+            // The caption files run longer than the 3 s clip.
+            doc["duration"] = 30.0.into();
+        }
         if !lang.is_empty() {
             doc["language"] = lang.into();
             doc["subtitles"] = subs;
@@ -248,6 +266,8 @@ fn captions(args: &[String], scenario: &str, dir: &std::path::Path) {
         ("captions-auto", "en-orig", true) => "WEBVTT\nKind: captions\nLanguage: en\n\n00:00:00.100 --> 00:00:01.000 align:start position:0%\n \nhello<00:00:00.400><c> world</c>\n\n00:00:01.000 --> 00:00:01.010 align:start position:0%\nhello world\n \n\n00:00:01.010 --> 00:00:02.500 align:start position:0%\nhello world\nthis<00:00:01.300><c> is</c><c> fine</c>\n".to_owned(),
         ("captions-bad", "en", false) => "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nfine\n\n00:00:10.000 --> 00:00:12.000\nafter the end\n".to_owned(),
         ("captions-missing", "en", false) => return,
+        ("captions-youtube-tr", "tr", false) => YOUTUBE_TR.to_owned(),
+        ("captions-youtube-en", "en-orig", true) => YOUTUBE_EN_AUTO.to_owned(),
         _ => fail(&format!("usage: unexpected caption track {track} for {scenario}")),
     };
     std::fs::write(dir.join(format!("caps.{track}.vtt")), body).expect("write captions");

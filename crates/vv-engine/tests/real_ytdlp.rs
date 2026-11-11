@@ -369,7 +369,10 @@ fn a_real_download_from_a_local_page_is_fetched_verified_and_playable() {
 fn real_site_captions_from_a_local_page_become_a_transcript() {
     let Some(paths) = real() else { return };
     let clip = std::fs::read(repo_root().join("tests/fixtures/media/mp4-h264-aac.mp4")).unwrap();
-    let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nYerel <i>altyazı</i>\n\n00:00:01.000 --> 00:00:02.000\nikinci satır\n";
+    // Self-authored, YouTube-like Turkish track: `&gt;&gt;` speaker marks
+    // before Turkish letters (the 11 Nov 2026 bug), entities, emoji.
+    let vtt =
+        std::fs::read(repo_root().join("tests/fixtures/captions/youtube-tr-manual.vtt")).unwrap();
     let origin = serve(move |path| {
         match path {
         "/page.html" => (
@@ -378,7 +381,7 @@ fn real_site_captions_from_a_local_page_become_a_transcript() {
             b"<html><head><title>Captioned clip</title></head><body><video src=\"/clip.mp4\" controls><track kind=\"captions\" srclang=\"tr\" label=\"T\xc3\xbcrk\xc3\xa7e\" src=\"/caps.tr.vtt\"></video></body></html>".to_vec(),
         ),
         "/clip.mp4" => (200, vec![("Content-Type".into(), "video/mp4".into())], clip.clone()),
-        "/caps.tr.vtt" => (200, vec![("Content-Type".into(), "text/vtt".into())], vtt.as_bytes().to_vec()),
+        "/caps.tr.vtt" => (200, vec![("Content-Type".into(), "text/vtt".into())], vtt.clone()),
         _ => (404, vec![], vec![]),
     }
     });
@@ -399,12 +402,17 @@ fn real_site_captions_from_a_local_page_become_a_transcript() {
     assert_eq!(ts.len(), 1, "one transcript from the page's track");
     assert_eq!(ts[0].origin.language, "tr");
     let segs = lib.write(|c| vv_persistence::transcripts::segments(c, &ts[0].id).unwrap());
-    let got: Vec<_> = segs
+    let got: Vec<serde_json::Value> = segs
         .iter()
-        .map(|s| (s.start_ms, s.end_ms, s.text.as_str()))
+        .map(|s| serde_json::json!([s.start_ms, s.end_ms, s.text]))
         .collect();
+    let expected: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("tests/fixtures/captions/expected.json"))
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
-        got,
-        vec![(0, 1_000, "Yerel altyazı"), (1_000, 2_000, "ikinci satır")]
+        serde_json::Value::Array(got),
+        expected["files"]["youtube-tr-manual.vtt"]
     );
 }

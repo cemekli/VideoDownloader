@@ -1,0 +1,27 @@
+{
+  "_comment": "Expected cues of the self-authored caption files in this folder (start_ms, end_ms, text), as vv_ytdlp::captions::parse_vtt returns them. The files imitate what yt-dlp writes for YouTube (manual Turkish track with '&gt;&gt;' speaker marks, rolling English automatic track) plus hand-written edge cases. Written by us, no real video's text (the repo is public). Used by vv-ytdlp captions_fixture.rs, the fake yt-dlp and real_ytdlp.rs.",
+  "files": {
+    "edge-cases.vtt": [
+      [1000, 2000, "İstanbul şehri şğı son"],
+      [4000, 5000, "&amp"],
+      [6000, 7000, "&ğğğğğğğ; &şş &#0; &bogus;"],
+      [3600000, 3601500, "bir saat sonra"]
+    ],
+    "youtube-en-auto.vtt": [
+      [160, 2310, "hey everyone welcome back"],
+      [2320, 4950, "to the channel today we're"],
+      [4960, 7590, "going to visit Şile & Ağva"],
+      [7600, 10000, "[Music]"]
+    ],
+    "youtube-tr-manual.vtt": [
+      [320, 3040, ">> Merhaba arkadaşlar, bugün İstanbul'dayız."],
+      [3040, 6480, ">> Şu an Kadıköy iskelesindeyiz; hava çok güzel."],
+      [6480, 9120, "[Müzik]"],
+      [9120, 12760, ">> Ayşe: Çığlık atmayın, kuşlar ürküyor! >> Güldüğümü görüyorsun değil mi?"],
+      [12760, 15000, "Iğdır, Iğdır… İzmir, ılık, IŞIK, ışık."],
+      [15000, 18400, "Fiyatı 25 ₺ — “çok ucuz” dedi & gitti."],
+      [18400, 21900, "Öğretmen: Ödevleri <yarın> getirin."],
+      [21900, 25000, "😀 Teşekkürler! 👍🏽 Görüşmek üzere 🇹🇷"]
+    ]
+  }
+}
