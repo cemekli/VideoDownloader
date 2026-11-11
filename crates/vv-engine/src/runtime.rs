@@ -163,6 +163,49 @@ impl<S: Store> Engine<S> {
     }
 }
 
+/// Runs `handler` for a claimed job. A handler bug (a panic) must end the
+/// job with `INTERNAL_ERROR`, not leave it running until its lease runs out
+/// and it is retried into the same bug (F6.2: a panic looked like a hang).
+pub fn run_guarded<S: Store>(
+    cx: &Context<S>,
+    lease: jobs::Lease,
+    handler: impl FnOnce(&Context<S>, jobs::Lease),
+) {
+    let (id, g, item) = (
+        lease.job.id.clone(),
+        lease.generation,
+        lease.job.item_id.clone(),
+    );
+    let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(cx, lease)));
+    if ran.is_err() {
+        let now = cx.now();
+        cx.store.write(|c| {
+            let _ = jobs::fail(
+                c,
+                &id,
+                g,
+                &jobs::Failure::Permanent,
+                "INTERNAL_ERROR",
+                Some("the job stopped on an internal error"),
+                now,
+            );
+        });
+        cx.events.job_changed(&id, item.as_deref());
+    }
+}
+
+/// Runs the handler of one claimed job.
+pub fn dispatch<S: Store>(cx: &Context<S>, kind: JobKind, lease: jobs::Lease) {
+    match kind {
+        JobKind::Metadata => metadata::run(cx, lease),
+        JobKind::Download => download::run(cx, lease),
+        JobKind::StorageMove => storage_move::run(cx, lease),
+        JobKind::ModelDownload => models::run(cx, lease),
+        JobKind::FetchCaptions => captions::run(cx, lease),
+        _ => {}
+    }
+}
+
 fn tick<S: Store>(cx: &Arc<Context<S>>) {
     let now = cx.now();
     cx.store.write(|c| {
@@ -189,14 +232,7 @@ fn claim_all<S: Store>(cx: &Arc<Context<S>>) -> Vec<std::thread::JoinHandle<()>>
                 .name(format!("vv-job-{}", lease.job.kind))
                 .spawn(move || {
                     let kind = lease.job.kind;
-                    match kind {
-                        JobKind::Metadata => metadata::run(&cx2, lease),
-                        JobKind::Download => download::run(&cx2, lease),
-                        JobKind::StorageMove => storage_move::run(&cx2, lease),
-                        JobKind::ModelDownload => models::run(&cx2, lease),
-                        JobKind::FetchCaptions => captions::run(&cx2, lease),
-                        _ => {}
-                    }
+                    run_guarded(&cx2, lease, |cx, lease| dispatch(cx, kind, lease));
                 });
             match h {
                 Ok(h) => out.push(h),

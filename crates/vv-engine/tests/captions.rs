@@ -125,3 +125,30 @@ fn a_missing_caption_file_fails_the_job() {
     assert_eq!(job.status, JobStatus::Failed);
     assert_eq!(job.error_code.as_deref(), Some("EXTRACTOR_FAILED"));
 }
+
+#[test]
+fn a_handler_that_panics_ends_its_job_with_internal_error() {
+    // F6.2 bug (11 Nov 2026): a panic in the caption parser left the job
+    // "running" and the panel said "Getting…" for minutes.
+    let lib = library(Setup::fake());
+    let item = lib.save("https://fake.test/captions-manual");
+    let now = lib.clock.now_ms();
+    let id = lib.write(|c| captions::enqueue(c, &item, now).unwrap().id);
+    let lease = lib
+        .write(|c| {
+            vv_persistence::jobs::claim(
+                c,
+                "test-owner",
+                &[vv_persistence::jobs::JobKind::FetchCaptions],
+                1,
+                false,
+                now,
+            )
+        })
+        .unwrap()
+        .unwrap();
+    vv_engine::runtime::run_guarded(lib.cx(), lease, |_, _| panic!("handler bug"));
+    let j = lib.job(&id);
+    assert_eq!(j.status, JobStatus::Failed);
+    assert_eq!(j.error_code.as_deref(), Some("INTERNAL_ERROR"));
+}
