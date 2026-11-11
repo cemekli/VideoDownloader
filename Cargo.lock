@@ -4455,6 +4455,7 @@ dependencies = [
  "url",
  "vv-domain",
  "vv-ffmpeg",
+ "vv-fuzz",
  "vv-import",
  "vv-netguard",
  "vv-persistence",
@@ -4472,6 +4473,10 @@ dependencies = [
  "serde_json",
  "vv-domain",
 ]
+
+[[package]]
+name = "vv-fuzz"
+version = "0.0.1"
 
 [[package]]
 name = "vv-import"
@@ -4546,6 +4551,7 @@ dependencies = [
  "serde",
  "serde_json",
  "vv-domain",
+ "vv-fuzz",
 ]
 
 [[package]]

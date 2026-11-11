@@ -1,11 +1,19 @@
 [workspace]
 resolver = "2"
-members = ["crates/vv-domain", "crates/vv-persistence", "crates/vv-ytdlp", "crates/vv-tools", "crates/vv-ffmpeg", "crates/vv-netguard", "crates/vv-process", "crates/vv-benchdata", "crates/vv-import", "crates/vv-engine", "crates/vv-secrets", "apps/desktop/src-tauri"]
+members = ["crates/vv-domain", "crates/vv-persistence", "crates/vv-ytdlp", "crates/vv-tools", "crates/vv-ffmpeg", "crates/vv-netguard", "crates/vv-process", "crates/vv-benchdata", "crates/vv-import", "crates/vv-engine", "crates/vv-secrets", "crates/vv-fuzz", "apps/desktop/src-tauri"]
 
 [workspace.package]
 edition = "2021"
 license = "UNLICENSED"
 publish = false
+
+# Text from outside the app (yt-dlp output, captions, cookie files) is full of
+# multi-byte letters; `&s[a..b]` panics when an index lands inside one (F6.2
+# bug, 11 Nov 2026). Slices go through `get`, `split_once`, `strip_prefix`…,
+# or carry an `#[expect(clippy::string_slice, reason = "…")]` saying why the
+# offsets are safe. `verify` runs clippy with `-D warnings`.
+[workspace.lints.clippy]
+string_slice = "warn"
 
 # Development builds (`npm run desktop`) hash every managed tool at start-up
 # (about 400 MB) and every finished download: unoptimized SHA-256 took tens

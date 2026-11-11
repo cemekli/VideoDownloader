@@ -312,7 +312,7 @@ fn killed_process_and_cut_lines() {
     );
 
     // A kill can land mid-write: the last line is then half a progress object.
-    let cut = &r.stdout[..r.stdout.len() - 40];
+    let cut = r.stdout.get(..r.stdout.len() - 40).unwrap();
     let partial = replay(cut, "", Exit::Killed, true);
     assert_eq!(partial.malformed, 1);
     assert_eq!(partial.outcome, RunOutcome::Canceled);

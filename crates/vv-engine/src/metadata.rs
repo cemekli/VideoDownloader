@@ -67,9 +67,13 @@ fn set_status(c: &Connection, item_id: &str, status: MetadataStatus, now: i64) {
     );
 }
 
-/// `20261109` -> `2026-11-09`.
+/// `20261109` -> `2026-11-09`. Anything else (also 8 bytes that are not 8
+/// digits, such as `2026ğ110`) is no date.
 fn iso_date(d: &str) -> Option<String> {
-    (d.len() == 8).then(|| format!("{}-{}-{}", &d[..4], &d[4..6], &d[6..8]))
+    if d.len() != 8 || !d.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!("{}-{}-{}", d.get(..4)?, d.get(4..6)?, d.get(6..)?))
 }
 
 /// `scheme://host[:port]` of a URL, for `source_metadata` (§11.3).
@@ -436,6 +440,16 @@ fn lib(e: LibraryError) -> jobs::JobError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upload_dates_that_are_not_eight_digits_are_no_date() {
+        assert_eq!(iso_date("20261109").as_deref(), Some("2026-11-09"));
+        // 8 bytes, but `ğ` is two of them: slicing at 4..6 used to panic.
+        assert_eq!(iso_date("2026ğ110"), None);
+        assert_eq!(iso_date("2026-1-9"), None);
+        assert_eq!(iso_date("2026110"), None);
+        assert_eq!(iso_date("😀😀"), None);
+    }
 
     #[test]
     fn origins_keep_only_scheme_and_host() {

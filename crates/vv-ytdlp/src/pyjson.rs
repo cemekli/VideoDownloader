@@ -5,6 +5,10 @@
 
 /// Returns `input` with bare `NaN`, `Infinity`, `-Infinity` and `NA` outside
 /// strings replaced by `null`. Everything else is copied unchanged.
+#[expect(
+    clippy::string_slice,
+    reason = "slices start and end at ASCII token bytes (`NaN`, `NA`, …)"
+)]
 pub(crate) fn nullify_bare_tokens(input: &str) -> String {
     const TOKENS: [&str; 4] = ["-Infinity", "Infinity", "NaN", "NA"];
     let bytes = input.as_bytes();

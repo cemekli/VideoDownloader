@@ -48,8 +48,8 @@ pub fn firefox_profiles(root: &Path) -> Vec<BrowserProfile> {
     let mut sections: Vec<(String, Vec<(String, String)>)> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
-        if line.starts_with('[') && line.ends_with(']') {
-            sections.push((line[1..line.len() - 1].to_string(), Vec::new()));
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            sections.push((name.to_string(), Vec::new()));
         } else if let (Some((k, v)), Some(last)) = (line.split_once('='), sections.last_mut()) {
             last.1.push((k.trim().to_string(), v.trim().to_string()));
         }
@@ -81,8 +81,13 @@ pub fn firefox_profiles(root: &Path) -> Vec<BrowserProfile> {
         } else {
             PathBuf::from(&rel)
         };
-        // A relative path must stay inside Firefox's folder.
-        if relative && rel.split('/').any(|s| s == ".." || s.is_empty()) {
+        // A relative path must stay inside Firefox's folder. On Windows `\`
+        // and `C:` in one segment would also leave it (`..\..\x`, `C:\x`).
+        if relative
+            && rel
+                .split('/')
+                .any(|s| s == ".." || s.is_empty() || s.contains(['\\', ':']))
+        {
             continue;
         }
         let is_default = match &install_default {

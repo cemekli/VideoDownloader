@@ -29,6 +29,10 @@ pub fn redact(line: &str) -> String {
     s
 }
 
+#[expect(
+    clippy::string_slice,
+    reason = "`i` is where an ASCII marker starts; ASCII lowercasing keeps byte offsets"
+)]
 fn cut_headers(line: &str) -> String {
     let lower = line.to_ascii_lowercase();
     match HEADER_MARKERS.iter().filter_map(|m| lower.find(m)).min() {
@@ -37,6 +41,10 @@ fn cut_headers(line: &str) -> String {
     }
 }
 
+#[expect(
+    clippy::string_slice,
+    reason = "offsets come from find() of ASCII schemes and terminators"
+)]
 fn redact_urls(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut rest = line;
@@ -64,6 +72,10 @@ fn find_scheme(s: &str) -> Option<usize> {
 }
 
 /// `https://u:p@host:1/a?b#c` → `https://host:1/…`; `https://host/` stays.
+#[expect(
+    clippy::string_slice,
+    reason = "`auth_end` is where an ASCII `/`, `?` or `#` is"
+)]
 fn keep_origin(url: &str) -> String {
     let (scheme, after) = url.split_once("://").unwrap_or(("", url));
     let auth_end = after.find(['/', '?', '#']).unwrap_or(after.len());
@@ -87,6 +99,10 @@ fn redact_home_dirs(line: &str) -> String {
     replace_segment_after(&s, "\\\\Users\\\\")
 }
 
+#[expect(
+    clippy::string_slice,
+    reason = "offsets come from find() of ASCII markers and separators"
+)]
 fn replace_segment_after(s: &str, marker: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;

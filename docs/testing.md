@@ -67,6 +67,7 @@ CI (`.github/workflows/ci.yml`) her değişikliği Windows ve Linux'ta bir kez t
 | UI bileşeni | `apps/desktop/src/**/<Bileşen>.test.tsx` | Fixture istemcisiyle |
 | Kullanıcı yolculuğu | `apps/desktop/e2e/*.spec.ts` | 3 görünümde çalışır |
 | yt-dlp çıktısı ayrıştırma ve hata eşleme | `crates/vv-ytdlp/tests/fixtures.rs` + `tests/fixtures/ytdlp/` | Yeni hata metni: yakalanabiliyorsa yakalama betiğine senaryo, değilse kaynağıyla birlikte `errors-source.json`'a vaka |
+| Dışarıdan metin okuyan her ayrıştırıcı (yt-dlp çıktısı, altyazı, çerez dosyası, `profiles.ini`) | `crates/*/tests/fuzz.rs` (`vv-fuzz` ile) | Bkz. "Fuzz testleri". Yeni ayrıştırıcı yazınca buraya bir hedef eklenir |
 | Gerçek uygulama davranışı (IPC, yetki, CSP, pencere) | `apps/desktop/e2e-desktop/*.spec.ts` | Windows'ta gerçek exe ile; ADR-0001 |
 | Yönetilen araçlar: manifest, hash, sürüm, JS runtime, FFmpeg lisansı | `crates/vv-tools/tests/tools.rs` + `tools/manifest.json` + `tests/fixtures/tools/` | Araç sürümü değişince `health-output.json` yeniden yakalanır; ADR-0005, ADR-0006 |
 | FFmpeg/ffprobe bayrakları, biçim sınıflandırma, referanslı girdi reddi (AC-59) | `crates/vv-ffmpeg/tests/ffmpeg.rs` + `tests/fixtures/ffmpeg/` | Gerçek build ile `npm run tools:fetch` (CI'da her çalışmada); yeni build: `node scripts/ffmpeg-probe.mjs --ffmpeg … --ffprobe … --update`; ADR-0006 |
@@ -84,6 +85,17 @@ Kurallar:
 - Fixture'lara gerçek URL'ler, çerezler, token'lar veya kişisel dosyalar konmaz. Redaksiyon testlerindeki sahte değerler `CANARY` kelimesini içerir. `verify` bunu denetler.
 - Fixture ile geçen test, canlı platform başarısı sayılmaz.
 - Fixture IPC ile geçen E2E testi, gerçek Tauri IPC'nin çalıştığını kanıtlamaz. `tests/ipc.rs` gerçek IPC yolunu sahte pencereyle test eder; gerçek pencere ve WebView2 için `e2e-desktop/` vardır (yalnızca Windows).
+
+## Fuzz testleri
+
+Elle yazılan fixture'lar kısa ve çoğunlukla ASCII'dir. 11 Kasım 2026'daki altyazı hatası (`&gt;&gt;`'den sonra Türkçe harfte bayt dilimi panic'i) bu yüzden testlerde görünmedi. Dışarıdan metin okuyan her ayrıştırıcı bu yüzden bir de fuzz testinden geçer:
+
+- `crates/vv-fuzz`: yalnızca test bağımlılığı, uygulamaya girmez. Sabit tohumlu SplitMix64 (her işletim sisteminde aynı vakalar); gerçek bir örneği (fixture) parçalayan, kesen, tekrarlayan, Türkçe harf, NFD, emoji, BOM, NUL, CR, yön işareti ve geçersiz UTF-8 ekleyen mutasyonlar; örneğin her karakter sınırında kesilmiş halleri.
+- Hedefler: `crates/vv-ytdlp/tests/fuzz.rs` (progress satırı, hata satırı + `RunObserver`, redaksiyon, metadata JSON, altyazı izi seçimi, WebVTT, satır bölücü) ve `crates/vv-engine/tests/fuzz.rs` (Netscape çerez dosyası, Firefox `profiles.ini`, whisper-cli progress satırı, `-oj` JSON çıktısı ve WAV başlığı). Her hedef panic etmemeli ve kendi kuralını korumalı: redaksiyondan sonra URL'deki `VVCANARY` görünmez; çerez filtresi yalnızca platformun alan adlarını bırakır; göreli Firefox profili klasörden çıkmaz; altyazı işaretleri sıralı, `start < end`, kontrol karakteri yok.
+- Varsayılan 2 000 vaka/hedef, `cargo test` içinde birkaç saniye. Daha uzun arama: `VV_FUZZ_ITERS=100000 cargo test --release --test fuzz`; başka tohum: `VV_FUZZ_SEED=0x1234`. Düşen vaka numarasını ve tohumu yazar; `VV_FUZZ_CASE=<n>` yalnızca onu çalıştırır.
+- Düşen bir vaka bulunursa düzeltmeyle birlikte ayrı bir regresyon testi (sabit girdi) eklenir.
+
+**UTF-8 dilimleme kuralı.** Workspace'te `clippy::string_slice` açık (`Cargo.toml` `[workspace.lints.clippy]`, `verify` `-D warnings` ile çalıştırır). `&s[a..b]` yerine `get`, `split_once`, `strip_prefix`/`strip_suffix` kullanılır. Ofset güvenliyse (ör. ASCII bir karakterin `find` sonucu) fonksiyona `#[expect(clippy::string_slice, reason = "…")]` yazılır; gerekçe zorunludur. Kural açıldığında iki gizli hata bulundu: 8 baytlık ama 8 rakam olmayan `upload_date` (`2026ğ110`) metadata işini panic ettirebilirdi; Windows'ta `profiles.ini` içindeki `Path=..\x` ya da `C:\x` göreli profil klasörünün dışına çıkabilirdi. Whisper (F6.2b) eklenince iki şey daha çıktı: `whisper.cpp` sürüm metni bayt bayt kesiliyordu (artık karakter karakter), ve whisper JSON'undaki `\u0000` gibi kaçışlar döküm metnine kontrol karakteri olarak giriyordu (artık boşluk).
 
 ## Fixture'lar
 
@@ -156,7 +168,7 @@ Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §2
 | CAP-05 | M1 | Etiket/koleksiyon seçimi isteğe bağlı olmalı; varsayılan kayıt Inbox'a gitmeli. | MT-02 | henüz yok |
 | CAP-06 | M1 | Platform+source ID veya normalize URL eşleşmesi aynı öğeye yönlendirmeli; mevcut notlar k… | AC-02, AC-03, AC-45, AC-56 | `apps/desktop/src-tauri/src/capture_commands.rs`, `apps/desktop/src/AddUrl.test.tsx`, `crates/vv-persistence/src/library/bookmark.rs`, `crates/vv-persistence/tests/bookmark.rs` |
 | CAP-07 | M2 | Güvenli metadata önizlemesi varsa gösterilmeli; Download ayrı ve isteğe bağlı eylem olmal… | MT-03, AC-28 | `crates/vv-engine/src/metadata.rs` |
-| CAP-08 | M1 | Geçici oturumlu medya URL'leri kalıcı kaynak URL yerine kullanılmamalı; hassas URL sorgul… | AC-36, AC-52, AC-18 | `apps/desktop/src-tauri/src/capture_commands.rs`, `crates/vv-domain/src/normalize.rs`, `crates/vv-domain/tests/normalize_fixture.rs`, `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/src/library/bookmark.rs`, `crates/vv-persistence/tests/auth.rs`, `crates/vv-persistence/tests/bookmark.rs` |
+| CAP-08 | M1 | Geçici oturumlu medya URL'leri kalıcı kaynak URL yerine kullanılmamalı; hassas URL sorgul… | AC-36, AC-52, AC-18 | `apps/desktop/src-tauri/src/capture_commands.rs`, `crates/vv-domain/src/normalize.rs`, `crates/vv-domain/tests/normalize_fixture.rs`, `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/src/library/bookmark.rs`, `crates/vv-persistence/tests/auth.rs`, `crates/vv-persistence/tests/bookmark.rs`, `crates/vv-ytdlp/tests/fuzz.rs` |
 | IMP-01 | M1 | Dosya seçici, klasör seçici ve erişilebilir alternatifi olan sürükle-bırak desteklenmeli. | MT-04 | `apps/desktop/src-tauri/src/library_commands.rs` |
 | IMP-02 | M1 | MP4, MKV, WebM, MOV ve seçilen araçların desteklediği ses dosyaları ffprobe ile doğrulanm… | AC-04, AC-32, AC-59 | `apps/desktop/e2e/player.spec.ts`, `apps/desktop/src/Data.test.tsx`, `crates/vv-ffmpeg/tests/ffmpeg.rs`, `crates/vv-import/src/fsutil.rs`, `crates/vv-import/tests/import.rs`, `scripts/ffmpeg-probe.mjs` |
 | IMP-03 | M1 | Süre, container, codec, boyut, çözünürlük ve ses parçası bilgisi mevcut olduğu ölçüde çık… | MT-05 | henüz yok |

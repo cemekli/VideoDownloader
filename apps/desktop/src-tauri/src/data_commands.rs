@@ -285,7 +285,7 @@ pub async fn export_library<R: Runtime>(
             .add_filter("VideoVault library", &["json"])
             .set_file_name(format!(
                 "videovault-library-{}.json",
-                &portable::iso_utc(t)[..10]
+                portable::iso_utc(t).chars().take(10).collect::<String>()
             ));
         if let Some(w) = parent_window(&app) {
             dialog = dialog.set_parent(&w);

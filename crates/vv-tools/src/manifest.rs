@@ -492,7 +492,7 @@ fn ffmpeg_url_is_pinned(t: &Tool, a: &Artifact) -> bool {
                 b.is_ascii_digit()
             }
         })
-        && tag[..10].replace('-', "") == date;
+        && tag.get(..10).map(|d| d.replace('-', "")).as_deref() == Some(date);
     let os = match a.platform.as_str() {
         "windows-x86_64" => "win64",
         "linux-x86_64" => "linux64",

@@ -28,3 +28,7 @@ ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
 
 [dev-dependencies]
 tempfile = "3"
+vv-fuzz = { path = "../vv-fuzz" }
+
+[lints]
+workspace = true

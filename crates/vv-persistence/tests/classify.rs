@@ -63,9 +63,10 @@ fn every_spec_19_code_exists_and_has_a_job_rule() {
     let spec =
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../SPEC.md")).unwrap();
     let start = spec.find("## 19. Hata sınıflandırması").unwrap();
-    let end = start + spec[start..].find("\n## 20.").unwrap();
+    let section = spec.get(start..).unwrap();
+    let section = section.split_once("\n## 20.").unwrap().0;
     let mut in_spec = std::collections::BTreeSet::new();
-    for line in spec[start..end].lines().filter(|l| l.starts_with("| `")) {
+    for line in section.lines().filter(|l| l.starts_with("| `")) {
         let first = line.split('|').nth(1).unwrap();
         for part in first.split('`').skip(1).step_by(2) {
             in_spec.insert(part.to_string());

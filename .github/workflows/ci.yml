@@ -32,9 +32,18 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install Tauri system libraries (Linux)
         if: runner.os == 'Linux'
+        # The runner's Ubuntu mirror sometimes fails DNS or serves a stale
+        # index (11 Nov 2026: two runs lost before any test). Retry with a
+        # fresh index instead of failing the whole Linux job.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+          for attempt in 1 2 3; do
+            sudo apt-get update -o Acquire::Retries=5 &&
+              sudo apt-get install -y -o Acquire::Retries=5 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev &&
+              exit 0
+            echo "apt attempt $attempt failed; retrying in 30 s"
+            sleep 30
+          done
+          exit 1
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
