@@ -815,6 +815,10 @@ export interface ItemTranscripts {
   canFetchCaptions: boolean;
   /** The item's last local transcription job (F6.2, ADR-0028). */
   transcribeJob: JobDto | null;
+  /** Label of the model that job uses ("Base", "Medium", ...). */
+  transcribeModel: string | null;
+  /** How long that job has run (to now while open), from when it started; null while queued. */
+  transcribeElapsedMs: number | null;
   local: LocalTranscription;
 }
 
