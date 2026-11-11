@@ -236,9 +236,11 @@ fn sanitize_json(raw: &[u8]) -> String {
 fn is_marker(text: &str) -> bool {
     let t = text.trim();
     let wrapped = |o: char, c: char| {
-        t.starts_with(o) && t.ends_with(c) && t[1..t.len() - 1].chars().all(|x| x != o && x != c)
+        t.strip_prefix(o)
+            .and_then(|r| r.strip_suffix(c))
+            .is_some_and(|inner| inner.chars().all(|x| x != o && x != c))
     };
-    t.len() >= 2 && (wrapped('[', ']') || wrapped('(', ')'))
+    wrapped('[', ']') || wrapped('(', ')')
 }
 
 /// A BCP 47-looking tag (`tr`, `en`, `zh`), else `und`.
@@ -272,6 +274,18 @@ pub fn parse_output(raw: &[u8], asked: &str) -> Result<Output, String> {
     let segments = doc
         .transcription
         .into_iter()
+        .map(|mut s| {
+            // A `\u0000`-style escape decodes to a control character; like
+            // caption text, stored text has none (found by tests/fuzz.rs).
+            if s.text.chars().any(char::is_control) {
+                s.text = s
+                    .text
+                    .chars()
+                    .map(|c| if c.is_control() { ' ' } else { c })
+                    .collect();
+            }
+            s
+        })
         .filter(|s| {
             s.offsets.to > s.offsets.from && !s.text.trim().is_empty() && !is_marker(&s.text)
         })
@@ -549,15 +563,16 @@ pub fn fingerprint_of(
     language: &str,
 ) -> String {
     let media = match (&asset.content_hash, asset.size_bytes) {
-        (Some(h), _) => format!("sha256:{}", &h[..h.len().min(64)]),
+        (Some(h), _) => format!("sha256:{}", h.chars().take(64).collect::<String>()),
         (None, Some(n)) => format!("size:{n}"),
         (None, None) => "unhashed".into(),
     };
     format!(
         "asset:{}:{media}:model:{}:whisper.cpp:{}:lang:{language}",
         asset.id,
-        &model_sha256[..model_sha256.len().min(16)],
-        &whisper_version[..whisper_version.len().min(16)],
+        model_sha256.chars().take(16).collect::<String>(),
+        // From the tool's own `--version` output: never sliced by bytes.
+        whisper_version.chars().take(16).collect::<String>(),
     )
 }
 
@@ -655,6 +670,13 @@ mod tests {
         assert!(parse_output(b"not json", "auto").is_err());
         let odd = br#"{"result": {"language": "<script>"}, "transcription": []}"#;
         assert_eq!(parse_output(odd, "auto").unwrap().language, "und");
+    }
+
+    #[test]
+    fn escaped_control_characters_do_not_reach_the_text() {
+        let raw = br#"{"result":{"language":"tr"},"transcription":[{"offsets":{"from":0,"to":900},"text":" a\u0000b\u0007 c "}]}"#;
+        let o = parse_output(raw, "auto").unwrap();
+        assert_eq!(o.segments[0].text, "a b  c");
     }
 
     #[test]
