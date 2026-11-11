@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
-import type { ItemTranscripts, JobDto, TranscriptClient, TranscriptDetail, TranscriptDto } from "../ipc/types";
+import type { DownloadClient, ItemTranscripts, JobDto, TranscribeLanguage, TranscriptClient, TranscriptDetail, TranscriptDto } from "../ipc/types";
 import { formatDuration } from "../format";
 import { getLocale, t, tn } from "../i18n";
 import { errorMessage } from "../labels";
@@ -27,15 +27,19 @@ export function sourceLabel(tr: TranscriptDto): string {
 
 /**
  * The item's transcripts in the details panel (STATE.md F6.2, SPEC §8.4,
- * AI-A01). The site's own captions come first; each transcript says its
- * language and source. Lines are shown with their timecodes as plain text.
+ * AI-A01, AI-A02). The site's own captions come first; an item with a file
+ * can also be transcribed on this PC with a model the user installed. Each
+ * transcript says its language and source. Lines are shown with their
+ * timecodes as plain text.
  */
-export function Transcripts({ client, itemId }: { client: TranscriptClient; itemId: string }) {
+export function Transcripts({ client, itemId }: { client: TranscriptClient & Pick<DownloadClient, "cancelJob">; itemId: string }) {
   const online = useOnline();
   const [view, setView] = useState<ItemTranscripts | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState<TranscriptDetail | null>(null);
+  const [language, setLanguage] = useState<TranscribeLanguage>("auto");
+  const [modelId, setModelId] = useState<string | null>(null);
 
   const fail = useCallback((e: unknown) => setError(errorMessage(errorCode(e))), []);
   const reload = useCallback(
@@ -54,14 +58,16 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient; item
     void reload();
   }, [reload]);
 
-  // While the captions job is open, refresh once a second.
+  // While a captions or transcription job is open, refresh once a second.
   const job = view?.captionsJob ?? null;
   const active = openJob(job);
+  const asr = view?.transcribeJob ?? null;
+  const asrActive = openJob(asr);
   useEffect(() => {
-    if (!active) return;
+    if (!active && !asrActive) return;
     const id = setInterval(() => void reload(), 1000);
     return () => clearInterval(id);
-  }, [active, reload]);
+  }, [active, asrActive, reload]);
 
   // A transcript that is open is reloaded when it changes.
   const shownId = shown?.transcript.id;
@@ -95,10 +101,15 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient; item
   if (!view) return null;
   const hasCaptions = view.transcripts.some((x) => x.provenance === "source_captions");
   const noneFound = job?.status === "succeeded" && !hasCaptions;
+  const local = view.local;
+  // Default: the largest model installed (the list is smallest first).
+  const model = local.models.find((m) => m.id === modelId) ?? local.models[local.models.length - 1] ?? null;
+  const noSpeech = asr?.status === "succeeded" && !view.transcripts.some((x) => x.provenance === "generated_local");
+  const asrStopped = asr !== null && (asr.status === "failed" || asr.status === "blocked");
   return (
     <section data-testid="inspector-transcripts">
       <h4>{t("transcripts.title")}</h4>
-      {view.transcripts.length === 0 && !active && !noneFound && <p className="muted small">{t("transcripts.empty")}</p>}
+      {view.transcripts.length === 0 && !active && !asrActive && !noneFound && <p className="muted small">{t(local.reason === "no-media" ? "transcripts.empty" : "transcripts.empty_local")}</p>}
       {view.transcripts.length > 0 && (
         <ul className="transcript-list">
           {view.transcripts.map((tr) => (
@@ -171,6 +182,79 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient; item
           {hasCaptions || job ? t("transcripts.fetch_again") : t("transcripts.fetch")}
         </button>
       )}
+
+      <div className="transcribe-local" data-testid="transcribe-local">
+        {asrActive && asr && (
+          <p role="status" className="muted small" data-testid="transcribe-running">
+            {asr.phase === "transcribe" && asr.unitsDone !== null
+              ? t("transcripts.local.running_pct", { pct: asr.unitsDone })
+              : asr.status === "queued"
+                ? t("transcripts.local.queued")
+                : t("transcripts.local.preparing")}{" "}
+            {asr.canCancel && (
+              <button type="button" className="link-button" disabled={busy} onClick={() => void act(async () => (await client.cancelJob(asr.id), client.listTranscripts(itemId)))} data-testid="transcribe-cancel">
+                {t("transcripts.local.cancel")}
+              </button>
+            )}
+          </p>
+        )}
+        {noSpeech && !asrActive && (
+          <p className="muted small" data-testid="transcribe-no-speech">
+            {t("transcripts.local.no_speech")}
+          </p>
+        )}
+        {asrStopped && !asrActive && asr && (
+          <p role="alert" className="small" data-testid="transcribe-failed">
+            {t("transcripts.local.failed", { reason: errorMessage(asr.errorCode ?? "INTERNAL_ERROR") })}
+          </p>
+        )}
+        {!asrActive && local.reason === "no-model" && (
+          <p className="muted small" data-testid="transcribe-hint">
+            {t("transcripts.local.no_model")}
+          </p>
+        )}
+        {!asrActive && local.reason === "no-tool" && (
+          <p className="muted small" data-testid="transcribe-hint">
+            {t("transcripts.local.no_tool")}
+          </p>
+        )}
+        {!asrActive && local.ready && model && (
+          <div className="transcribe-controls">
+            <label className="small">
+              {t("transcripts.local.language")}{" "}
+              <select value={language} onChange={(e) => setLanguage(e.target.value as TranscribeLanguage)} data-testid="transcribe-language">
+                {local.languages.map((l) => (
+                  <option key={l} value={l}>
+                    {l === "auto" ? t("transcripts.local.auto") : languageName(l)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {local.models.length > 1 && (
+              <label className="small">
+                {t("transcripts.local.model")}{" "}
+                <select value={model.id} onChange={(e) => setModelId(e.target.value)} data-testid="transcribe-model">
+                  {local.models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              className="button"
+              disabled={busy}
+              title={t("transcripts.local.hint", { model: model.label })}
+              onClick={() => void act(() => client.transcribeLocally(itemId, model.id, language))}
+              data-testid="transcribe-start"
+            >
+              {t("transcripts.local.start")}
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

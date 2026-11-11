@@ -52,5 +52,23 @@
     "-update",
     "1",
     "-n"
+  ],
+  "audioWavOutput": [
+    "-map",
+    "0:a:0",
+    "-vn",
+    "-sn",
+    "-dn",
+    "-ac",
+    "1",
+    "-ar",
+    "16000",
+    "-c:a",
+    "pcm_s16le",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "wav",
+    "-n"
   ]
 }

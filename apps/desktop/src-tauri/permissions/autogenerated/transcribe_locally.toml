@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transcribe-locally"
+description = "Enables the transcribe_locally command without any pre-configured scope."
+commands.allow = ["transcribe_locally"]
+
+[[permission]]
+identifier = "deny-transcribe-locally"
+description = "Denies the transcribe_locally command without any pre-configured scope."
+commands.deny = ["transcribe_locally"]

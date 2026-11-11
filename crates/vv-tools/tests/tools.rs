@@ -177,7 +177,7 @@ fn manifest_cannot_point_elsewhere() {
         (
             "missing ffprobe",
             Box::new(|v| {
-                v["tools"].as_array_mut().unwrap().pop();
+                v["tools"].as_array_mut().unwrap().remove(3);
             }),
         ),
         // FFmpeg (ADR-0006).
@@ -524,5 +524,137 @@ fn ffmpeg_banner_and_licence() {
         "Access is denied.",
     ] {
         assert_eq!(parse_ffmpeg_banner(junk), None, "{junk:?}");
+    }
+}
+
+/// whisper-cli is the fifth entry (F6.2, ADR-0028).
+const WHISPER: usize = 4;
+
+#[test]
+fn whisper_cli_is_optional_pinned_and_brings_checked_libraries() {
+    let m = Manifest::parse(&manifest_text()).unwrap();
+    let w = m.tool(ToolId::WhisperCli).expect("whisper-cli entry");
+    assert!(ToolId::WhisperCli.is_optional() && !REQUIRED_TOOLS.contains(&ToolId::WhisperCli));
+    assert_eq!(w.provenance, Provenance::PublishedSha256);
+    // whisper.cpp publishes no Linux binary; Windows only.
+    assert!(m.artifact(ToolId::WhisperCli, "linux-x86_64").is_none());
+    let a = m.artifact(ToolId::WhisperCli, "windows-x86_64").unwrap();
+    assert_eq!(a.executable, "whisper-cli.exe");
+    let names: Vec<&str> = a.companions.iter().map(|c| c.file.as_str()).collect();
+    for needed in [
+        "whisper.dll",
+        "ggml.dll",
+        "ggml-base.dll",
+        "ggml-cpu-x64.dll",
+    ] {
+        assert!(names.contains(&needed), "{needed}");
+    }
+    // Nothing that is not a library comes along (SDL2, parakeet, other tools).
+    assert!(names
+        .iter()
+        .all(|n| n.ends_with(".dll") && !n.starts_with("SDL") && !n.starts_with("parakeet")));
+
+    // Without the entry the manifest is still valid: it is optional.
+    assert!(tampered(|v| {
+        v["tools"].as_array_mut().unwrap().remove(WHISPER);
+    })
+    .is_ok());
+}
+
+#[test]
+fn whisper_cli_entry_cannot_point_elsewhere_or_smuggle_files() {
+    let cases: Vec<(&str, Edit)> = vec![
+        (
+            "another repository",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["url"] =
+                    "https://github.com/evil/whisper.cpp/releases/download/v1.9.2/whisper-bin-x64.zip".into()
+            }),
+        ),
+        (
+            "not the pinned version",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["url"] =
+                    "https://github.com/ggml-org/whisper.cpp/releases/download/latest/whisper-bin-x64.zip".into()
+            }),
+        ),
+        (
+            "an executable as a companion",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["companions"][0]["file"] = "cmd.exe".into()
+            }),
+        ),
+        (
+            "a companion outside the folder",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["companions"][0]["file"] =
+                    "../whisper.dll".into()
+            }),
+        ),
+        (
+            "a companion path that does not end in its name",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["companions"][0]["archivePath"] =
+                    "Release/ggml.dll".into()
+            }),
+        ),
+        (
+            "the same library twice, in another case",
+            Box::new(|v| {
+                let mut c = v["tools"][WHISPER]["artifacts"][0]["companions"][0].clone();
+                c["file"] = "WHISPER.DLL".into();
+                c["archivePath"] = "Release/WHISPER.DLL".into();
+                v["tools"][WHISPER]["artifacts"][0]["companions"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(c);
+            }),
+        ),
+        (
+            "a bad companion hash",
+            Box::new(|v| {
+                v["tools"][WHISPER]["artifacts"][0]["companions"][1]["sha256"] = "abc".into()
+            }),
+        ),
+        (
+            "companions without an archive",
+            Box::new(|v| {
+                let comps = v["tools"][WHISPER]["artifacts"][0]["companions"].clone();
+                let a = &mut v["tools"][1]["artifacts"][0];
+                a["companions"] = comps;
+                a["archive"] = Value::Null;
+                a["sha256"] = a["executableSha256"].clone();
+            }),
+        ),
+        (
+            "an unknown field in a companion",
+            Box::new(|v| v["tools"][WHISPER]["artifacts"][0]["companions"][0]["run"] = "x".into()),
+        ),
+        (
+            "a required tool without a Linux build",
+            Box::new(|v| {
+                v["tools"][1]["artifacts"].as_array_mut().unwrap().pop();
+            }),
+        ),
+    ];
+    for (what, edit) in cases {
+        assert!(tampered(edit).is_err(), "{what} was accepted");
+    }
+}
+
+#[test]
+fn whisper_version_line() {
+    let v = parse_whisper_version("whisper.cpp version: 1.9.2\n");
+    assert_eq!(check_version("1.9.2", v), VersionCheck::Ok);
+    assert!(matches!(
+        check_version("1.9.2", parse_whisper_version("whisper.cpp version: 1.8.0")),
+        VersionCheck::Mismatch { .. }
+    ));
+    for junk in [
+        "",
+        "usage: whisper-cli [options] file0",
+        "whisper.cpp version: x",
+    ] {
+        assert_eq!(parse_whisper_version(junk), None, "{junk:?}");
     }
 }

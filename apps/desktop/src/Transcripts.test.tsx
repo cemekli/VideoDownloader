@@ -74,11 +74,60 @@ describe("Details → Transcript", () => {
     expect(sourceLabel(t)).toBe("Site captions (automatic)");
     const client = createFixtureClient();
     client.getTranscript = async () => ({ transcript: t, segments: [{ startMs: 0, endMs: 1, text: "<img src=x onerror=alert(1)>" }], truncated: false });
-    client.listTranscripts = async () => ({ itemId: YOUTUBE, transcripts: [t], captionsJob: null, canFetchCaptions: true });
+    client.listTranscripts = async () => ({ itemId: YOUTUBE, transcripts: [t], captionsJob: null, canFetchCaptions: true, transcribeJob: null, local: { ready: false, reason: "no-media", models: [], languages: ["auto", "tr", "en"] } });
     const user = userEvent.setup();
     const { container } = render(<Transcripts client={client} itemId={YOUTUBE} />);
     await user.click(await screen.findByTestId("transcript-show"));
     expect(await screen.findByTestId("transcript-lines")).toHaveTextContent("<img src=x onerror=alert(1)>");
     expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("transcribes a local file on this PC and shows the model as the source (F6.2, AI-A02)", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient();
+    render(<Transcripts client={client} itemId={LOCAL} />);
+    const section = await screen.findByTestId("inspector-transcripts");
+    expect(section).toHaveTextContent("transcribe the file on this PC");
+    await user.selectOptions(within(section).getByTestId("transcribe-language"), "tr");
+    await user.click(within(section).getByTestId("transcribe-start"));
+    expect(await screen.findByTestId("transcribe-running")).toBeInTheDocument();
+    expect(await screen.findByText(/Transcribing on this PC… 50%/, {}, { timeout: 4000 })).toBeInTheDocument();
+    const row = await screen.findByTestId("transcript-row", {}, { timeout: 4000 });
+    expect(row).toHaveTextContent("Turkish");
+    expect(row).toHaveTextContent("Transcribed on this PC (whisper-base)");
+    expect(screen.queryByTestId("transcribe-running")).toBeNull();
+  });
+
+  it("a transcription can be cancelled", async () => {
+    const user = userEvent.setup();
+    render(<Transcripts client={createFixtureClient()} itemId={LOCAL} />);
+    await user.click(await screen.findByTestId("transcribe-start"));
+    await user.click(await screen.findByTestId("transcribe-cancel"));
+    await waitFor(() => expect(screen.queryByTestId("transcribe-running")).toBeNull());
+    expect(screen.queryByTestId("transcript-row")).toBeNull();
+    expect(screen.getByTestId("transcribe-start")).toBeEnabled();
+  });
+
+  it("explains what is missing for local transcription", async () => {
+    const client = createFixtureClient();
+    // A bookmark: nothing to transcribe, no button.
+    render(<Transcripts client={client} itemId={INSTAGRAM} />);
+    await screen.findByTestId("inspector-transcripts");
+    expect(screen.queryByTestId("transcribe-start")).toBeNull();
+    await expect(client.transcribeLocally(INSTAGRAM, "whisper-base", "auto")).rejects.toMatchObject({ code: "FILE_MISSING" });
+    await expect(client.transcribeLocally(LOCAL, "whisper-huge", "auto")).rejects.toMatchObject({ code: "MODEL_MISSING" });
+
+    const base = await client.listTranscripts(LOCAL);
+    for (const [reason, text] of [
+      ["no-model", "download a model in Settings"],
+      ["no-tool", "local transcriber is missing"],
+    ] as const) {
+      const c = createFixtureClient();
+      c.listTranscripts = async () => ({ ...base, local: { ...base.local, ready: false, reason, models: reason === "no-model" ? [] : base.local.models } });
+      const { unmount } = render(<Transcripts client={c} itemId={LOCAL} />);
+      expect(await screen.findByTestId("transcribe-hint")).toHaveTextContent(text);
+      expect(screen.queryByTestId("transcribe-start")).toBeNull();
+      unmount();
+    }
   });
 });

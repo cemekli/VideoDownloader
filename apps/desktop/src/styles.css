@@ -343,3 +343,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .transcript-lines li { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--s2); padding: 2px 0; }
 .transcript-lines .timecode { color: var(--muted); font-variant-numeric: tabular-nums; }
 .transcript-text { overflow-wrap: anywhere; }
+.transcribe-local { margin-top: var(--s2); }
+.transcribe-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s1); }

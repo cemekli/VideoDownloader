@@ -1053,6 +1053,7 @@
         "tools": [
           {
             "id": "yt-dlp",
+            "optional": false,
             "version": "2026.10.26",
             "reportedVersion": "2026.10.26",
             "state": "ok",
@@ -1063,6 +1064,7 @@
           },
           {
             "id": "deno",
+            "optional": false,
             "version": "2.9.8",
             "reportedVersion": "2.9.8",
             "state": "ok",
@@ -1073,6 +1075,7 @@
           },
           {
             "id": "ffmpeg",
+            "optional": false,
             "version": "9.0.2",
             "reportedVersion": "9.0.2",
             "state": "ok",
@@ -1083,12 +1086,24 @@
           },
           {
             "id": "ffprobe",
+            "optional": false,
             "version": "9.0.2",
             "reportedVersion": "9.0.2",
             "state": "ok",
             "code": null,
             "license": "LGPL-3.0-or-later: BtbN lgpl variant, configured with --enable-version3 and without --enable-gpl or --enable-nonfree (fetch-tools checks the configuration line)",
             "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59 (FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/7adfbe40dc)",
+            "provenance": "published-sha256"
+          },
+          {
+            "id": "whisper-cli",
+            "optional": true,
+            "version": "1.9.2",
+            "reportedVersion": "1.9.2",
+            "state": "ok",
+            "code": null,
+            "license": "MIT (whisper.cpp and ggml); the Windows build links the Microsoft Visual C++ runtime, which it expects to be installed",
+            "source": "https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.2",
             "provenance": "published-sha256"
           }
         ],
@@ -1801,7 +1816,23 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "canFetchCaptions": true
+        "canFetchCaptions": true,
+        "transcribeJob": null,
+        "local": {
+          "ready": true,
+          "reason": null,
+          "models": [
+            {
+              "id": "whisper-base",
+              "label": "Base"
+            }
+          ],
+          "languages": [
+            "auto",
+            "tr",
+            "en"
+          ]
+        }
       }
     },
     "get_transcript": {
@@ -1892,7 +1923,119 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "canFetchCaptions": true
+        "canFetchCaptions": true,
+        "transcribeJob": null,
+        "local": {
+          "ready": true,
+          "reason": null,
+          "models": [
+            {
+              "id": "whisper-base",
+              "label": "Base"
+            }
+          ],
+          "languages": [
+            "auto",
+            "tr",
+            "en"
+          ]
+        }
+      }
+    },
+    "transcribe_locally": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "modelId": "whisper-base",
+        "language": "auto"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "transcripts": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c101",
+            "itemId": "00000000-0000-4000-8000-000000000001",
+            "language": "tr",
+            "provenance": "source_captions",
+            "provider": "source_captions",
+            "captionKind": "manual",
+            "modelId": null,
+            "status": "ready",
+            "coveredMs": 9500,
+            "segmentCount": 3,
+            "createdAt": 1794000065000,
+            "updatedAt": 1794000065000
+          }
+        ],
+        "captionsJob": {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "fetch_captions",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
+          "status": "succeeded",
+          "phase": null,
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": null,
+          "unitsTotal": null,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 5,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000000000,
+          "updatedAt": 1794000060000,
+          "finishedAt": 1794000065000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "canFetchCaptions": true,
+        "transcribeJob": {
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "kind": "transcription",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "itemTitle": "Deniz kenarında sabah",
+          "itemPlatform": "youtube",
+          "status": "running",
+          "phase": "transcribe",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 40,
+          "unitsTotal": 100,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": null,
+          "canRetry": false,
+          "canCancel": true,
+          "canRemovePartial": false
+        },
+        "local": {
+          "ready": true,
+          "reason": null,
+          "models": [
+            {
+              "id": "whisper-base",
+              "label": "Base"
+            }
+          ],
+          "languages": [
+            "auto",
+            "tr",
+            "en"
+          ]
+        }
       }
     },
     "delete_transcript": {
@@ -1929,7 +2072,23 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "canFetchCaptions": true
+        "canFetchCaptions": true,
+        "transcribeJob": null,
+        "local": {
+          "ready": true,
+          "reason": null,
+          "models": [
+            {
+              "id": "whisper-base",
+              "label": "Base"
+            }
+          ],
+          "languages": [
+            "auto",
+            "tr",
+            "en"
+          ]
+        }
       }
     }
   },

@@ -15,7 +15,7 @@
 //! and block themselves, waiting ones are blocked by `jobs::set_offline`.
 
 use crate::context::{Context, Store};
-use crate::{captions, download, metadata, models, storage_move};
+use crate::{captions, download, metadata, models, storage_move, transcribe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -32,6 +32,9 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     (&[JobKind::ModelDownload], 1),
     // Small text files; two runs of yt-dlp each (F6.2).
     (&[JobKind::FetchCaptions], 2),
+    // One local transcription at a time: whisper.cpp uses most cores and
+    // the model's memory (F6.2; limits come with F6.6).
+    (&[JobKind::Transcription], 1),
 ];
 
 pub struct Engine<S: Store> {
@@ -195,6 +198,7 @@ fn claim_all<S: Store>(cx: &Arc<Context<S>>) -> Vec<std::thread::JoinHandle<()>>
                         JobKind::StorageMove => storage_move::run(&cx2, lease),
                         JobKind::ModelDownload => models::run(&cx2, lease),
                         JobKind::FetchCaptions => captions::run(&cx2, lease),
+                        JobKind::Transcription => transcribe::run(&cx2, lease),
                         _ => {}
                     }
                 });

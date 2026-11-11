@@ -47,6 +47,12 @@ fn health_check_passes_the_pinned_tools_and_names_each_failure() {
     let m = manifest();
     let report = check_tools(&m, &paths, 1);
     for t in &report.tools {
+        // whisper.cpp publishes no Linux build (ADR-0028).
+        if t.id == "whisper-cli" && cfg!(not(windows)) {
+            assert_eq!(t.state, ToolState::Unavailable, "{t:?}");
+            assert!(t.optional);
+            continue;
+        }
         assert_eq!(t.state, ToolState::Ok, "{t:?}");
         assert!(t.reported_version.is_some());
     }
@@ -92,6 +98,36 @@ fn health_check_passes_the_pinned_tools_and_names_each_failure() {
         report.ready_for_downloads(),
         Err(vv_domain::error::ErrorCode::ChecksumMismatch)
     );
+
+    // whisper-cli with one of its DLLs changed is never started, and that
+    // does not stop downloads (ADR-0028).
+    if cfg!(windows) {
+        let wdir = d.path().join("whisper-cli");
+        std::fs::create_dir_all(&wdir).unwrap();
+        for e in std::fs::read_dir(paths.whisper.parent().unwrap())
+            .unwrap()
+            .flatten()
+        {
+            std::fs::copy(e.path(), wdir.join(e.file_name())).unwrap();
+        }
+        let dll = wdir.join("ggml-base.dll");
+        let mut b = std::fs::read(&dll).unwrap();
+        b[100] ^= 0xFF;
+        std::fs::write(&dll, b).unwrap();
+        let mut w = paths.clone();
+        w.whisper = wdir.join("whisper-cli.exe");
+        let report = check_tools(&m, &w, 3);
+        assert_eq!(
+            report.health(vv_tools::ToolId::WhisperCli).unwrap().state,
+            ToolState::ChecksumMismatch
+        );
+        assert!(report
+            .health(vv_tools::ToolId::WhisperCli)
+            .unwrap()
+            .reported_version
+            .is_none());
+        assert!(report.ready_for_downloads().is_ok());
+    }
 }
 
 type Route = (u16, Vec<(String, String)>, Vec<u8>);
@@ -163,6 +199,7 @@ fn real_lib(paths: &ToolPaths, test_target: SocketAddr) -> Lib {
         ytdlp: paths.ytdlp.clone(),
         media: media_tools(),
         policy,
+        whisper: None,
     })
 }
 

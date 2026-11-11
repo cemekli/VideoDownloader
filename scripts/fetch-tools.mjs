@@ -148,13 +148,16 @@ async function verifiedDownload(t, a, to) {
   if (t.provenance.kind === "gpg-signed-sums") await verifyYtDlpSignature(t, a);
 }
 
+const companionsOk = (dir, a) => (a.companions ?? []).every((c) => existsSync(join(dir, c.file)) && sha256(join(dir, c.file)) === c.sha256);
+
 async function fetchTool(id) {
   const t = tool(id);
   const a = artifact(t);
   const dir = join(binDir, id);
   const exe = join(dir, a.executable);
-  if (existsSync(exe) && sha256(exe) === a.executableSha256) {
-    ok(`${id} ${t.build ?? t.version} already present and verified`);
+  const companions = a.companions ?? [];
+  if (existsSync(exe) && sha256(exe) === a.executableSha256 && companionsOk(dir, a)) {
+    ok(`${id} ${t.build ?? t.version} already present and verified${companions.length ? ` (with ${companions.length} libraries)` : ""}`);
     return exe;
   }
   if (offline) fail(`${id}: ${exe} missing or does not match the manifest`);
@@ -170,24 +173,33 @@ async function fetchTool(id) {
       await verifiedDownload(t, a, file);
       archives.set(a.url, file);
     } else ok(`${id} uses the ${a.url.split("/").pop()} already verified for this run`);
-    const entry = a.archivePath ?? a.executable;
+    // The executable and its libraries (whisper.cpp's DLLs), nothing else.
+    const wanted = [[a.archivePath ?? a.executable, a.executable], ...companions.map((c) => [c.archivePath, c.file])];
+    const entries = wanted.map(([entry]) => entry);
     // Windows 10+ ships bsdtar, which reads zip. Call it by full path: Git's GNU
     // tar may come first on PATH and cannot read zip. unzip and tar elsewhere.
     const winTar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
     let r;
-    if (a.archive === "zip") r = isWin ? spawnSync(winTar, ["-xf", file, "-C", dir, entry]) : spawnSync("unzip", ["-oq", file, entry, "-d", dir]);
-    else if (a.archive === "tar.xz") r = spawnSync(isWin ? winTar : "tar", ["-xJf", file, "-C", dir, entry]);
+    if (a.archive === "zip") r = isWin ? spawnSync(winTar, ["-xf", file, "-C", dir, ...entries]) : spawnSync("unzip", ["-oq", file, ...entries, "-d", dir]);
+    else if (a.archive === "tar.xz") r = spawnSync(isWin ? winTar : "tar", ["-xJf", file, "-C", dir, ...entries]);
     else fail(`${id}: unsupported archive ${a.archive}`);
-    if (r.status !== 0) fail(`${id}: cannot unpack ${entry} from ${file}\n${r.stderr ?? ""}`);
-    if (entry !== a.executable) {
-      renameSync(join(dir, ...entry.split("/")), exe);
-      rmSync(join(dir, entry.split("/")[0]), { recursive: true, force: true });
+    if (r.status !== 0) fail(`${id}: cannot unpack ${entries.join(", ")} from ${file}\n${r.stderr ?? ""}`);
+    const tops = new Set();
+    for (const [entry, name] of wanted) {
+      if (entry === name) continue;
+      renameSync(join(dir, ...entry.split("/")), join(dir, name));
+      tops.add(entry.split("/")[0]);
     }
+    for (const top of tops) rmSync(join(dir, top), { recursive: true, force: true });
   }
   if (!existsSync(exe)) fail(`${id}: ${a.executable} not found after download`);
   if (!isWin) chmodSync(exe, 0o755);
   if (sha256(exe) !== a.executableSha256) fail(`${id}: executable SHA-256 does not match the manifest`);
-  ok(`${id} executable verified`);
+  for (const c of companions) {
+    const got = existsSync(join(dir, c.file)) ? sha256(join(dir, c.file)) : "missing";
+    if (got !== c.sha256) fail(`${id}: ${c.file} SHA-256 ${got}, manifest says ${c.sha256}`);
+  }
+  ok(`${id} executable verified${companions.length ? `, and its ${companions.length} libraries` : ""}`);
   return exe;
 }
 
@@ -200,6 +212,11 @@ const ytdlp = await fetchTool("yt-dlp");
 const deno = await fetchTool("deno");
 const ffmpeg = await fetchTool("ffmpeg");
 const ffprobe = await fetchTool("ffprobe");
+// Optional (ADR-0028): whisper.cpp publishes a Windows build only. Without it
+// the app works; only "Transcribe on this PC" is unavailable.
+const whisperTool = tool("whisper-cli");
+const whisper = whisperTool.artifacts.some((a) => a.platform === platform) ? await fetchTool("whisper-cli") : null;
+if (!whisper) console.log(`… whisper-cli has no build for ${platform}; local transcription is tested with the fake one here`);
 
 const denoV = run(deno, ["--version"]).split("\n")[0].trim();
 if (!denoV.startsWith(`deno ${tool("deno").version} `)) fail(`deno --version printed ${JSON.stringify(denoV)}`);
@@ -237,6 +254,17 @@ for (const [id, exe] of [["ffmpeg", ffmpeg], ["ffprobe", ffprobe]]) {
   ok(`${id} configuration is LGPL (${conf.includes("--enable-version3") ? "version 3" : "version 2.1"}); ${lines[1].trim()}`);
   // Printed in full once so the CI log keeps the real banner (ADR-0006 evidence).
   if (id === "ffmpeg") console.log(lines.slice(0, 3).join("\n"));
+}
+if (whisper) {
+  // Same rule as vv-tools parse_whisper_version. A missing Visual C++ runtime
+  // shows up here as a start failure (exit 0xC0000135), not as a wrong version.
+  const r = spawnSync(whisper, ["--version"], { encoding: "utf8", timeout: 60_000 });
+  const line = (r.stdout ?? "").split(/\r?\n/).find((l) => l.startsWith("whisper.cpp version:")) ?? "";
+  if (r.status !== 0 || line.trim() !== `whisper.cpp version: ${whisperTool.version}`) {
+    const hint = r.status === 3221225781 || r.status === -1073741515 ? " (a DLL is missing: the Microsoft Visual C++ runtime?)" : "";
+    fail(`whisper-cli --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
+  }
+  ok(line.trim());
 }
 const ffFailures = await checkFfmpeg({ ffmpeg, ffprobe });
 if (ffFailures.length) fail(`${ffFailures.length} FFmpeg check(s) failed`);

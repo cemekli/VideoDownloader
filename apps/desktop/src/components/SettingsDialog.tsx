@@ -85,7 +85,7 @@ export function ToolHealthBlock({ tools }: { tools: ToolStatus | null }) {
         {tools.tools.map((x) => (
           <li key={x.id} data-testid="tool" data-state={x.state}>
             <span>
-              {x.id} <span className="muted small">{t("diag.version", { version: x.version })}</span>
+              {x.id} <span className="muted small">{t("diag.version", { version: x.version })}{x.optional ? ` · ${t("diag.optional")}` : ""}</span>
             </span>
             <span className={x.state === "ok" ? "" : "warning"}>{t(`diag.state.${x.state}` as MessageKey)}</span>
           </li>

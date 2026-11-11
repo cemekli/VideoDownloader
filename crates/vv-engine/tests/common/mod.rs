@@ -86,6 +86,7 @@ pub fn media_tools() -> Option<MediaTools> {
 fn ok(id: &'static str) -> ToolHealth {
     ToolHealth {
         id,
+        optional: false,
         version: "test".into(),
         reported_version: Some("test".into()),
         state: ToolState::Ok,
@@ -118,6 +119,8 @@ pub struct Setup {
     pub ytdlp: PathBuf,
     pub media: Option<MediaTools>,
     pub policy: Policy,
+    /// `whisper-cli`; the fake one unless a test sets the real one.
+    pub whisper: Option<PathBuf>,
 }
 
 impl Setup {
@@ -126,6 +129,7 @@ impl Setup {
             ytdlp: PathBuf::from(env!("CARGO_BIN_EXE_vv-fake-ytdlp")),
             media: media_tools(),
             policy: Policy::default(),
+            whisper: Some(PathBuf::from(env!("CARGO_BIN_EXE_vv-fake-whisper"))),
         }
     }
 }
@@ -155,6 +159,10 @@ pub fn library(setup: Setup) -> Lib {
         }),
         media: setup.media,
         ytdlp_version: "test".into(),
+        whisper: setup.whisper.map(|exe| vv_engine::WhisperTool {
+            exe,
+            version: "1.9.2".into(),
+        }),
     };
     let cx = Context {
         store: TestStore {

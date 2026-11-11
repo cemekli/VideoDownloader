@@ -118,6 +118,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,
+            transcript_commands::transcribe_locally,
             transcript_commands::delete_transcript
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous

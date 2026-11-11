@@ -93,6 +93,7 @@
     "allow-list-transcripts",
     "allow-get-transcript",
     "allow-fetch-captions",
+    "allow-transcribe-locally",
     "allow-delete-transcript",
     "core:event:allow-listen",
     "core:event:allow-unlisten"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient } from "../ipc/types";
+import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient } from "../ipc/types";
 import { Transcripts } from "./Transcripts";
 import { ItemDownload } from "./DownloadsView";
 import { errorCode } from "../ipc/errors";
@@ -76,7 +76,7 @@ export function Inspector({
   /** The item's latest open or failed download (F3.8). */
   downloadJob?: JobDto | null;
   /** Transcripts of the item (F6.2); without it the section is not shown. */
-  transcripts?: TranscriptClient;
+  transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -161,7 +161,7 @@ function Details({
   collections: CollectionDto[];
   actions?: InspectorActions;
   downloadJob: JobDto | null;
-  transcripts?: TranscriptClient;
+  transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
