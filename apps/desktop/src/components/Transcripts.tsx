@@ -75,6 +75,7 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
   const job = view?.captionsJob ?? null;
   const active = openJob(job);
   const asr = view?.transcribeJob ?? null;
+  const asrModel = view?.transcribeModel ?? "?";
   const asrActive = openJob(asr);
   useEffect(() => {
     if (!active && !asrActive) return;
@@ -223,10 +224,10 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
         {asrActive && asr && (
           <p role="status" className="muted small" data-testid="transcribe-running">
             {asr.phase === "transcribe" && asr.unitsDone !== null
-              ? t("transcripts.local.running_pct", { pct: asr.unitsDone })
+              ? t("transcripts.local.running_pct", { pct: asr.unitsDone, model: asrModel })
               : asr.status === "queued"
-                ? t("transcripts.local.queued")
-                : t("transcripts.local.preparing")}{" "}
+                ? t("transcripts.local.queued", { model: asrModel })
+                : t("transcripts.local.preparing", { model: asrModel })}{" "}
             {asr.canCancel && client.cancelJob && (
               <button
                 type="button"

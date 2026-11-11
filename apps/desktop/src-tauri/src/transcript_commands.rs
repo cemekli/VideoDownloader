@@ -73,6 +73,8 @@ pub struct ItemTranscripts {
     pub can_fetch_captions: bool,
     /// The item's last local `transcription` job, if any.
     pub transcribe_job: Option<JobDto>,
+    /// The label of the model that job uses (`Base`, `Medium`, ...).
+    pub transcribe_model: Option<String>,
     /// Whether "Transcribe on this PC" can run, and with what.
     pub local: LocalTranscription,
 }
@@ -138,13 +140,28 @@ pub fn dto(t: &Transcript) -> TranscriptDto {
     }
 }
 
-fn last_job(c: &Connection, staging: &Path, item_id: &str, kind: JobKind) -> Option<JobDto> {
+fn last_raw_job(c: &Connection, item_id: &str, kind: JobKind) -> Option<jobs::Job> {
     jobs::list(c, &[], 500)
         .ok()?
         .into_iter()
         .filter(|j| j.kind == kind && j.item_id.as_deref() == Some(item_id))
         .max_by_key(|j| (j.created_at, j.id.clone()))
-        .map(|j| job_dto(c, staging, &j))
+}
+
+fn last_job(c: &Connection, staging: &Path, item_id: &str, kind: JobKind) -> Option<JobDto> {
+    last_raw_job(c, item_id, kind).map(|j| job_dto(c, staging, &j))
+}
+
+/// The catalog label of the model a transcription job runs with.
+fn job_model_label(job: &jobs::Job) -> Option<String> {
+    let p = serde_json::from_value::<transcribe::Payload>(job.payload.clone()).ok()?;
+    let cat = models::catalog();
+    Some(
+        cat.models
+            .iter()
+            .find(|m| m.id == p.model_id)
+            .map_or(p.model_id, |m| m.label.clone()),
+    )
 }
 
 /// whisper-cli passed its health check (ADR-0028).
@@ -200,12 +217,14 @@ pub fn for_item(
         .iter()
         .map(dto)
         .collect();
+    let asr = last_raw_job(c, item_id, JobKind::Transcription);
     Ok(ItemTranscripts {
         item_id: item_id.to_owned(),
         transcripts,
         captions_job: last_job(c, &dirs.staging, item_id, JobKind::FetchCaptions),
         can_fetch_captions: it.canonical_url.is_some() && it.removed_at.is_none(),
-        transcribe_job: last_job(c, &dirs.staging, item_id, JobKind::Transcription),
+        transcribe_job: asr.as_ref().map(|j| job_dto(c, &dirs.staging, j)),
+        transcribe_model: asr.as_ref().and_then(job_model_label),
         local: local(c, dirs, item_id, whisper && it.removed_at.is_none()),
     })
 }

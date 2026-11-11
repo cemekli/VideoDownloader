@@ -24,6 +24,7 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
   const segments = new Map<string, TranscriptDetail["segments"]>();
   const jobs = new Map<string, JobDto>();
   const asr = new Map<string, JobDto>();
+  const asrModel = new Map<string, string>();
   let clock = 1_794_100_000_000;
   let seq = 0;
   const now = () => (clock += 1_000);
@@ -33,7 +34,7 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
     const r = item(id, "list_transcripts");
     const hasMedia = r.localState === "local_ready";
     const local: LocalTranscription = { ready: hasMedia, reason: hasMedia ? null : "no-media", models: FIXTURE_MODELS, languages: ["auto", "tr", "en"] };
-    return structuredClone({ itemId: id, transcripts: byItem.get(id) ?? [], captionsJob: jobs.get(id) ?? null, canFetchCaptions: r.canonicalUrl !== null, transcribeJob: asr.get(id) ?? null, local });
+    return structuredClone({ itemId: id, transcripts: byItem.get(id) ?? [], captionsJob: jobs.get(id) ?? null, canFetchCaptions: r.canonicalUrl !== null, transcribeJob: asr.get(id) ?? null, transcribeModel: asrModel.get(id) ?? null, local });
   };
   const isOpen = (j: JobDto | undefined) => j !== undefined && !["succeeded", "failed", "canceled"].includes(j.status);
   const step = (r: FixtureRecord, modelId: string, language: string, pct: number) => {
@@ -129,6 +130,7 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400)
       if (!FIXTURE_MODELS.some((m) => m.id === modelId)) throw err("MODEL_MISSING", "transcribe_locally");
       if (isOpen(asr.get(itemId))) return view(itemId);
       const t = now();
+      asrModel.set(itemId, FIXTURE_MODELS.find((m) => m.id === modelId)?.label ?? modelId);
       asr.set(itemId, {
         ...(contract.commands.start_download.response as JobDto),
         id: `00000000-0000-4000-8000-${String(0xc300 + ++seq).padStart(12, "0")}`,
