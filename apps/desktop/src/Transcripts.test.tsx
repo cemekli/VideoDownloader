@@ -131,3 +131,14 @@ describe("Details → Transcript", () => {
     }
   });
 });
+
+describe("captions job state", () => {
+  it("names waiting, retrying and blocked instead of one spinner text", async () => {
+    const { captionsJobText } = await import("./components/Transcripts");
+    const base = (await createFixtureClient().fetchCaptions(YOUTUBE)).captionsJob!;
+    expect(captionsJobText({ ...base, status: "queued" })).toBe("Waiting to start…");
+    expect(captionsJobText({ ...base, status: "running", attempts: 2, maxAttempts: 4 })).toContain("attempt 2 of 4");
+    expect(captionsJobText({ ...base, status: "retry_wait", errorCode: "TIMEOUT", nextRetryAt: 1_794_000_000_000 })).toContain("too long");
+    expect(captionsJobText({ ...base, status: "blocked", blockedReason: "offline" })).not.toContain("Getting");
+  });
+});

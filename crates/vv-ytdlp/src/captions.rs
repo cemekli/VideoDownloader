@@ -208,7 +208,9 @@ fn decode_entities(s: &str) -> String {
     while let Some(i) = rest.find('&') {
         out.push_str(&rest[..i]);
         rest = &rest[i..];
-        let end = rest[..rest.len().min(12)].find(';');
+        // `;` is ASCII, so slicing at it stays on a char boundary; a byte
+        // window (`rest[..12]`) could cut a multi-byte letter (ş, ğ, ı).
+        let end = rest.find(';').filter(|&e| e <= 11);
         let decoded = end.and_then(|e| {
             let name = &rest[1..e];
             let c = match name {
@@ -485,6 +487,91 @@ mod tests {
         );
         let big = vec![b'a'; MAX_VTT_BYTES + 1];
         assert_eq!(parse_vtt(&big), Err(VttError::TooLarge));
+    }
+
+    #[test]
+    fn an_ampersand_before_turkish_letters_does_not_panic() {
+        // Found on a real Turkish YouTube video (11 Nov 2026): a byte window
+        // after `&` cut `ş` in half and the job thread panicked.
+        let vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nAhmet & Ayşe çığlık atıyor &amp; gülüşüyor\n\n00:00:02.000 --> 00:00:03.000\n&ğğğğğğğ; &şş\n";
+        let cues = parse_vtt(vtt.as_bytes()).unwrap();
+        assert_eq!(cues[0].text, "Ahmet & Ayşe çığlık atıyor & gülüşüyor");
+        assert_eq!(cues[1].text, "&ğğğğğğğ; &şş");
+    }
+
+    /// Random text from pieces real caption files have (Turkish letters,
+    /// entities, tags, timings, CR/LF): the parser must never panic and
+    /// every cue it returns must keep the rules (start < end, text, sorted).
+    #[test]
+    fn random_caption_text_never_panics() {
+        const PIECES: &[&str] = &[
+            "WEBVTT\n",
+            "\n",
+            "\r\n",
+            "\n\n",
+            "00:00:01.000 --> 00:00:02.500",
+            "00:01.000 --> 00:00.500",
+            " --> ",
+            "01:02:03.004",
+            "&",
+            ";",
+            "&amp;",
+            "&#x15f;",
+            "&#287;",
+            "&nbsp;",
+            "&lrm;",
+            "<",
+            ">",
+            "<c>",
+            "</c>",
+            "<00:00:01.200>",
+            "<v Ayşe>",
+            "ş",
+            "ğ",
+            "ı",
+            "İ",
+            "ç",
+            "ö",
+            "ü",
+            "€",
+            "😀",
+            "\u{feff}",
+            "a",
+            "Merhaba",
+            " ",
+            "\t",
+            "NOTE ",
+            "STYLE",
+            ":",
+            ".",
+            ",",
+            "9",
+            "-->",
+            "\u{0}",
+        ];
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for _ in 0..3_000 {
+            let n = (next() % 60) as usize;
+            let mut text = String::from("WEBVTT\n\n");
+            for _ in 0..n {
+                text.push_str(PIECES[(next() % PIECES.len() as u64) as usize]);
+            }
+            let cues = parse_vtt(text.as_bytes()).expect("starts with WEBVTT");
+            for w in cues.windows(2) {
+                assert!(w[0].start_ms <= w[1].start_ms);
+            }
+            for c in &cues {
+                assert!(c.start_ms < c.end_ms && !c.text.is_empty(), "{c:?}");
+            }
+            let _ = decode_entities(&text);
+            let _ = clean_line(&text);
+        }
     }
 
     #[test]

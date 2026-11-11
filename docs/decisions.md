@@ -1099,6 +1099,7 @@ STATE.md F6.2 (ilk yarı). SPEC AI-A01, §8.4 adım 2, §11.5, §20.2.
 - `crates/vv-engine/tests/real_ytdlp.rs` `real_site_captions_from_a_local_page_become_a_transcript`: sabitlenmiş gerçek yt-dlp, yerel bir sayfadaki HTML5 `<track>` altyazısını bu bayraklarla indirir ve döküm olur.
 - `apps/desktop/src-tauri/tests/ipc.rs` `transcript_commands_match_contract_and_queue_captions`; `apps/desktop/src/Transcripts.test.tsx`.
 - Gerçek YouTube videosunda (TR ve EN) Cuma'nın Windows testi gerekir; ✅ bunu ve F6.2'nin ikinci yarısını (whisper.cpp) bekler.
+- **11 Kas düzeltmesi.** Cuma'nın ilk gerçek Türkçe videosunda iş dakikalarca "Getting…" gösterdi. Sebep: varlık çözücü `&`'den sonra 12 baytlık bir pencereye bakıyordu; pencere çok baytlı bir harfi (ş, ğ, ı) böldü ve iş iş parçacığı panic ile durdu. İş "running" kaldı, lease dolunca aynı hataya yeniden girdi. Düzeltmeler: `;` (ASCII) aranarak dilimleniyor; iş işleyicileri `runtime::run_guarded` içinde çalışıyor, panic olursa iş `INTERNAL_ERROR` ile kalıcı başarısız oluyor; panel işin gerçek durumunu (bekliyor, kaçıncı deneme, ne zaman yeniden denenecek, bloklandı) ve Cancel'ı gösteriyor. Testler: tam bu durumun regresyon testi, rastgele Unicode/varlık/etiket parçalarıyla 3 000 girdilik fuzz testi (eski kodda ikisi de düşüyor), panic eden işleyicinin işi bitirdiği motor testi.
 
 ## ADR-0028: Yerel transkripsiyon whisper.cpp `whisper-cli` ile
 

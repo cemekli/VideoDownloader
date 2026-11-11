@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
 import type { DownloadClient, ItemTranscripts, JobDto, TranscribeLanguage, TranscriptClient, TranscriptDetail, TranscriptDto } from "../ipc/types";
 import { formatDuration } from "../format";
-import { getLocale, t, tn } from "../i18n";
+import { formatDateTime, getLocale, t, tn } from "../i18n";
 import { errorMessage } from "../labels";
 import { useOnline } from "../hooks/useEnv";
+import { blockedText } from "./DownloadsView";
 
 const openJob = (j: JobDto | null) => j !== null && !["succeeded", "failed", "canceled"].includes(j.status);
 
@@ -25,6 +26,18 @@ export function sourceLabel(tr: TranscriptDto): string {
   return t("transcripts.source.imported");
 }
 
+/** What the open captions job is doing right now, in words. */
+export function captionsJobText(j: JobDto): string {
+  if (j.status === "queued") return t("transcripts.job.queued");
+  if (j.status === "retry_wait") {
+    const reason = errorMessage(j.errorCode ?? "INTERNAL_ERROR");
+    return j.nextRetryAt ? t("transcripts.job.retry_at", { reason, time: formatDateTime(j.nextRetryAt) }) : t("transcripts.job.retry", { reason });
+  }
+  if (j.status === "blocked") return blockedText(j);
+  if (j.status === "canceling") return t("transcripts.job.canceling");
+  return j.attempts > 1 ? t("transcripts.job.running_attempt", { attempt: j.attempts, max: j.maxAttempts }) : t("transcripts.fetching");
+}
+
 /**
  * The item's transcripts in the details panel (STATE.md F6.2, SPEC §8.4,
  * AI-A01, AI-A02). The site's own captions come first; an item with a file
@@ -32,7 +45,7 @@ export function sourceLabel(tr: TranscriptDto): string {
  * transcript says its language and source. Lines are shown with their
  * timecodes as plain text.
  */
-export function Transcripts({ client, itemId }: { client: TranscriptClient & Pick<DownloadClient, "cancelJob">; itemId: string }) {
+export function Transcripts({ client, itemId }: { client: TranscriptClient & Partial<Pick<DownloadClient, "cancelJob">>; itemId: string }) {
   const online = useOnline();
   const [view, setView] = useState<ItemTranscripts | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,14 +163,37 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Pic
           ))}
         </ul>
       )}
-      {active && (
-        <p role="status" className="muted small" data-testid="captions-running">
-          {t("transcripts.fetching")}
-        </p>
+      {active && job && (
+        <div className="row-actions">
+          <p role="status" className="muted small" data-testid="captions-running" data-status={job.status}>
+            {captionsJobText(job)}
+          </p>
+          {client.cancelJob && job.canCancel && (
+            <button
+              type="button"
+              className="link-button"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  await client.cancelJob!(job.id);
+                  return client.listTranscripts(itemId);
+                })
+              }
+              data-testid="captions-cancel"
+            >
+              {t("transcripts.cancel")}
+            </button>
+          )}
+        </div>
       )}
       {noneFound && !active && (
         <p className="muted small" data-testid="captions-none">
           {t("transcripts.none_found")}
+        </p>
+      )}
+      {job?.status === "canceled" && !active && !hasCaptions && (
+        <p className="muted small" data-testid="captions-canceled">
+          {t("transcripts.canceled")}
         </p>
       )}
       {job?.status === "failed" && !active && (
@@ -191,8 +227,14 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Pic
               : asr.status === "queued"
                 ? t("transcripts.local.queued")
                 : t("transcripts.local.preparing")}{" "}
-            {asr.canCancel && (
-              <button type="button" className="link-button" disabled={busy} onClick={() => void act(async () => (await client.cancelJob(asr.id), client.listTranscripts(itemId)))} data-testid="transcribe-cancel">
+            {asr.canCancel && client.cancelJob && (
+              <button
+                type="button"
+                className="link-button"
+                disabled={busy}
+                onClick={() => void act(async () => (await client.cancelJob?.(asr.id), client.listTranscripts(itemId)))}
+                data-testid="transcribe-cancel"
+              >
                 {t("transcripts.local.cancel")}
               </button>
             )}
