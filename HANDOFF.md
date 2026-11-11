@@ -39,7 +39,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 2. F5.3 elle test (Cuma, release exe): VK zaten çerez dosyasıyla bağlı. Takipçilere özel videoda "Try again"e basılır. Beklenen sonuç: video çerezle iner ve VK satırı "Signed in" olur. İşten sonra `%APPDATA%\dev.videovault.desktop\staging\cookies` boş olmalı. Sonucu `docs/platform-support.md`'ye yaz (VK-10), STATE F5.3 ✅.
 3. Herkese açık VK videosunda küçük resmin neden gelmediğine bak.
 4. F5.7 elle test (Cuma, release exe): Sessions → Reddit → Connect → "Sign in here" → pencerede giriş → Done → Reddit gönderisi iner. Sonra aynısı VK için (`vk.com` girişi) ve takipçilere özel videoda Try again (VK-04). Sonuç `docs/platform-support.md`'ye.
-5. F6.2 site altyazısı elle test (Cuma, release exe): Türkçe altyazılı bir YouTube videosu ve İngilizce otomatik altyazılı bir video kaydet → Details → Transcript → Get site captions. Dil, kaynak (uploader/automatic) ve zaman kodlu satırlar doğru mu; altyazısız bir videoda "no captions" mesajı çıkıyor mu.
+5. ~~F6.2 site altyazısı elle test~~ — yapıldı (11 Kas, Cuma): TR otomatik altyazı, EN video, sil/yeniden al çalışıyor.
 
 ## Bilinmesi gerekenler
 
