@@ -6,8 +6,13 @@
 //! The environment is cleared by `vv-process`, so the scenario comes from a
 //! file `fake-whisper-mode` next to the model (`-m`): `ok` (default),
 //! `silence`, `fail`, `garbage`, `slow`, `beyond`, `slow-after-1` (the
-//! first run is quick, later ones slow), `fail-after-1`. Each run appends
-//! its WAV's length and `-l` to `fake-whisper-calls` there.
+//! first run is quick, later ones slow), `fail-after-1`, `late-words` (each
+//! segment's first word is 400 ms after whisper's segment start, by DTW).
+//! Each run appends its WAV's length and `-l` to `fake-whisper-calls` there.
+//!
+//! With `-dtw` (which needs `-ojf` and `-nfa`, like the real one needs flash
+//! attention off) each segment carries `tokens` with `t_dtw` in 10 ms
+//! units, -1 except in `late-words`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -55,8 +60,36 @@ fn wav_ms(path: &Path) -> i64 {
 }
 
 fn seg(from: i64, to: i64, text: &str) -> String {
+    seg_with(from, to, text, None)
+}
+
+/// A segment; with `words` (the first word's DTW time in ms, or -1) it
+/// has `-ojf` tokens: `[_BEG_]`, then the words.
+fn seg_with(from: i64, to: i64, text: &str, words: Option<i64>) -> String {
+    let tokens = match words {
+        None => String::new(),
+        Some(first) => {
+            let t = |ms: i64| if ms < 0 { -1 } else { ms / 10 };
+            let mut v = vec![format!(
+                "{{\"text\": \"[_BEG_]\", \"id\": 50364, \"p\": 0.9, \"t_dtw\": {}}}",
+                t(from)
+            )];
+            for (i, w) in text.split_whitespace().enumerate() {
+                let at = if first < 0 {
+                    -1
+                } else {
+                    first + 100 * i as i64
+                };
+                v.push(format!(
+                    "{{\"text\": \" {w}\", \"id\": 100, \"p\": 0.9, \"t_dtw\": {}}}",
+                    t(at)
+                ));
+            }
+            format!(",\n\t\t\t\"tokens\": [{}]", v.join(", "))
+        }
+    };
     format!(
-        "\t\t{{\n\t\t\t\"timestamps\": {{}},\n\t\t\t\"offsets\": {{\"from\": {from}, \"to\": {to}}},\n\t\t\t\"text\": \"{text}\"\n\t\t}}"
+        "\t\t{{\n\t\t\t\"timestamps\": {{}},\n\t\t\t\"offsets\": {{\"from\": {from}, \"to\": {to}}},\n\t\t\t\"text\": \"{text}\"{tokens}\n\t\t}}"
     )
 }
 
@@ -78,8 +111,18 @@ fn main() {
     let wav = PathBuf::from(arg_after(&args, "-f").unwrap_or_else(|| fail("no input", 2)));
     let out = arg_after(&args, "-of").unwrap_or_else(|| fail("no -of", 1));
     let lang = arg_after(&args, "-l").unwrap_or_else(|| "en".into());
-    if !args.iter().any(|a| a == "-oj") {
+    let has = |f: &str| args.iter().any(|a| a == f);
+    if !has("-oj") {
         fail("expected -oj", 1);
+    }
+    let dtw = arg_after(&args, "-dtw");
+    if let Some(preset) = &dtw {
+        if !["tiny", "base", "small", "medium"].contains(&preset.as_str()) {
+            fail("unknown DTW preset", 1);
+        }
+        if !has("-ojf") || !has("-nfa") {
+            fail("DTW needs -ojf and -nfa", 1);
+        }
     }
     let ms = wav_ms(&wav);
     let calls_file = model.with_file_name("fake-whisper-calls");
@@ -115,6 +158,20 @@ fn main() {
         "beyond" => vec![
             seg(0, ms / 2, " Merhaba d\u{fc}nya."),
             seg(ms / 2, ms + 600, " Son."),
+        ],
+        "late-words" if dtw.is_some() => vec![
+            seg_with(0, ms / 2, " Merhaba d\u{fc}nya.", Some(400)),
+            seg_with(ms / 2, ms, " Son.", Some(ms / 2 + 400)),
+        ],
+        _ if dtw.is_some() => vec![
+            seg_with(
+                0,
+                ms / 2,
+                " Merhaba d\u{fc}nya, \\\"bu\\\" bir deneme.",
+                Some(-1),
+            ),
+            seg_with(ms / 2, ms / 2, " zero", Some(-1)),
+            seg_with(ms / 2, ms, " \u{130}kinci sat\u{131}r.", Some(-1)),
         ],
         _ => vec![
             seg(0, ms / 2, " Merhaba d\u{fc}nya, \\\"bu\\\" bir deneme."),
