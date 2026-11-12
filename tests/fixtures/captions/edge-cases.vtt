@@ -1,0 +1,30 @@
+﻿WEBVTT
+
+NOTE written by hand: BOM, CRLF, NFD letters, hours, entities
+
+STYLE
+::cue { color: lime }
+
+1
+00:00:01.000 --> 00:00:02.000
+İstanbul şehri &#x15f;&#287;&#305; &lrm;son
+
+2
+00:00:02.000 --> 00:00:02.000
+zero length, left out
+
+3
+00:00:03.000 --> 00:00:01.000
+ends before it starts, left out
+
+01:00:00.000 --> 01:00:01.500
+<v Mehmet Bey>bir saat sonra</v>
+
+00:00:04.000 --> 00:00:05.000
+&amp
+
+00:00:05.000 --> 00:00:06.000
+   
+
+00:00:06.000 --> 00:00:07.000
+&ğğğğğğğ; &şş &#0; &bogus;

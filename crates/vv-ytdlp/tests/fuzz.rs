@@ -367,6 +367,18 @@ fn captions_vtt() {
         "WEBVTT\n\n00:00:00.000 --> 00:00:01.200\nMerhaba <b>dünya</b>\n\n00:00:01.200 --> 00:00:02.900\nİkinci satır &amp; son\n",
         "WEBVTT\nKind: captions\nLanguage: tr\n\n00:00:00.100 --> 00:00:01.000 align:start position:0%\n&gt;&gt; Ayşe: çok güzel<00:00:00.400><c> değil</c> mi?\n\n00:00:01.000 --> 00:00:02.000\n&gt;&gt; Şükrü: ığdır'a gidiyoruz &#x15f;&#287;\n",
     ];
+    let files: Vec<String> = ["youtube-tr-manual", "youtube-en-auto", "edge-cases"]
+        .iter()
+        .map(|f| {
+            std::fs::read_to_string(root().join(format!("tests/fixtures/captions/{f}.vtt")))
+                .unwrap()
+        })
+        .collect();
+    let seeds: Vec<&str> = seeds
+        .iter()
+        .copied()
+        .chain(files.iter().map(String::as_str))
+        .collect();
     each(
         "captions/prefixes",
         seeds.iter().flat_map(|s| prefixes(s)),

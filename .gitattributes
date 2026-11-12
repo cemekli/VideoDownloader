@@ -7,3 +7,5 @@
 *.webm binary
 *.mkv binary
 *.mov binary
+# Edge cases on purpose: BOM and CRLF line endings stay as written.
+tests/fixtures/captions/edge-cases.vtt -text

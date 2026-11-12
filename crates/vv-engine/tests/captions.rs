@@ -90,6 +90,64 @@ fn automatic_original_track_is_folded_and_labelled() {
     );
 }
 
+fn expected_cues(file: &str) -> Vec<(i64, i64, String)> {
+    let v: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("tests/fixtures/captions/expected.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    v["files"][file]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c[0].as_i64().unwrap(),
+                c[1].as_i64().unwrap(),
+                c[2].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// The whole path with realistic files: a Turkish manual track with
+/// `&gt;&gt;` speaker marks before Turkish letters (the 11 Nov 2026 bug),
+/// emoji and entities; a rolling English automatic track. The job ends,
+/// and every cue reaches the database as `parse_vtt` reads it.
+#[test]
+fn realistic_turkish_and_english_youtube_captions_reach_the_library_intact() {
+    let lib = library(Setup::fake());
+    for (scenario, file, lang, kind) in [
+        (
+            "captions-youtube-tr",
+            "youtube-tr-manual.vtt",
+            "tr",
+            CaptionKind::Manual,
+        ),
+        (
+            "captions-youtube-en",
+            "youtube-en-auto.vtt",
+            "en",
+            CaptionKind::Automatic,
+        ),
+    ] {
+        let item = lib.save(&format!("https://fake.test/{scenario}"));
+        let job = lib.job(&fetch(&lib, &item));
+        assert_eq!(
+            job.status,
+            JobStatus::Succeeded,
+            "{scenario}: {:?}",
+            job.error_code
+        );
+        let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+        assert_eq!(ts.len(), 1, "{scenario}");
+        assert_eq!(ts[0].origin.language, lang);
+        assert_eq!(ts[0].origin.caption_kind, Some(kind));
+        assert_eq!(texts(&lib, &ts[0].id), expected_cues(file), "{scenario}");
+    }
+    assert!(staging_is_empty(&lib));
+}
+
 #[test]
 fn only_translations_means_no_transcript_and_a_finished_job() {
     let lib = library(Setup::fake());
