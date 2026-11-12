@@ -835,14 +835,16 @@
         "locale": "en",
         "onboardingCompletedAt": null,
         "legalAckAt": null,
-        "activeDownloadRootId": null
+        "activeDownloadRootId": null,
+        "transcriptionCpu": "full"
       }
     },
     "update_settings": {
       "args": {
         "patch": {
           "theme": "light",
-          "offlineMode": true
+          "offlineMode": true,
+          "transcriptionCpu": "full"
         }
       },
       "response": {
@@ -852,7 +854,8 @@
         "locale": "en",
         "onboardingCompletedAt": null,
         "legalAckAt": null,
-        "activeDownloadRootId": null
+        "activeDownloadRootId": null,
+        "transcriptionCpu": "full"
       }
     },
     "acknowledge_legal": {
@@ -864,7 +867,8 @@
         "locale": "en",
         "onboardingCompletedAt": null,
         "legalAckAt": 1794000390000,
-        "activeDownloadRootId": null
+        "activeDownloadRootId": null,
+        "transcriptionCpu": "full"
       }
     },
     "finish_onboarding": {
@@ -876,7 +880,8 @@
         "locale": "en",
         "onboardingCompletedAt": 1794000400000,
         "legalAckAt": 1794000390000,
-        "activeDownloadRootId": null
+        "activeDownloadRootId": null,
+        "transcriptionCpu": "full"
       }
     },
     "get_storage_overview": {
@@ -1682,6 +1687,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 273,
+            "needMemoryMb": 469,
+            "fit": "ok",
             "status": "not_installed",
             "consentAt": null,
             "verifiedAt": null,
@@ -1695,6 +1702,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 388,
+            "needMemoryMb": 613,
+            "fit": "ok",
             "status": "ready",
             "consentAt": 1762700000000,
             "verifiedAt": 1762700300000,
@@ -1719,6 +1728,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 273,
+            "needMemoryMb": 469,
+            "fit": "ok",
             "status": "not_installed",
             "consentAt": null,
             "verifiedAt": null,
@@ -1732,6 +1743,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 388,
+            "needMemoryMb": 613,
+            "fit": "ok",
             "status": "ready",
             "consentAt": 1762700000000,
             "verifiedAt": 1762700300000,
@@ -1755,6 +1768,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 273,
+            "needMemoryMb": 469,
+            "fit": "ok",
             "status": "not_installed",
             "consentAt": null,
             "verifiedAt": null,
@@ -1768,6 +1783,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 388,
+            "needMemoryMb": 613,
+            "fit": "ok",
             "status": "ready",
             "consentAt": 1762700000000,
             "verifiedAt": 1762700300000,
@@ -1791,6 +1808,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 273,
+            "needMemoryMb": 469,
+            "fit": "ok",
             "status": "not_installed",
             "consentAt": null,
             "verifiedAt": null,
@@ -1804,6 +1823,8 @@
             "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
             "source": "https://huggingface.co/ggerganov/whisper.cpp",
             "upstreamMemoryMb": 388,
+            "needMemoryMb": 613,
+            "fit": "ok",
             "status": "ready",
             "consentAt": 1762700000000,
             "verifiedAt": 1762700300000,
@@ -1811,6 +1832,91 @@
           }
         ],
         "freeBytes": 120000000000
+      }
+    },
+    "get_ai_processing": {
+      "args": {},
+      "response": {
+        "machine": {
+          "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592
+          },
+          "cores": 8,
+          "cpuUse": "full",
+          "threads": 7,
+          "transcriber": "ok",
+          "stagingFreeBytes": 120000000000
+        },
+        "models": {
+          "models": [
+            {
+              "id": "whisper-tiny",
+              "label": "Tiny",
+              "languages": "multilingual",
+              "sizeBytes": 77691713,
+              "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+              "source": "https://huggingface.co/ggerganov/whisper.cpp",
+              "upstreamMemoryMb": 273,
+              "needMemoryMb": 469,
+              "fit": "ok",
+              "status": "not_installed",
+              "consentAt": null,
+              "verifiedAt": null,
+              "job": null
+            },
+            {
+              "id": "whisper-base",
+              "label": "Base",
+              "languages": "multilingual",
+              "sizeBytes": 147951465,
+              "license": "MIT (OpenAI Whisper weights, converted to ggml by the whisper.cpp project)",
+              "source": "https://huggingface.co/ggerganov/whisper.cpp",
+              "upstreamMemoryMb": 388,
+              "needMemoryMb": 613,
+              "fit": "ok",
+              "status": "ready",
+              "consentAt": 1762700000000,
+              "verifiedAt": 1762700300000,
+              "job": null
+            }
+          ],
+          "freeBytes": 120000000000
+        },
+        "jobs": [
+          {
+            "job": {
+              "id": "00000000-0000-4000-8000-00000000c002",
+              "kind": "transcription",
+              "itemId": "00000000-0000-4000-8000-000000000001",
+              "itemTitle": "Deniz kenarında sabah",
+              "itemPlatform": "youtube",
+              "status": "running",
+              "phase": "transcribe",
+              "bytesDone": null,
+              "bytesTotal": null,
+              "bytesEstimate": null,
+              "unitsDone": 40,
+              "unitsTotal": 100,
+              "preset": null,
+              "attempts": 1,
+              "maxAttempts": 1,
+              "errorCode": null,
+              "blockedReason": null,
+              "nextRetryAt": null,
+              "partialBytes": 0,
+              "createdAt": 1794000080000,
+              "updatedAt": 1794000090000,
+              "finishedAt": null,
+              "canRetry": false,
+              "canCancel": true,
+              "canRemovePartial": false
+            },
+            "model": "Base",
+            "language": "auto",
+            "elapsedMs": 65000
+          }
+        ]
       }
     },
     "list_transcripts": {
@@ -1828,6 +1934,7 @@
             "provider": "source_captions",
             "captionKind": "manual",
             "modelId": null,
+            "modelVersion": null,
             "status": "ready",
             "coveredMs": 9500,
             "segmentCount": 3,
@@ -1872,14 +1979,22 @@
           "models": [
             {
               "id": "whisper-base",
-              "label": "Base"
+              "label": "Base",
+              "needMemoryMb": 613,
+              "fit": "ok"
             }
           ],
           "languages": [
             "auto",
             "tr",
             "en"
-          ]
+          ],
+          "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592
+          },
+          "diskNeedBytes": 67425280,
+          "freeBytes": 120000000000
         }
       }
     },
@@ -1896,6 +2011,7 @@
           "provider": "source_captions",
           "captionKind": "manual",
           "modelId": null,
+          "modelVersion": null,
           "status": "ready",
           "coveredMs": 9500,
           "segmentCount": 3,
@@ -1940,6 +2056,7 @@
             "provider": "source_captions",
             "captionKind": "manual",
             "modelId": null,
+            "modelVersion": null,
             "status": "ready",
             "coveredMs": 9500,
             "segmentCount": 3,
@@ -1984,14 +2101,22 @@
           "models": [
             {
               "id": "whisper-base",
-              "label": "Base"
+              "label": "Base",
+              "needMemoryMb": 613,
+              "fit": "ok"
             }
           ],
           "languages": [
             "auto",
             "tr",
             "en"
-          ]
+          ],
+          "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592
+          },
+          "diskNeedBytes": 67425280,
+          "freeBytes": 120000000000
         }
       }
     },
@@ -1999,7 +2124,8 @@
       "args": {
         "itemId": "00000000-0000-4000-8000-000000000001",
         "modelId": "whisper-base",
-        "language": "auto"
+        "language": "auto",
+        "allowLowMemory": false
       },
       "response": {
         "itemId": "00000000-0000-4000-8000-000000000001",
@@ -2012,6 +2138,7 @@
             "provider": "source_captions",
             "captionKind": "manual",
             "modelId": null,
+            "modelVersion": null,
             "status": "ready",
             "coveredMs": 9500,
             "segmentCount": 3,
@@ -2082,14 +2209,22 @@
           "models": [
             {
               "id": "whisper-base",
-              "label": "Base"
+              "label": "Base",
+              "needMemoryMb": 613,
+              "fit": "ok"
             }
           ],
           "languages": [
             "auto",
             "tr",
             "en"
-          ]
+          ],
+          "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592
+          },
+          "diskNeedBytes": 67425280,
+          "freeBytes": 120000000000
         }
       }
     },
@@ -2137,14 +2272,22 @@
           "models": [
             {
               "id": "whisper-base",
-              "label": "Base"
+              "label": "Base",
+              "needMemoryMb": 613,
+              "fit": "ok"
             }
           ],
           "languages": [
             "auto",
             "tr",
             "en"
-          ]
+          ],
+          "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592
+          },
+          "diskNeedBytes": 67425280,
+          "freeBytes": 120000000000
         }
       }
     },

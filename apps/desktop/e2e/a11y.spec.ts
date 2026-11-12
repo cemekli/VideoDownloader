@@ -85,6 +85,15 @@ for (const theme of ["dark", "light"] as const) {
       expect(await serious(page, '[data-testid="session-dialog"]')).toEqual([]);
     });
 
+    test("AI Processing screen (F6.6)", async ({ page }, info) => {
+      await ready(page, "?fixture=low-memory");
+      if (info.project.name === "narrow-800") await page.getByTestId("menu-button").click();
+      await page.getByTestId("nav-ai").click();
+      await expect(page.getByTestId("ai-processing")).toBeVisible();
+      await expect(page.getByTestId("model-row").first()).toBeVisible();
+      expect(await serious(page)).toEqual([]);
+    });
+
     test("first run, every step", async ({ page }) => {
       await page.goto("/?fixture=first-run");
       const ob = page.getByTestId("onboarding");

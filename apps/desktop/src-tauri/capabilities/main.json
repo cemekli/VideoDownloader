@@ -90,6 +90,7 @@
     "allow-download-model",
     "allow-verify-model",
     "allow-remove-model",
+    "allow-get-ai-processing",
     "allow-list-transcripts",
     "allow-get-transcript",
     "allow-fetch-captions",

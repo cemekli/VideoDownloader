@@ -26,6 +26,10 @@ sha2 = "0.10"
 # address is vetted by vv-netguard's policy before it is used.
 ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
 
+[target.'cfg(windows)'.dependencies]
+# GlobalMemoryStatusEx for the memory check before a transcription (F6.6).
+windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation"] }
+
 [dev-dependencies]
 tempfile = "3"
 vv-fuzz = { path = "../vv-fuzz" }

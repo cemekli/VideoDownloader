@@ -115,6 +115,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             model_commands::download_model,
             model_commands::verify_model,
             model_commands::remove_model,
+            model_commands::get_ai_processing,
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,

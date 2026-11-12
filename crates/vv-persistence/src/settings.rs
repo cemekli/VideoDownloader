@@ -28,6 +28,20 @@ pub enum UpdateCheck {
     Automatic,
 }
 
+/// How much of the CPU a local transcription may use (STATE.md F6.6;
+/// SPEC AI-A05). Threads per level: `vv_engine::resources::threads`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CpuUse {
+    /// Two threads: slower, the PC stays free for other work.
+    Light,
+    /// Half the cores.
+    Balanced,
+    /// All cores but one, at most 8 (the speeds measured in F6.2).
+    #[default]
+    Full,
+}
+
 /// Every setting with its value (defaults filled in).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +58,8 @@ pub struct Settings {
     pub legal_ack_at: Option<i64>,
     /// `StorageRoot(kind = managed_media)` new downloads go to (§11.6).
     pub active_download_root_id: Option<String>,
+    /// CPU limit for local transcription (F6.6).
+    pub transcription_cpu: CpuUse,
 }
 
 impl Settings {
@@ -63,6 +79,7 @@ pub struct SettingsPatch {
     pub theme: Option<Theme>,
     pub update_check: Option<UpdateCheck>,
     pub locale: Option<String>,
+    pub transcription_cpu: Option<CpuUse>,
 }
 
 /// Locales the UI has messages for.
@@ -75,6 +92,7 @@ const LOCALE: &str = "locale";
 const ONBOARDING: &str = "onboarding_completed_at";
 const LEGAL: &str = "legal_ack_at";
 const DOWNLOAD_ROOT: &str = "active_download_root_id";
+const TRANSCRIPTION_CPU: &str = "transcription_cpu";
 
 fn read_raw(c: &Connection, key: &str) -> Result<Option<String>> {
     Ok(
@@ -111,6 +129,7 @@ pub fn get(c: &Connection) -> Result<Settings> {
         onboarding_completed_at: read(c, ONBOARDING)?.flatten(),
         legal_ack_at: read(c, LEGAL)?.flatten(),
         active_download_root_id: read(c, DOWNLOAD_ROOT)?.flatten(),
+        transcription_cpu: read(c, TRANSCRIPTION_CPU)?.unwrap_or(d.transcription_cpu),
     })
 }
 
@@ -130,6 +149,9 @@ pub fn update(c: &Connection, patch: &SettingsPatch, now_ms: i64) -> Result<Sett
             return Err(LibraryError::Invalid("unknown locale"));
         }
         write(c, LOCALE, v, now_ms)?;
+    }
+    if let Some(v) = patch.transcription_cpu {
+        write(c, TRANSCRIPTION_CPU, &v, now_ms)?;
     }
     get(c)
 }
@@ -187,6 +209,20 @@ mod tests {
     }
 
     #[test]
+    fn transcription_cpu_is_kept() {
+        let (_d, mut db) = db();
+        let c = db.writer();
+        assert_eq!(get(c).unwrap().transcription_cpu, CpuUse::Full);
+        let p: SettingsPatch =
+            serde_json::from_value(serde_json::json!({ "transcriptionCpu": "light" })).unwrap();
+        assert_eq!(update(c, &p, 1).unwrap().transcription_cpu, CpuUse::Light);
+        assert!(serde_json::from_value::<SettingsPatch>(
+            serde_json::json!({ "transcriptionCpu": "turbo" })
+        )
+        .is_err());
+    }
+
+    #[test]
     fn bad_values_read_as_defaults_and_unknown_input_is_refused() {
         let (_d, mut db) = db();
         let c = db.writer();
@@ -202,6 +238,7 @@ mod tests {
             theme: None,
             update_check: None,
             locale: Some("xx".into()),
+            transcription_cpu: None,
         };
         assert!(update(c, &p, 1).is_err());
     }

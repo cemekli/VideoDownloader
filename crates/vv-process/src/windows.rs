@@ -20,6 +20,8 @@ use windows_sys::Win32::System::Threading::{
 
 pub const CREATE_SUSPENDED: u32 = windows_sys::Win32::System::Threading::CREATE_SUSPENDED;
 pub const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+pub const BELOW_NORMAL_PRIORITY_CLASS: u32 =
+    windows_sys::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS;
 const STILL_ACTIVE: u32 = 259;
 
 pub struct Job(HANDLE);

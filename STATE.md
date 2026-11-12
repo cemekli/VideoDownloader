@@ -239,7 +239,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F6.3 | Ses parçalama, checkpoint ve iptal | AI-A03, AI-A04 | AC-23 | 🟨 yazıldı: ~10 dk'lık, sessiz yerden kesilen, örtüşmeyen parçalar; her parçadan sonra checkpoint + `partial` döküm; yeniden açılışta kaldığı parçadan devam; iptal/hata kısmi dökümü bırakır. ADR-0029. ✅ için Cuma'nın Windows'ta uzun video testi (yarıda kapat-aç, iptal). |
 | F6.4 | Segment doğrulama, transkript FTS, gruplanmış sonuçlar | SEA-06, §16.2 | AC-22, NFR-04 | ✅ Cuma Windows'ta denedi (12 Kas): dökümde arama, an listesi ve o saniyeden oynatma çalışıyor. Arama kutusu dökümleri de arar (`ready`/`partial`), anlar öğe altında tek dökümden gruplanır (ilk 5 + toplam), her an eşleşen kelimenin segment başlangıcıyla; kısmi döküm "searched up to" der; tıklayınca `get_moment` yeniden denetler ve oynatıcı o saniyeden başlar. 100.000 segmentte p95 85 ms (bulut, release). ADR-0030. |
 | F6.5 | Transkript paneli, zaman koduna gitme, not dışa aktarma | PLAY-06, DATA-11 | AC-22, NFR-10 | ✅ Cuma Windows'ta denedi (12 Kas, PR #53 sonrası yeniden döküm): satırlar konuşmayla hizalı, not dışa aktarma çalışıyor. Oynatıcı yanında döküm paneli (o anki satır işaretli ve takip ediliyor, zaman koduna tıklayınca o segmentten oynar), satır seçip Markdown not (önizleme + "Save as…"; zamanlar saklı segmentlerden, YouTube'da `&t=` bağlantısı, metin kaçışlı). ADR-0031. 12 Kas denemesinde whisper satır başları 1–5 sn kayıyordu; satır başı artık ilk kelimenin DTW zamanı (ADR-0032). |
-| F6.6 | Kaynak sınırları ve AI Processing ekranı | AI-A05, AI-A06 | düşük bellek senaryosu testi | ⬜ |
+| F6.6 | Kaynak sınırları ve AI Processing ekranı | AI-A05, AI-A06 | düşük bellek senaryosu testi | 🟨 yazıldı: model başına bellek ihtiyacı (tahmin) ve bu bilgisayara uyumu; sığmayan model varsayılan seçilmez, "Use … anyway" olmadan başlamaz (arka uç da `RESOURCE_LIMIT` ile reddeder); ses için disk denetimi; işlemci sınırı (Light/Balanced/Full) ve düşük öncelik; kenar çubuğunda AI Processing (bu bilgisayar, kuyruk ve iptal, modeller); döküm satırında model, sürüm ve durum. ADR-0033. Düşük bellek senaryosu: `crates/vv-engine/tests/low_memory.rs`, `e2e/ai-processing.spec.ts`. ✅ için CI ve Cuma'nın Windows denemesi. |
 | F6.7 | Türkçe/İngilizce kalite ve hız raporu | AI-A07 | ölçüm raporu | 🟨 hız ölçüldü (Cuma'nın PC'si, CPU, 21:44 video): Tiny 0:49 (~27×), Base 1:20 (~16×), Small 3:29 (~6×), Medium 10:29 (~2×). Kalan: TR/EN kalite karşılaştırması ve rapor. |
 
 **Çıkış kapısı:** SPEC §26.2.
@@ -303,6 +303,7 @@ Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
 | Tarih | Değişiklik |
 |---|---|
+| 12 Kas 2026 | F6.6 (🟨): bellek/disk denetimi ve "use it anyway" onayı, işlemci sınırı ve düşük öncelik, AI Processing ekranı, dökümde model/sürüm/durum. ADR-0033. |
 | 12 Kas 2026 | F6.4 ve F6.5 ✅: Cuma Windows'ta dökümde aramayı, paneli, zamana atlamayı (PR #53 DTW düzeltmesinden sonra) ve not dışa aktarmayı doğruladı. |
 | 12 Kas 2026 | Yerel dökümde satır başları whisper'ın segment zamanı yerine ilk kelimenin DTW zamanından (Cuma'nın denemesinde ilk satır 5 sn erken, diğerleri 1–1,2 sn kayıktı). ADR-0032. |
 | 12 Kas 2026 | F6.5 (🟨): oynatıcı yanında döküm paneli, satıra tıklayınca atlama, seçilen satırlarla Markdown not dışa aktarma. ADR-0031. |

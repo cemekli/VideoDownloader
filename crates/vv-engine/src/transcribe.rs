@@ -30,11 +30,18 @@
 //!    ends the job, replacing the partial one. No speech at all: the job
 //!    succeeds without a transcript.
 //!
+//! Before any of that (F6.6, AI-A05): a model that does not fit this PC's
+//! memory ([`crate::resources::fit`]) runs only when the user said "use it
+//! anyway" for this job; staging must have room for the WAV. FFmpeg and
+//! whisper run below normal priority, whisper with the threads the user's
+//! CPU limit allows.
+//!
 //! Nothing here uses the network. The staging folder is removed when the
 //! job ends; it stays only when the lease was lost (the job runs again).
 
 use crate::context::{Context, Store, WhisperTool};
 use crate::proc::{run_streaming, spawn_error_code, StdoutMode};
+use crate::resources::{self, CpuUse, Fit};
 use crate::worker::{Stop, Work};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
@@ -70,6 +77,10 @@ pub struct Payload {
     pub model_id: String,
     /// One of [`LANGUAGES`].
     pub language: String,
+    /// The user saw that the model does not fit this PC's memory and asked
+    /// to run it anyway (AI-A05). Older jobs lack it: `false`.
+    #[serde(default)]
+    pub allow_low_memory: bool,
 }
 
 /// Queues a transcription (one open job per item, model and language).
@@ -78,6 +89,7 @@ pub fn enqueue(
     item_id: &str,
     model_id: &str,
     language: &str,
+    allow_low_memory: bool,
     now: i64,
 ) -> jobs::Result<jobs::Enqueued> {
     let mut job = NewJob::new(
@@ -88,6 +100,7 @@ pub fn enqueue(
     job.payload = serde_json::to_value(Payload {
         model_id: model_id.to_owned(),
         language: language.to_owned(),
+        allow_low_memory,
     })
     .unwrap_or_default();
     // A failed run would fail the same way again; the user asks again.
@@ -140,13 +153,16 @@ pub fn usable_model(c: &Connection, models_dir: &Path, id: &str) -> Option<Insta
         .then_some(inst)
 }
 
-/// Threads for whisper.cpp: all cores but one, at most 8 (it gains little
-/// beyond that on a CPU and the PC stays usable).
-pub fn threads() -> usize {
-    std::thread::available_parallelism()
-        .map(|n| n.get().saturating_sub(1))
-        .unwrap_or(1)
-        .clamp(1, 8)
+/// Threads for whisper.cpp on this PC under the user's CPU limit (F6.6).
+pub fn threads(u: CpuUse) -> usize {
+    resources::threads(u, resources::cores())
+}
+
+/// Memory a catalog model needs on this PC, and whether it fits now.
+pub fn model_fit(model_id: &str, mem: Option<resources::Memory>) -> Option<(u64, Fit)> {
+    let m = crate::models::catalog().model(model_id)?;
+    let need = resources::need_mb(m.upstream_memory_mb);
+    Some((need, resources::fit(need, mem)))
 }
 
 /// whisper.cpp's alignment-heads preset for a catalog model, for
@@ -640,6 +656,20 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         w.end_error(ErrorCode::ModelMissing, None);
         return;
     };
+    // AI-A05: a model this PC cannot hold is never loaded silently.
+    if !p.allow_low_memory {
+        if let Some((_, Fit::TooBig)) = model_fit(&p.model_id, resources::memory()) {
+            w.end_error(
+                ErrorCode::ResourceLimit,
+                Some("the model needs more memory than this PC has"),
+            );
+            return;
+        }
+    }
+    let cpu = cx
+        .store
+        .read(|c| vv_persistence::settings::get(c).map(|s| s.transcription_cpu))
+        .unwrap_or_default();
     let tools = cx.tools();
     let (Some(media), Some(whisper)) = (tools.media.clone(), tools.whisper.clone()) else {
         w.end_error(ErrorCode::ToolMissing, None);
@@ -659,6 +689,7 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         whisper: &whisper,
         language: &p.language,
         dir: &dir,
+        threads: threads(cpu),
     };
     // A lost lease means the job runs again (after a restart or a reclaim):
     // its folder and checkpoint stay for that run. Otherwise it ended.
@@ -677,6 +708,7 @@ struct Job<'a> {
     whisper: &'a WhisperTool,
     language: &'a str,
     dir: &'a Path,
+    threads: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -712,7 +744,7 @@ fn run_tool<S: Store>(
     mut on_err_line: impl FnMut(&str),
 ) -> Result<Exit, End> {
     let mut cmd = ManagedCommand::new(exe);
-    cmd.args(&args).current_dir(dir);
+    cmd.args(&args).current_dir(dir).low_priority();
     let r = run_streaming(
         cmd,
         StdoutMode::Lines,
@@ -774,6 +806,11 @@ fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) -> End {
         None => {
             let _ = std::fs::remove_file(j.dir.join(CHECKPOINT_FILE));
             phase(w, "transcribe_audio", None, true);
+            let duration = j.asset.duration_ms.or(j.item.duration_ms).unwrap_or(0);
+            let need = resources::audio_disk_bytes(duration, j.whisper.chunk_ms);
+            if crate::storage::free_bytes(j.dir).is_some_and(|free| free < need) {
+                return fail(w, ErrorCode::DiskFull, Some("no room for the audio"));
+            }
             let wav_ms = match make_wav(w, j, &wav_path) {
                 Ok(ms) => ms,
                 Err(end) => return end,
@@ -823,7 +860,7 @@ fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) -> End {
             &part,
             &out_base,
             asked,
-            threads(),
+            j.threads,
             dtw_preset(&j.model.spec.id),
         );
         let exit = match run_tool(w, &j.whisper.exe, args, j.dir, |l| {
@@ -1233,7 +1270,8 @@ mod tests {
         assert!(s.windows(2).any(|w| w == ["-t", "4"]));
         assert!(s.contains(&"-ng".to_string()) && s.contains(&"-oj".to_string()));
         assert_eq!(s[s.len() - 2..], ["-of".to_string(), format!("{base}out")]);
-        assert!((1..=8).contains(&threads()));
+        assert!((1..=8).contains(&threads(CpuUse::Full)));
+        assert!(threads(CpuUse::Light) <= 2);
         assert!(!s.contains(&"-dtw".to_string()));
 
         let d = whisper_args(

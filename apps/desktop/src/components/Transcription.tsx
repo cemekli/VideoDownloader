@@ -20,7 +20,7 @@ const HEADROOM = 64 * 1024 * 1024;
  * is off until the user downloads a model; each download asks first and shows
  * size, free space, source, licence and the memory the model needs.
  */
-export function TranscriptionBlock({ client, notify }: { client: ModelClient & Pick<DownloadClient, "cancelJob" | "retryJob">; notify: Notify }) {
+export function TranscriptionBlock({ client, notify, onChanged }: { client: Omit<ModelClient, "getAiProcessing"> & Pick<DownloadClient, "cancelJob" | "retryJob">; notify: Notify; onChanged?: () => void }) {
   const [view, setView] = useState<ModelOverview | null>(null);
   const [asking, setAsking] = useState<ModelDto | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,6 +45,7 @@ export function TranscriptionBlock({ client, notify }: { client: ModelClient & P
       const v = await f();
       if (v) setView(v);
       else await reload();
+      onChanged?.();
     } catch (e) {
       fail(e);
     } finally {
@@ -130,6 +131,9 @@ function ModelRow({
       <p className={warn ? "warning small" : "muted small"} data-testid="model-status">
         {statusText(m)}
       </p>
+      <p className={m.fit === "too_big" ? "warning small" : "muted small"} data-testid="model-fit" data-fit={m.fit}>
+        {t(`models.fit.${m.fit}` as MessageKey, { need: formatBytes(m.needMemoryMb * 1024 * 1024) })}
+      </p>
       {m.job && <ProgressBar job={m.job} />}
       <div className="actions">
         {!open && (m.status === "not_installed" || m.status === "pending" || m.status === "missing" || m.status === "corrupt") && (
@@ -182,7 +186,7 @@ export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree }: {
           </tr>
           <tr>
             <th scope="row">{t("models.consent.memory")}</th>
-            <td>{t("models.consent.memory_value", { size: formatBytes(m.upstreamMemoryMb * 1024 * 1024) })}</td>
+            <td>{t("models.consent.memory_value", { size: formatBytes(m.needMemoryMb * 1024 * 1024) })}</td>
           </tr>
           <tr>
             <th scope="row">{t("models.consent.source")}</th>
@@ -196,6 +200,11 @@ export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree }: {
       </table>
       <p className="muted small">{t("models.consent.cpu")}</p>
       <p className="muted small">{t("models.consent.check")}</p>
+      {m.fit === "too_big" && (
+        <p className="warning small" data-testid="consent-memory-warning">
+          {t("models.consent.too_big")}
+        </p>
+      )}
       {tooBig && (
         <p className="warning small" role="alert" data-testid="consent-no-space">
           {t("models.consent.no_space")}

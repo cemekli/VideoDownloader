@@ -15,6 +15,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
 use vv_engine::models::{self, RequestError};
+use vv_engine::resources::{self, CpuUse, Fit, Memory};
+use vv_engine::toolset::ToolState;
 use vv_engine::{storage, Dirs};
 use vv_persistence::jobs::{self, CancelReason, JobKind};
 use vv_persistence::library::{Clock, SystemClock};
@@ -38,6 +40,10 @@ pub struct ModelDto {
     pub source: String,
     /// What whisper.cpp's README lists; not a measurement of ours.
     pub upstream_memory_mb: i64,
+    /// What a run needs by our estimate, and whether this PC has it now
+    /// (F6.6, AI-A05).
+    pub need_memory_mb: u64,
+    pub fit: Fit,
     /// `not_installed`, `pending`, `ready`, `missing` or `corrupt`.
     pub status: String,
     pub consent_at: Option<i64>,
@@ -66,6 +72,7 @@ fn last_job(c: &Connection, staging: &std::path::Path, id: &str) -> Option<JobDt
 
 pub fn overview(c: &Connection, dirs: &Dirs) -> ModelOverview {
     let cat = models::catalog();
+    let mem = resources::memory();
     let models = cat
         .models
         .iter()
@@ -79,6 +86,8 @@ pub fn overview(c: &Connection, dirs: &Dirs) -> ModelOverview {
                 license: cat.license.clone(),
                 source: cat.repository.clone(),
                 upstream_memory_mb: m.upstream_memory_mb,
+                need_memory_mb: resources::need_mb(m.upstream_memory_mb),
+                fit: resources::fit(resources::need_mb(m.upstream_memory_mb), mem),
                 status: inst
                     .as_ref()
                     .map_or("not_installed", |i| i.status.as_str())
@@ -197,4 +206,111 @@ pub async fn remove_model<R: Runtime>(
     .await;
     wake(&a);
     r
+}
+
+/// This PC as AI Processing shows it (SPEC §9.3 "AI Processing": disk/RAM,
+/// CPU/GPU; AI-A05).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Machine {
+    /// `None` when the system does not say.
+    pub memory: Option<Memory>,
+    pub cores: usize,
+    /// The user's CPU limit and the threads it gives whisper here.
+    pub cpu_use: CpuUse,
+    pub threads: usize,
+    /// whisper-cli: `ok`, `missing`, `blocked`, `checksum_mismatch` or
+    /// `unavailable` (no build for this system).
+    pub transcriber: ToolState,
+    /// Free space in staging, where the audio of a run is written.
+    pub staging_free_bytes: Option<u64>,
+}
+
+/// One local AI job (transcription) in the AI Processing queue.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiJobDto {
+    pub job: JobDto,
+    /// `Base`, `Medium`, ...
+    pub model: Option<String>,
+    /// `auto`, `tr`, `en`.
+    pub language: Option<String>,
+    pub elapsed_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProcessing {
+    pub machine: Machine,
+    pub models: ModelOverview,
+    /// Open transcriptions first (oldest first, as they run), then the
+    /// last finished ones, newest first.
+    pub jobs: Vec<AiJobDto>,
+}
+
+/// Finished jobs AI Processing lists below the open ones.
+pub const RECENT_AI_JOBS: usize = 10;
+
+pub fn ai_jobs(c: &Connection, staging: &std::path::Path, now: i64) -> Vec<AiJobDto> {
+    let all: Vec<jobs::Job> = jobs::list(c, &[], 500)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|j| j.kind == JobKind::Transcription)
+        .collect();
+    let (mut open, mut done): (Vec<_>, Vec<_>) =
+        all.into_iter().partition(|j| !j.status.is_terminal());
+    open.sort_by_key(|j| (j.created_at, j.id.clone()));
+    done.sort_by_key(|j| std::cmp::Reverse((j.finished_at.unwrap_or(j.updated_at), j.id.clone())));
+    done.truncate(RECENT_AI_JOBS);
+    open.into_iter()
+        .chain(done)
+        .map(|j| {
+            let p =
+                serde_json::from_value::<vv_engine::transcribe::Payload>(j.payload.clone()).ok();
+            AiJobDto {
+                model: crate::transcript_commands::job_model_label(&j),
+                language: p.map(|p| p.language),
+                elapsed_ms: crate::transcript_commands::job_elapsed_ms(c, &j, now),
+                job: job_dto(c, staging, &j),
+            }
+        })
+        .collect()
+}
+
+pub fn machine(c: &Connection, dirs: &Dirs, transcriber: ToolState) -> Machine {
+    let cpu_use = vv_persistence::settings::get(c)
+        .map(|s| s.transcription_cpu)
+        .unwrap_or_default();
+    let cores = resources::cores();
+    Machine {
+        memory: resources::memory(),
+        cores,
+        cpu_use,
+        threads: resources::threads(cpu_use, cores),
+        transcriber,
+        staging_free_bytes: storage::free_bytes(&dirs.staging),
+    }
+}
+
+fn transcriber_state<R: Runtime>(app: &AppHandle<R>) -> ToolState {
+    app.try_state::<EngineState>()
+        .and_then(|e| e.report())
+        .and_then(|r| r.health(vv_tools::ToolId::WhisperCli).map(|t| t.state))
+        .unwrap_or(ToolState::Missing)
+}
+
+/// The AI Processing screen: this PC, the models and the queue.
+#[tauri::command]
+pub async fn get_ai_processing<R: Runtime>(app: AppHandle<R>) -> Result<AiProcessing, DomainError> {
+    let tool = transcriber_state(&app);
+    blocking(app, move |st| {
+        let d = dirs(st)?;
+        let c = st.get()?.reader()?;
+        Ok(AiProcessing {
+            machine: machine(&c, &d, tool),
+            models: overview(&c, &d),
+            jobs: ai_jobs(&c, &d.staging, now()),
+        })
+    })
+    .await
 }

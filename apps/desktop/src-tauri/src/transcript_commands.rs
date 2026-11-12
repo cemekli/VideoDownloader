@@ -14,6 +14,7 @@ use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
+use vv_engine::resources::{self, Fit, Memory};
 use vv_engine::{captions, models, transcribe, Dirs};
 use vv_persistence::jobs::{self, JobKind};
 use vv_persistence::library::repo;
@@ -37,6 +38,8 @@ pub struct TranscriptDto {
     /// `manual` or `automatic` for site captions.
     pub caption_kind: Option<String>,
     pub model_id: Option<String>,
+    /// The pinned model revision (AI-A06: model and version shown).
+    pub model_version: Option<String>,
     /// `ready`, `partial`, ... (§11.5).
     pub status: String,
     pub covered_ms: Option<i64>,
@@ -95,6 +98,12 @@ pub struct LocalTranscription {
     pub models: Vec<ModelChoice>,
     /// `auto`, `tr`, `en`.
     pub languages: Vec<&'static str>,
+    /// This PC's memory, when it can be read (F6.6).
+    pub memory: Option<Memory>,
+    /// Staging space the item's audio needs, when its length is known.
+    pub disk_need_bytes: Option<u64>,
+    /// Free space in staging, when known.
+    pub free_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,6 +111,10 @@ pub struct LocalTranscription {
 pub struct ModelChoice {
     pub id: String,
     pub label: String,
+    /// Estimated memory a run needs (F6.6, AI-A05).
+    pub need_memory_mb: u64,
+    /// `ok`, `tight`, `too_big` or `unknown` on this PC right now.
+    pub fit: Fit,
 }
 
 fn now() -> i64 {
@@ -136,6 +149,7 @@ pub fn dto(t: &Transcript) -> TranscriptDto {
         provider: t.origin.provider.clone(),
         caption_kind: t.origin.caption_kind.map(|k| k.as_str().to_owned()),
         model_id: t.origin.model_id.clone(),
+        model_version: t.origin.model_version.clone(),
         status: t.status.as_str().to_owned(),
         covered_ms: t.covered_ms,
         segment_count: t.segment_count,
@@ -157,13 +171,13 @@ fn last_job(c: &Connection, staging: &Path, item_id: &str, kind: JobKind) -> Opt
 }
 
 /// Run time of a job from its latest attempt's start to its end (or `now`).
-fn job_elapsed_ms(c: &Connection, job: &jobs::Job, now: i64) -> Option<i64> {
+pub(crate) fn job_elapsed_ms(c: &Connection, job: &jobs::Job, now: i64) -> Option<i64> {
     let started = jobs::last_attempt_started_at(c, &job.id).ok().flatten()?;
     Some((job.finished_at.unwrap_or(now) - started).max(0))
 }
 
 /// The catalog label of the model a transcription job runs with.
-fn job_model_label(job: &jobs::Job) -> Option<String> {
+pub(crate) fn job_model_label(job: &jobs::Job) -> Option<String> {
     let p = serde_json::from_value::<transcribe::Payload>(job.payload.clone()).ok()?;
     let cat = models::catalog();
     Some(
@@ -182,20 +196,41 @@ fn whisper_ready<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 /// Ready models, smallest first (the catalog's order).
-fn usable_models(c: &Connection, dirs: &Dirs) -> Vec<ModelChoice> {
+fn usable_models(c: &Connection, dirs: &Dirs, mem: Option<Memory>) -> Vec<ModelChoice> {
     models::catalog()
         .models
         .iter()
         .filter(|m| transcribe::usable_model(c, &dirs.models, &m.id).is_some())
-        .map(|m| ModelChoice {
-            id: m.id.clone(),
-            label: m.label.clone(),
+        .map(|m| {
+            let need = resources::need_mb(m.upstream_memory_mb);
+            ModelChoice {
+                id: m.id.clone(),
+                label: m.label.clone(),
+                need_memory_mb: need,
+                fit: resources::fit(need, mem),
+            }
         })
         .collect()
 }
 
+/// Staging space a transcription of the item's file needs (F6.6).
+fn disk_need(c: &Connection, item_id: &str) -> Option<u64> {
+    let a = transcribe::source_asset(c, item_id)?;
+    let ms = a.duration_ms.or_else(|| {
+        repo::get_item(c, item_id)
+            .ok()
+            .flatten()
+            .and_then(|i| i.duration_ms)
+    })?;
+    Some(resources::audio_disk_bytes(
+        ms,
+        transcribe::DEFAULT_CHUNK_MS,
+    ))
+}
+
 fn local(c: &Connection, dirs: &Dirs, item_id: &str, whisper: bool) -> LocalTranscription {
-    let models = usable_models(c, dirs);
+    let memory = resources::memory();
+    let models = usable_models(c, dirs, memory);
     let reason = if transcribe::source_asset(c, item_id).is_none() {
         Some("no-media")
     } else if models.is_empty() {
@@ -210,6 +245,9 @@ fn local(c: &Connection, dirs: &Dirs, item_id: &str, whisper: bool) -> LocalTran
         reason,
         models,
         languages: transcribe::LANGUAGES.to_vec(),
+        memory,
+        disk_need_bytes: disk_need(c, item_id),
+        free_bytes: vv_engine::storage::free_bytes(&dirs.staging),
     }
 }
 
@@ -469,7 +507,9 @@ pub async fn transcribe_locally<R: Runtime>(
     item_id: String,
     model_id: String,
     language: String,
+    allow_low_memory: Option<bool>,
 ) -> Result<ItemTranscripts, DomainError> {
+    let allow = allow_low_memory.unwrap_or(false);
     let a = app.clone();
     let whisper = whisper_ready(&app);
     let r = blocking(app, move |st| {
@@ -497,10 +537,22 @@ pub async fn transcribe_locally<R: Runtime>(
                 }
                 _ => {}
             }
-            if !view.local.models.iter().any(|m| m.id == model_id) {
+            let Some(choice) = view.local.models.iter().find(|m| m.id == model_id) else {
                 return Err(DomainError::new(ErrorCode::ModelMissing, "model-not-ready"));
+            };
+            // AI-A05: warned first; runs only with "use it anyway".
+            if choice.fit.needs_consent() && !allow {
+                return Err(DomainError::new(
+                    ErrorCode::ResourceLimit,
+                    "model-needs-more-memory",
+                ));
             }
-            transcribe::enqueue(c, &item_id, &model_id, &language, now())
+            if let (Some(need), Some(free)) = (view.local.disk_need_bytes, view.local.free_bytes) {
+                if free < need {
+                    return Err(DomainError::new(ErrorCode::DiskFull, "no-room-for-audio"));
+                }
+            }
+            transcribe::enqueue(c, &item_id, &model_id, &language, allow, now())
                 .map_err(|_| internal("transcription-job"))?;
             for_item(c, &d, &item_id, whisper)
         })

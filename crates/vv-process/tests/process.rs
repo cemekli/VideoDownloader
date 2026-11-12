@@ -164,3 +164,18 @@ fn a_crashed_parent_leaves_no_orphan() {
         "grandchild {g} orphaned"
     );
 }
+
+/// F6.6: long CPU work (transcription) runs below normal priority.
+#[cfg(target_os = "linux")]
+#[test]
+fn low_priority_child_is_niced() {
+    let mut cmd = ManagedCommand::new(HELPER);
+    cmd.arg("sleep").low_priority();
+    let mut child = cmd.spawn().unwrap();
+    let stat = std::fs::read_to_string(format!("/proc/{}/stat", child.id())).unwrap();
+    // Fields after the `(comm)`: state is field 3, nice is field 19.
+    let rest = stat.rsplit_once(") ").unwrap().1;
+    let nice: i32 = rest.split_whitespace().nth(16).unwrap().parse().unwrap();
+    child.kill_tree().unwrap();
+    assert_eq!(nice, 10);
+}

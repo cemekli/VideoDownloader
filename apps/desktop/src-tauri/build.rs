@@ -86,6 +86,7 @@ const COMMANDS: &[&str] = &[
     "download_model",
     "verify_model",
     "remove_model",
+    "get_ai_processing",
     "list_transcripts",
     "get_transcript",
     "fetch_captions",

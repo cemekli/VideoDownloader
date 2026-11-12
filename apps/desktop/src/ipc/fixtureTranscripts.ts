@@ -19,20 +19,30 @@ import contract from "@fixtures/ipc-contract.json";
 import realCaptions from "@fixtures/captions/expected.json";
 import { IpcError } from "./errors";
 import { highlight, terms, type FixtureRecord, type FixtureScenario } from "./fixture";
-import type { ItemTranscripts, JobDto, LocalTranscription, MomentDto, TranscriptClient, TranscriptDetail, TranscriptDto, TranscriptMatchesDto } from "./types";
+import type { AiJobDto, ItemTranscripts, JobDto, LocalTranscription, ModelChoice, MomentDto, TranscriptClient, TranscriptDetail, TranscriptDto, TranscriptMatchesDto } from "./types";
+import { fitOf, fixtureMemory, needMb } from "./fixtureModels";
 
 /** Transcripts plus the cancel the fixture client routes here for transcription jobs. */
 export type FixtureTranscripts = TranscriptClient & {
   cancelOwnJob(jobId: string): JobDto | null;
   /** Where the search terms were said in an item (F6.4). */
   spokenMatches(itemId: string, ts: string[]): TranscriptMatchesDto | null;
+  /** Transcription jobs as AI Processing lists them (F6.6). */
+  aiJobs(): AiJobDto[];
 };
 
 /** Moments listed under one item, as the backend (`search::MAX_MOMENTS`). */
 const MAX_MOMENTS = 5;
 type Cue = Omit<TranscriptDetail["segments"][number], "id">;
 
-const FIXTURE_MODELS = [{ id: "whisper-base", label: "Base" }];
+/** Base as if installed; `low-memory` also has Medium, which does not fit that PC (AI-A05). */
+function fixtureModels(scenario: FixtureScenario): ModelChoice[] {
+  const mem = fixtureMemory(scenario);
+  const choice = (id: string, label: string, up: number): ModelChoice => ({ id, label, needMemoryMb: needMb(up), fit: fitOf(needMb(up), mem) });
+  const list = [choice("whisper-base", "Base", 388)];
+  if (scenario === "low-memory") list.push(choice("whisper-medium", "Medium", 2100));
+  return list;
+}
 
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
@@ -51,6 +61,8 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
   const jobs = new Map<string, JobDto>();
   const asr = new Map<string, JobDto>();
   const asrModel = new Map<string, string>();
+  const FIXTURE_MODELS = fixtureModels(scenario);
+  const asrLanguage = new Map<string, string>();
   let clock = 1_794_100_000_000;
   let seq = 0;
   const now = () => (clock += 1_000);
@@ -66,7 +78,15 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
   const view = (id: string): ItemTranscripts => {
     const r = item(id, "list_transcripts");
     const hasMedia = r.localState === "local_ready";
-    const local: LocalTranscription = { ready: hasMedia, reason: hasMedia ? null : "no-media", models: FIXTURE_MODELS, languages: ["auto", "tr", "en"] };
+    const local: LocalTranscription = {
+      ready: hasMedia,
+      reason: hasMedia ? null : "no-media",
+      models: FIXTURE_MODELS,
+      languages: ["auto", "tr", "en"],
+      memory: fixtureMemory(scenario),
+      diskNeedBytes: hasMedia ? 67_425_280 : null,
+      freeBytes: 120_000_000_000,
+    };
     return structuredClone({ itemId: id, transcripts: byItem.get(id) ?? [], captionsJob: jobs.get(id) ?? null, canFetchCaptions: r.canonicalUrl !== null, transcribeJob: asr.get(id) ?? null, transcribeModel: asrModel.get(id) ?? null, transcribeElapsedMs: elapsed(asr.get(id)), local });
   };
   const isOpen = (j: JobDto | undefined) => j !== undefined && !["succeeded", "failed", "canceled"].includes(j.status);
@@ -227,14 +247,17 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
       setTimeout(() => finish(r), stepMs);
       return view(itemId);
     },
-    async transcribeLocally(itemId, modelId, language) {
+    async transcribeLocally(itemId, modelId, language, allowLowMemory = false) {
       const r = item(itemId, "transcribe_locally");
       if (!["auto", "tr", "en"].includes(language)) throw err("INPUT_REJECTED", "transcribe_locally");
       if (r.localState !== "local_ready") throw err("FILE_MISSING", "transcribe_locally");
-      if (!FIXTURE_MODELS.some((m) => m.id === modelId)) throw err("MODEL_MISSING", "transcribe_locally");
+      const choice = FIXTURE_MODELS.find((m) => m.id === modelId);
+      if (!choice) throw err("MODEL_MISSING", "transcribe_locally");
+      if ((choice.fit === "tight" || choice.fit === "too_big") && !allowLowMemory) throw err("RESOURCE_LIMIT", "transcribe_locally");
       if (isOpen(asr.get(itemId))) return view(itemId);
       const t = now();
-      asrModel.set(itemId, FIXTURE_MODELS.find((m) => m.id === modelId)?.label ?? modelId);
+      asrModel.set(itemId, choice.label);
+      asrLanguage.set(itemId, language);
       asr.set(itemId, {
         ...(contract.commands.start_download.response as JobDto),
         id: `00000000-0000-4000-8000-${String(0xc300 + ++seq).padStart(12, "0")}`,
@@ -254,6 +277,12 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
       });
       setTimeout(() => step(r, modelId, language, 0), stepMs);
       return view(itemId);
+    },
+    aiJobs() {
+      const all = [...asr.entries()].map(([itemId, job]): AiJobDto => ({ job: structuredClone(job), model: asrModel.get(itemId) ?? null, language: asrLanguage.get(itemId) ?? null, elapsedMs: elapsed(job) }));
+      const open = all.filter((a) => isOpen(a.job)).sort((a, b) => a.job.createdAt - b.job.createdAt);
+      const done = all.filter((a) => !isOpen(a.job)).sort((a, b) => (b.job.finishedAt ?? 0) - (a.job.finishedAt ?? 0));
+      return [...open, ...done.slice(0, 10)];
     },
     cancelOwnJob(jobId) {
       for (const j of asr.values()) {

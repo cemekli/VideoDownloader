@@ -425,9 +425,14 @@ export interface Settings {
   onboardingCompletedAt: number | null;
   legalAckAt: number | null;
   activeDownloadRootId: string | null;
+  /** CPU limit for local transcription (F6.6). */
+  transcriptionCpu: CpuUse;
 }
 
-export type SettingsPatch = Partial<Pick<Settings, "offlineMode" | "theme" | "updateCheck" | "locale">>;
+/** How much of the CPU a transcription may use: 2 threads, half the cores, or all but one (max 8). */
+export type CpuUse = "light" | "balanced" | "full";
+
+export type SettingsPatch = Partial<Pick<Settings, "offlineMode" | "theme" | "updateCheck" | "locale" | "transcriptionCpu">>;
 
 export interface StorageOverview {
   /** Folder name only; paths stay in the backend. */
@@ -797,6 +802,10 @@ export interface ModelDto {
   source: string;
   /** Memory whisper.cpp lists for the model, not a measurement of ours. */
   upstreamMemoryMb: number;
+  /** Our estimate of what a run needs (whisper's figure plus DTW and buffers). */
+  needMemoryMb: number;
+  /** Whether this PC has that memory now (F6.6, AI-A05). */
+  fit: MemoryFit;
   status: ModelStatus;
   consentAt: number | null;
   verifiedAt: number | null;
@@ -808,6 +817,43 @@ export interface ModelOverview {
   freeBytes: number | null;
 }
 
+/** `tight`: the PC has the memory but not free now; `too_big`: not even with everything else closed. */
+export type MemoryFit = "ok" | "tight" | "too_big" | "unknown";
+
+export interface MemoryInfo {
+  totalBytes: number;
+  availableBytes: number;
+}
+
+/** State of whisper-cli as the tool check saw it; `unavailable`: no build for this system. */
+export type TranscriberState = "ok" | "missing" | "blocked" | "checksum_mismatch" | "unavailable";
+
+/** This PC as AI Processing shows it (SPEC §9.3, AI-A05). */
+export interface MachineDto {
+  memory: MemoryInfo | null;
+  cores: number;
+  cpuUse: CpuUse;
+  /** Threads whisper gets under that limit. */
+  threads: number;
+  transcriber: TranscriberState;
+  stagingFreeBytes: number | null;
+}
+
+export interface AiJobDto {
+  job: JobDto;
+  model: string | null;
+  language: string | null;
+  elapsedMs: number | null;
+}
+
+/** The AI Processing screen: this PC, the models and the transcription queue. */
+export interface AiProcessing {
+  machine: MachineDto;
+  models: ModelOverview;
+  /** Open jobs first (in run order), then the last finished ones. */
+  jobs: AiJobDto[];
+}
+
 /** Transcription models (F6.1, AC-20): nothing is downloaded until the user agrees in the consent dialog. */
 export interface ModelClient {
   listModels(): Promise<ModelOverview>;
@@ -816,6 +862,7 @@ export interface ModelClient {
   verifyModel(modelId: string): Promise<ModelOverview>;
   /** Cancels an open download and removes the file and the consent. */
   removeModel(modelId: string): Promise<ModelOverview>;
+  getAiProcessing(): Promise<AiProcessing>;
 }
 
 /** Where a transcript came from (SPEC §11.5). */
@@ -833,6 +880,8 @@ export interface TranscriptDto {
   /** Site captions: `manual` (the uploader's) or `automatic` (the site's speech recognition). */
   captionKind: "manual" | "automatic" | null;
   modelId: string | null;
+  /** The pinned model revision (AI-A06). */
+  modelVersion: string | null;
   status: TranscriptStatus;
   coveredMs: number | null;
   segmentCount: number;
@@ -878,8 +927,20 @@ export interface LocalTranscription {
   ready: boolean;
   reason: LocalBlocker | null;
   /** Models the user agreed to and that passed their check, smallest first. */
-  models: { id: string; label: string }[];
+  models: ModelChoice[];
   languages: TranscribeLanguage[];
+  /** This PC's memory, when known (F6.6). */
+  memory: MemoryInfo | null;
+  /** Staging space the item's audio needs, when its length is known. */
+  diskNeedBytes: number | null;
+  freeBytes: number | null;
+}
+
+export interface ModelChoice {
+  id: string;
+  label: string;
+  needMemoryMb: number;
+  fit: MemoryFit;
 }
 
 /** Transcripts (F6.2, AI-A01): the site's own captions first. */
@@ -889,7 +950,8 @@ export interface TranscriptClient {
   /** Queues the site-captions job; one open job per item. */
   fetchCaptions(itemId: string): Promise<ItemTranscripts>;
   /** Queues a transcription of the item's file on this PC (AI-A02); works offline. */
-  transcribeLocally(itemId: string, modelId: string, language: TranscribeLanguage): Promise<ItemTranscripts>;
+  /** `allowLowMemory`: the user saw the memory warning and chose "use it anyway" (AI-A05); otherwise RESOURCE_LIMIT. */
+  transcribeLocally(itemId: string, modelId: string, language: TranscribeLanguage, allowLowMemory?: boolean): Promise<ItemTranscripts>;
   deleteTranscript(transcriptId: string): Promise<ItemTranscripts>;
   /** Checks a search moment before seeking; INPUT_REJECTED `moment-gone` when its transcript changed (F6.4). */
   getMoment(segmentId: string): Promise<MomentTarget>;

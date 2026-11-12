@@ -82,7 +82,7 @@ fn mode(lib: &Lib, m: &str) {
 fn transcribe(lib: &Lib, item: &str, language: &str) -> String {
     let now = lib.clock.now_ms();
     let id = lib.write(|c| {
-        transcribe::enqueue(c, item, MODEL, language, now)
+        transcribe::enqueue(c, item, MODEL, language, false, now)
             .unwrap()
             .id
     });
@@ -307,7 +307,7 @@ fn cancel_stops_whisper() {
     mode(&lib, "slow");
     let now = lib.clock.now_ms();
     let job = lib.write(|c| {
-        transcribe::enqueue(c, &item, MODEL, "auto", now)
+        transcribe::enqueue(c, &item, MODEL, "auto", false, now)
             .unwrap()
             .id
     });
@@ -413,7 +413,11 @@ fn checkpoint(lib: &Lib, job: &str) -> Option<transcribe::Checkpoint> {
 /// calls `then` while it is still running.
 fn during_second_part(lib: &Lib, item: &str, then: impl FnOnce(&str)) -> String {
     let now = lib.clock.now_ms();
-    let job = lib.write(|c| transcribe::enqueue(c, item, MODEL, "auto", now).unwrap().id);
+    let job = lib.write(|c| {
+        transcribe::enqueue(c, item, MODEL, "auto", false, now)
+            .unwrap()
+            .id
+    });
     std::thread::scope(|s| {
         let h = s.spawn(|| lib.run());
         for _ in 0..2000 {
@@ -511,7 +515,7 @@ fn a_checkpoint_from_other_settings_is_not_used() {
     short_parts(&lib);
     let now = lib.clock.now_ms();
     let job = lib.write(|c| {
-        transcribe::enqueue(c, &item, MODEL, "auto", now)
+        transcribe::enqueue(c, &item, MODEL, "auto", false, now)
             .unwrap()
             .id
     });

@@ -370,3 +370,18 @@ button.moment-button:hover, button.moment-button:focus-visible { background: var
 .moment-text { overflow-wrap: anywhere; }
 .transcribe-local { margin-top: var(--s2); }
 .transcribe-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s1); }
+
+/* AI Processing (F6.6): one CPU choice per line. */
+.ai-cpu {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 12px 0;
+}
+.ai-cpu label {
+  display: block;
+  padding: 2px 0;
+}
+.transcribe-local [data-testid="transcribe-memory"] p {
+  margin: 4px 0;
+}

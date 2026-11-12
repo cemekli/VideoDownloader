@@ -63,6 +63,7 @@ describe("Details → Transcript", () => {
       provider: "source_captions",
       captionKind: "automatic",
       modelId: null,
+      modelVersion: null,
       status: "ready",
       coveredMs: 1,
       segmentCount: 1,
@@ -74,7 +75,7 @@ describe("Details → Transcript", () => {
     expect(sourceLabel(t)).toBe("Site captions (automatic)");
     const client = createFixtureClient();
     client.getTranscript = async () => ({ transcript: t, segments: [{ id: "s1", startMs: 0, endMs: 1, text: "<img src=x onerror=alert(1)>" }], truncated: false });
-    client.listTranscripts = async () => ({ itemId: YOUTUBE, transcripts: [t], captionsJob: null, canFetchCaptions: true, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-media", models: [], languages: ["auto", "tr", "en"] } });
+    client.listTranscripts = async () => ({ itemId: YOUTUBE, transcripts: [t], captionsJob: null, canFetchCaptions: true, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-media", models: [], languages: ["auto", "tr", "en"], memory: null, diskNeedBytes: null, freeBytes: null } });
     const user = userEvent.setup();
     const { container } = render(<Transcripts client={client} itemId={YOUTUBE} />);
     await user.click(await screen.findByTestId("transcript-show"));
@@ -91,6 +92,7 @@ describe("Details → Transcript", () => {
       provider: "whisper_cpp",
       captionKind: null,
       modelId: "whisper-medium",
+      modelVersion: "5359861c739e955e79d9a303bcbc70fb988958b1",
       status: "partial",
       coveredMs: 600_000,
       segmentCount: 120,
@@ -98,11 +100,12 @@ describe("Details → Transcript", () => {
       updatedAt: 0,
     };
     const client = createFixtureClient();
-    client.listTranscripts = async () => ({ itemId: LOCAL, transcripts: [t], captionsJob: null, canFetchCaptions: false, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-model", models: [], languages: ["auto", "tr", "en"] } });
+    client.listTranscripts = async () => ({ itemId: LOCAL, transcripts: [t], captionsJob: null, canFetchCaptions: false, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-model", models: [], languages: ["auto", "tr", "en"], memory: null, diskNeedBytes: null, freeBytes: null } });
     render(<Transcripts client={client} itemId={LOCAL} />);
     const row = await screen.findByTestId("transcript-row");
     expect(row).toHaveTextContent("120 lines · partial, up to 10:00");
-    expect(row).toHaveTextContent("Transcribed on this PC (whisper-medium)");
+    expect(row).toHaveTextContent("Transcribed on this PC (Medium)");
+    expect(row).toHaveTextContent("Model: Medium (whisper.cpp, revision 5359861)");
   });
 
   it("transcribes a local file on this PC and shows the model as the source (F6.2, AI-A02)", async () => {
@@ -118,7 +121,8 @@ describe("Details → Transcript", () => {
     expect(screen.getByTestId("transcribe-timing")).toHaveTextContent(/elapsed, about \d+:\d\d left/);
     const row = await screen.findByTestId("transcript-row", {}, { timeout: 4000 });
     expect(row).toHaveTextContent("Turkish");
-    expect(row).toHaveTextContent("Transcribed on this PC (whisper-base)");
+    expect(row).toHaveTextContent("Transcribed on this PC (Base)");
+    expect(row).toHaveTextContent("complete");
     expect(screen.queryByTestId("transcribe-running")).toBeNull();
     expect(await screen.findByTestId("transcribe-last-run")).toHaveTextContent(/Last run: Base, took \d+:\d\d\./);
   });
@@ -144,7 +148,7 @@ describe("Details → Transcript", () => {
 
     const base = await client.listTranscripts(LOCAL);
     for (const [reason, text] of [
-      ["no-model", "download a model in Settings"],
+      ["no-model", "download a model in AI Processing"],
       ["no-tool", "local transcriber is missing"],
     ] as const) {
       const c = createFixtureClient();
@@ -154,6 +158,42 @@ describe("Details → Transcript", () => {
       expect(screen.queryByTestId("transcribe-start")).toBeNull();
       unmount();
     }
+  });
+});
+
+describe("low memory (F6.6, AI-A05)", () => {
+  it("does not pick a model the PC cannot hold, and runs it only after 'use it anyway'", async () => {
+    const user = userEvent.setup();
+    // A 4 GB PC with Base and Medium installed; Medium needs about 2.7 GB plus the system.
+    const client = createFixtureClient(undefined, "low-memory");
+    render(<Transcripts client={client} itemId={LOCAL} />);
+    const section = await screen.findByTestId("inspector-transcripts");
+    const select = within(section).getByTestId<HTMLSelectElement>("transcribe-model");
+    // Default: the largest model that fits, not the largest installed.
+    expect(select.value).toBe("whisper-base");
+    expect(within(section).queryByTestId("transcribe-memory")).toBeNull();
+    expect(within(section).getByRole("option", { name: "Medium (needs more memory)" })).toBeInTheDocument();
+
+    await user.selectOptions(select, "whisper-medium");
+    const warn = within(section).getByTestId("transcribe-memory");
+    expect(warn).toHaveAttribute("data-fit", "too_big");
+    expect(warn).toHaveTextContent(/Medium needs about 2\.\d GB of memory and this PC has 4(\.0)? GB in all/);
+    expect(within(section).getByTestId("transcribe-start")).toBeDisabled();
+    // The backend refuses it without the user's choice, too.
+    await expect(client.transcribeLocally(LOCAL, "whisper-medium", "auto")).rejects.toMatchObject({ code: "RESOURCE_LIMIT" });
+
+    await user.click(within(section).getByTestId("transcribe-anyway"));
+    await user.click(within(section).getByTestId("transcribe-start"));
+    expect(await screen.findByText(/with Medium/, {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+
+  it("blocks the start when there is no room for the audio", async () => {
+    const client = createFixtureClient();
+    const base = await client.listTranscripts(LOCAL);
+    client.listTranscripts = async () => ({ ...base, local: { ...base.local, diskNeedBytes: 500_000_000, freeBytes: 100_000_000 } });
+    render(<Transcripts client={client} itemId={LOCAL} />);
+    expect(await screen.findByTestId("transcribe-disk")).toHaveTextContent("Not enough free space for the audio");
+    expect(screen.getByTestId("transcribe-start")).toBeDisabled();
   });
 });
 
