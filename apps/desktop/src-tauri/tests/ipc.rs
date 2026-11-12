@@ -285,6 +285,7 @@ fn main_capability_grants_only_app_commands() {
         "allow-fetch-captions",
         "allow-transcribe-locally",
         "allow-delete-transcript",
+        "allow-get-moment",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1568,11 +1569,52 @@ fn transcript_commands_match_contract_and_queue_captions() {
     .unwrap_err();
     assert_eq!(e["code"], "INPUT_REJECTED");
 
+    assert_same_shape(
+        &g["segments"][0],
+        &spec("get_transcript")["segments"][0],
+        "get_transcript.segments[0]",
+    );
+
+    // F6.4, SEA-06: words said in the video find the item; the moment opens
+    // at the start of the segment that holds them (PLAY-06).
+    let found = ok(
+        &w,
+        "list_items",
+        json!({ "query": { "text": "yürüyüşü", "sort": "relevance" } }),
+    );
+    assert_eq!(found["total"], 1);
+    let tr = &found["items"][0]["transcript"];
+    let shape = &c["commands"]["list_items"]["transcriptShape"];
+    assert_same_shape(tr, shape, "list_items.items[0].transcript");
+    assert_same_shape(
+        &tr["moments"][0],
+        &shape["moments"][0],
+        "transcript.moments[0]",
+    );
+    assert_eq!(tr["moments"][0]["startMs"], 3_200);
+    assert_eq!(tr["moments"][0]["snippet"]["field"], "transcript");
+    let seg = tr["moments"][0]["segmentId"].as_str().unwrap().to_owned();
+    let m = ok(&w, "get_moment", json!({ "segmentId": seg }));
+    assert_same_shape(&m, &spec("get_moment"), "get_moment");
+    assert_eq!(
+        (m["itemId"].as_str(), m["startMs"].as_i64()),
+        (Some(id.as_str()), Some(3_200))
+    );
+    let plain = ok(&w, "list_items", json!({ "query": {} }));
+    assert!(plain["items"][0]["transcript"].is_null());
+
     let x = ok(&w, "delete_transcript", json!({ "transcriptId": t.id }));
     assert_same_shape(&x, &spec("delete_transcript"), "delete_transcript");
     assert_eq!(x["transcripts"], json!([]));
 
-    for v in [&l, &r, &g, &x] {
+    // The transcript is gone: an old result says so instead of seeking.
+    let e = invoke(&w, "get_moment", json!({ "segmentId": seg }), app_origin()).unwrap_err();
+    assert_eq!(
+        (e["code"].as_str(), e["diagnosticId"].as_str()),
+        (Some("INPUT_REJECTED"), Some("moment-gone"))
+    );
+
+    for v in [&l, &r, &g, &x, &found, &m] {
         let s = v.to_string();
         assert!(!s.contains(&*d.path().to_string_lossy()), "no paths: {s}");
     }

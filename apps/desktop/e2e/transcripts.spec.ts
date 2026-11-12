@@ -72,3 +72,23 @@ test.describe("Details → Transcript", () => {
     await expect(section.getByTestId("captions-fetch")).toHaveCount(0);
   });
 });
+
+// STATE.md F6.4 (SEA-06, PLAY-06, AC-22): words said in the video find the
+// item; the moment plays from its segment's start.
+test.describe("Search in transcripts", () => {
+  test("a spoken word finds the item and plays from that moment", async ({ page }, info) => {
+    await page.goto("/?fixture=transcripts");
+    await page.getByTestId("search-input").fill("Kadıköy");
+    const card = page.getByTestId("library-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.getByTestId("snippet")).toHaveAttribute("data-field", "transcript");
+    await expect(card.getByTestId("snippet")).toContainText("0:03");
+    await shot(page, "search-card", info);
+    await card.dblclick();
+    const moments = page.getByTestId("inspector").getByTestId("inspector-moments");
+    await expect(moments).toContainText("Said in the video");
+    await shot(page, "search-moments", info);
+    await moments.getByRole("button", { name: /Play from 0:03/ }).click();
+    await expect(page.getByTestId("player-video")).toHaveAttribute("data-start-ms", "3040");
+  });
+});

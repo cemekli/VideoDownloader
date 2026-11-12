@@ -91,6 +91,7 @@ const COMMANDS: &[&str] = &[
     "fetch_captions",
     "transcribe_locally",
     "delete_transcript",
+    "get_moment",
 ];
 
 fn main() {

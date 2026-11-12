@@ -10,21 +10,34 @@
 // INTERNAL_ERROR, as a handler panic does since the 11 Nov 2026 fix (the job
 // must end, never hang on "Getting…"); the next one succeeds with the cues of
 // the self-authored Turkish YouTube-like file (`tests/fixtures/captions/`).
+//
+// `transcripts`: the first YouTube item starts with those Turkish captions,
+// so a library search finds the words said in it (F6.4). `spokenMatches`
+// answers that search like the backend: one transcript per item (ready
+// first, newest), moments in time order at their segment's start.
 import contract from "@fixtures/ipc-contract.json";
 import realCaptions from "@fixtures/captions/expected.json";
 import { IpcError } from "./errors";
-import type { FixtureRecord, FixtureScenario } from "./fixture";
-import type { ItemTranscripts, JobDto, LocalTranscription, TranscriptClient, TranscriptDetail, TranscriptDto } from "./types";
+import { highlight, terms, type FixtureRecord, type FixtureScenario } from "./fixture";
+import type { ItemTranscripts, JobDto, LocalTranscription, MomentDto, TranscriptClient, TranscriptDetail, TranscriptDto, TranscriptMatchesDto } from "./types";
 
 /** Transcripts plus the cancel the fixture client routes here for transcription jobs. */
-export type FixtureTranscripts = TranscriptClient & { cancelOwnJob(jobId: string): JobDto | null };
+export type FixtureTranscripts = TranscriptClient & {
+  cancelOwnJob(jobId: string): JobDto | null;
+  /** Where the search terms were said in an item (F6.4). */
+  spokenMatches(itemId: string, ts: string[]): TranscriptMatchesDto | null;
+};
+
+/** Moments listed under one item, as the backend (`search::MAX_MOMENTS`). */
+const MAX_MOMENTS = 5;
+type Cue = Omit<TranscriptDetail["segments"][number], "id">;
 
 const FIXTURE_MODELS = [{ id: "whisper-base", label: "Base" }];
 
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
 
-const realTurkish: TranscriptDetail["segments"] = realCaptions.files["youtube-tr-manual.vtt"].map(([startMs, endMs, text]) => ({
+const realTurkish: Cue[] = realCaptions.files["youtube-tr-manual.vtt"].map(([startMs, endMs, text]) => ({
   startMs: startMs as number,
   endMs: endMs as number,
   text: text as string,
@@ -41,6 +54,12 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
   let clock = 1_794_100_000_000;
   let seq = 0;
   const now = () => (clock += 1_000);
+  /** Segment ids are unique per transcript, as the backend's are. */
+  const store = (tid: string, cues: Cue[]) =>
+    segments.set(
+      tid,
+      cues.map((c, i) => ({ ...c, id: `${tid.slice(0, 19)}${tid.slice(-4)}-${String(i + 1).padStart(12, "0")}` })),
+    );
 
   const elapsed = (j: JobDto | undefined) => (j && j.status !== "queued" ? (j.finishedAt ?? j.updatedAt) - j.createdAt : null);
   const item = (id: string, cmd: string) => records.find((r) => r.id === id && !r.removed) ?? (() => { throw err("INPUT_REJECTED", cmd); })();
@@ -83,7 +102,7 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
     };
     t.updatedAt = j.finishedAt;
     if (!existing) byItem.set(r.id, [...list, t]);
-    segments.set(t.id, sample.segments);
+    store(t.id, sample.segments);
   };
   const finish = (r: FixtureRecord) => {
     const j = jobs.get(r.id);
@@ -107,10 +126,52 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
     t.segmentCount = segs.length;
     t.coveredMs = segs.at(-1)?.endMs ?? null;
     if (!existing) byItem.set(r.id, [...(byItem.get(r.id) ?? []), t]);
-    segments.set(t.id, segs);
+    store(t.id, segs);
+  };
+  if (scenario === "transcripts") {
+    const r = records.find((x) => x.platform === "youtube" && !x.removed);
+    if (r) {
+      const t: TranscriptDto = { ...sample.transcript, id: `00000000-0000-4000-8000-${String(0xc100 + ++seq).padStart(12, "0")}`, itemId: r.id, segmentCount: realTurkish.length, coveredMs: realTurkish.at(-1)!.endMs };
+      byItem.set(r.id, [t]);
+      store(t.id, realTurkish);
+    }
+  }
+
+  /** One segment per moment; a moment opens at the segment's start. */
+  const spokenMatches = (itemId: string, ts: string[]): TranscriptMatchesDto | null => {
+    const list = (byItem.get(itemId) ?? []).filter((t) => t.status === "ready" || t.status === "partial");
+    list.sort((a, b) => Number(b.status === "ready") - Number(a.status === "ready") || b.updatedAt - a.updatedAt);
+    for (const t of list) {
+      const segs = segments.get(t.id) ?? [];
+      const hits = segs.filter((sg) => {
+        const words = terms(sg.text);
+        return ts.every((q, i) => words.some((w) => (i === ts.length - 1 ? w.startsWith(q) : w === q || w.startsWith(q))));
+      });
+      if (!hits.length) continue;
+      const moments: MomentDto[] = hits.slice(0, MAX_MOMENTS).map((sg) => ({
+        segmentId: sg.id,
+        startMs: sg.startMs,
+        endMs: sg.endMs,
+        snippet: highlight("transcript", sg.text, ts) ?? { field: "transcript", parts: [{ text: sg.text, highlight: false }], cutStart: false, cutEnd: false },
+      }));
+      return { transcriptId: t.id, language: t.language, provenance: t.provenance, partial: t.status === "partial", coveredMs: t.coveredMs, moments, total: hits.length };
+    }
+    return null;
   };
 
+
   return {
+    spokenMatches,
+    async getMoment(segmentId) {
+      for (const [tid, segs] of segments) {
+        const sg = segs.find((x) => x.id === segmentId);
+        if (!sg) continue;
+        const t = [...byItem.values()].flat().find((x) => x.id === tid);
+        if (!t || !["ready", "partial"].includes(t.status)) break;
+        return { itemId: t.itemId, transcriptId: t.id, segmentId, startMs: sg.startMs, endMs: sg.endMs };
+      }
+      throw new IpcError("INPUT_REJECTED", "get_moment: moment-gone", { code: "INPUT_REJECTED", messageKey: "error.input_rejected", retryable: false, suggestedAction: null, diagnosticId: "moment-gone", safeDetails: {} });
+    },
     async listTranscripts(itemId) {
       return view(itemId);
     },

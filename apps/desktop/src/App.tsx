@@ -68,7 +68,9 @@ export function App({ client }: { client?: BackendClient }) {
   const { settings, update: updateSettings, replace: replaceSettings } = useSettings(c);
   const offlineMode = !!settings?.offlineMode;
   /** Item open in the player (F2.4), and whether Settings is open. */
-  const [playing, setPlaying] = useState<string | null>(null);
+  // The item in the player, and where to start (a search moment, F6.4).
+  const [playing, setPlayingState] = useState<{ id: string; atMs: number | null } | null>(null);
+  const setPlaying = (id: string | null) => setPlayingState(id ? { id, atMs: null } : null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Item whose Download dialog is open (F3.8). */
   const [downloading, setDownloading] = useState<{ id: string; title: string } | null>(null);
@@ -324,6 +326,19 @@ export function App({ client }: { client?: BackendClient }) {
     c.openSource(id).then(
       () => toast(t("player.opened_source")),
       (e) => toast(errorMessage(errorCode(e)), "error"),
+    );
+
+  // A search moment is checked again before the player seeks (§16.2): a
+  // transcript made again since the search has other segments.
+  const openMoment = (segmentId: string) =>
+    c.getMoment(segmentId).then(
+      (m) => setPlayingState({ id: m.itemId, atMs: m.startMs }),
+      (e) => {
+        if (errorCode(e) === "INPUT_REJECTED") {
+          toast(t("search.moment_gone"), "error");
+          setReloadKey((k) => k + 1);
+        } else toast(errorMessage(errorCode(e)), "error");
+      },
     );
 
   const goView = (v: LibraryView) => {
@@ -586,6 +601,7 @@ export function App({ client }: { client?: BackendClient }) {
             onClose={closeInspector}
             refreshKey={org.version + reloadKey * 1000}
             transcripts={c}
+            moments={activeId ? (items.find((i) => i.id === activeId)?.transcript ?? null) : null}
             downloadJob={activeId ? (jobs.find((j) => j.kind === "download" && j.itemId === activeId && (isOpen(j) || j.status === "failed")) ?? null) : null}
             collections={sb?.collections ?? []}
             emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}
@@ -597,6 +613,7 @@ export function App({ client }: { client?: BackendClient }) {
               addToCollection: (id) => org.open({ kind: "add-to-collection", ids: [id] }),
               removeFromCollection: (id, cid) => org.actions.removeFromCollection([id], cid),
               play: (id) => setPlaying(id),
+              openMoment,
               openSource,
               download: (id, title) => setDownloading({ id, title }),
               openDownloads: () => setScope({ kind: "downloads" }),
@@ -616,7 +633,7 @@ export function App({ client }: { client?: BackendClient }) {
         />
       )}
       {org.dialog}
-      {playing && <Player client={c} itemId={playing} onClose={() => setPlaying(null)} notify={(m, tone) => toast(m, tone)} />}
+      {playing && <Player client={c} itemId={playing.id} startAtMs={playing.atMs} onClose={() => setPlaying(null)} notify={(m, tone) => toast(m, tone)} />}
       {downloading && (
         <DownloadDialog
           client={c}

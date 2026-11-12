@@ -472,6 +472,17 @@ export const en = {
   "models.consent.check": "The file is checked against its published checksums before it is used.",
   "models.consent.no_space": "There is not enough free space for this model.",
   "models.consent.agree": "Download",
+  // Search moments: where a search text was said (STATE.md F6.4, SEA-06, PLAY-06)
+  "search.moments_more.one": "+{count} more",
+  "search.moments_more.other": "+{count} more",
+  "search.said_title": "Said in the video",
+  "search.source.captions": "Site captions",
+  "search.source.local": "Transcribed on this PC",
+  "search.said_partial": "Partial transcript: searched up to {covered}.",
+  "search.said_more.one": "{count} more place in this transcript.",
+  "search.said_more.other": "{count} more places in this transcript.",
+  "search.moment_label": "Play from {time}: {text}",
+  "search.moment_gone": "This transcript changed after the search. Search again to find the moment.",
   // Transcripts in the details panel (STATE.md F6.2, SPEC §8.4, AI-A01)
   "transcripts.title": "Transcript",
   "transcripts.empty": "No transcript yet. If the site has captions for this video, VideoVault can keep them as searchable text.",

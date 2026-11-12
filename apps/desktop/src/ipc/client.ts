@@ -49,6 +49,7 @@ import type {
   TranscriptClient,
   ItemTranscripts,
   TranscriptDetail,
+  MomentTarget,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -101,9 +102,9 @@ export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStat
  */
 export function createFixtureClient(records?: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureClient {
   const recs = records ?? scenarioRecords(scenario);
-  const library = createFixtureLibrary(recs, scenario);
-  const downloads = createFixtureDownloads(recs, scenario);
   const transcripts = createFixtureTranscripts(recs, undefined, scenario);
+  const library = createFixtureLibrary(recs, scenario, transcripts.spokenMatches);
+  const downloads = createFixtureDownloads(recs, scenario);
   return {
     ...createFixtureData(recs, scenario, library),
     ...downloads.client,
@@ -262,6 +263,7 @@ const transcriptCommands: TranscriptClient = {
   fetchCaptions: (itemId) => call<ItemTranscripts>("fetch_captions", { itemId }),
   transcribeLocally: (itemId, modelId, language) => call<ItemTranscripts>("transcribe_locally", { itemId, modelId, language }),
   deleteTranscript: (transcriptId) => call<ItemTranscripts>("delete_transcript", { transcriptId }),
+  getMoment: (segmentId) => call<MomentTarget>("get_moment", { segmentId }),
 };
 
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */
@@ -293,9 +295,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts"];
 
-/** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient } from "../ipc/types";
+import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient, TranscriptMatchesDto } from "../ipc/types";
 import { Transcripts } from "./Transcripts";
+import { Moments } from "./Moments";
 import { ItemDownload } from "./DownloadsView";
 import { errorCode } from "../ipc/errors";
 import { formatBytes, formatDate, formatDuration } from "../format";
@@ -44,6 +45,8 @@ export interface InspectorActions {
   download?(id: string, title: string): void;
   /** Opens the Downloads screen. */
   openDownloads?(): void;
+  /** Plays the item from a search moment (F6.4, PLAY-06). */
+  openMoment?(segmentId: string): void;
 }
 
 /**
@@ -62,6 +65,7 @@ export function Inspector({
   emptyHint,
   downloadJob = null,
   transcripts,
+  moments = null,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -77,6 +81,8 @@ export function Inspector({
   downloadJob?: JobDto | null;
   /** Transcripts of the item (F6.2); without it the section is not shown. */
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
+  /** Where the current search text was said in the item (F6.4). */
+  moments?: TranscriptMatchesDto | null;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -111,7 +117,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -154,6 +160,7 @@ function Details({
   actions,
   downloadJob,
   transcripts,
+  moments,
   onSaved,
 }: {
   detail: ItemDetail;
@@ -162,6 +169,7 @@ function Details({
   actions?: InspectorActions;
   downloadJob: JobDto | null;
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
+  moments: TranscriptMatchesDto | null;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -199,6 +207,8 @@ function Details({
           </button>
         </div>
       )}
+      {/* With a search text, where it was said comes right under the actions (F6.4). */}
+      {moments && moments.moments.length > 0 && <Moments matches={moments} playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />}
       <p className="inspector-state">
         <StateBadge state={item.localState} />
         <span className="muted"> {LOCAL_STATE[item.localState].hint}</span>

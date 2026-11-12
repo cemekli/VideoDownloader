@@ -12,6 +12,7 @@ use vv_domain::error::{DomainError, ErrorCode};
 use vv_persistence::library::repo::{self, LibraryItem};
 use vv_persistence::library::search::{
     self, ArchiveFilter, Field, Filters, QueryNotice, SearchQuery, Snippet, Sort, SortField,
+    TranscriptMatches,
 };
 use vv_persistence::library::view::{self, AssetView, LocalState};
 use vv_persistence::library::{Clock, ItemKind, SourcePlatform, SystemClock};
@@ -121,6 +122,56 @@ pub struct LibraryItemDto {
     /// Set while the item is in Recently removed (§7.3).
     pub removed_at: Option<i64>,
     pub snippet: Option<SnippetDto>,
+    /// Where a search text was said in the item's transcript (F6.4,
+    /// SEA-06); `null` without a text or a transcript match.
+    pub transcript: Option<TranscriptMatchesDto>,
+}
+
+/// One place in a transcript; opening it seeks to `startMs`, the start of
+/// the segment holding the matched word (PLAY-06).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MomentDto {
+    pub segment_id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub snippet: SnippetDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptMatchesDto {
+    pub transcript_id: String,
+    pub language: String,
+    pub provenance: String,
+    /// Only up to `coveredMs` was transcribed (§16.2).
+    pub partial: bool,
+    pub covered_ms: Option<i64>,
+    /// The first few, in time order.
+    pub moments: Vec<MomentDto>,
+    /// All matches in this transcript.
+    pub total: u32,
+}
+
+fn matches_dto(m: &TranscriptMatches) -> TranscriptMatchesDto {
+    TranscriptMatchesDto {
+        transcript_id: m.transcript_id.clone(),
+        language: m.language.clone(),
+        provenance: m.provenance.clone(),
+        partial: m.partial,
+        covered_ms: m.covered_ms,
+        moments: m
+            .moments
+            .iter()
+            .map(|mo| MomentDto {
+                segment_id: mo.segment_id.clone(),
+                start_ms: mo.start_ms,
+                end_ms: mo.end_ms,
+                snippet: snippet_dto(&mo.snippet),
+            })
+            .collect(),
+        total: m.total,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -176,6 +227,7 @@ fn field_name(f: Field) -> &'static str {
         Field::Creator => "creator",
         Field::Notes => "notes",
         Field::Tags => "tags",
+        Field::Transcript => "transcript",
     }
 }
 
@@ -224,6 +276,7 @@ pub(crate) fn item_dto(
         archived: it.archived_at.is_some(),
         removed_at: it.removed_at,
         snippet,
+        transcript: None,
     }
 }
 
@@ -339,6 +392,7 @@ pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage,
                 h.snippet.as_ref().map(snippet_dto),
             );
             d.tags = tag_names(c, &h.item.id)?;
+            d.transcript = h.transcript.as_ref().map(matches_dto);
             Ok(d)
         })
         .collect::<Result<_, DomainError>>()?;

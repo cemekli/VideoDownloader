@@ -17,7 +17,20 @@ type Problem = "partial" | "failed" | null;
  * the user stopped, and decides "plays / sound only / fails" from what the
  * element actually did, not from `canPlayType`.
  */
-export function Player({ client, itemId, onClose, notify }: { client: BackendClient; itemId: string; onClose: () => void; notify: (text: string, tone?: "info" | "error") => void }) {
+export function Player({
+  client,
+  itemId,
+  startAtMs = null,
+  onClose,
+  notify,
+}: {
+  client: BackendClient;
+  itemId: string;
+  /** Start here instead of offering the saved position: a search moment (F6.4, PLAY-06). */
+  startAtMs?: number | null;
+  onClose: () => void;
+  notify: (text: string, tone?: "info" | "error") => void;
+}) {
   const [info, setInfo] = useState<PlaybackInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem>(null);
@@ -26,7 +39,7 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
   const dialog = useRef<HTMLDivElement>(null);
   const lastSaved = useRef(0);
   const source: PlaybackSource | null = info?.sources.find((s) => s.available) ?? info?.sources[0] ?? null;
-  const resume = info?.state?.resumable && info.state.assetId === source?.assetId ? info.state : null;
+  const resume = startAtMs === null && info?.state?.resumable && info.state.assetId === source?.assetId ? info.state : null;
 
   const load = useCallback(() => {
     client
@@ -75,7 +88,7 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
   useEffect(() => {
     if (autoStarted.current || !source?.available || resume) return;
     autoStarted.current = true;
-    start(0);
+    start(startAtMs ?? 0);
     // start only reads refs and setters; it runs once per opened file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.available, source?.assetId, resume]);
@@ -203,6 +216,7 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
               aria-label={info?.title}
               data-autofocus={resume ? undefined : true}
               data-testid="player-video"
+              data-start-ms={startAtMs ?? undefined}
               onPlay={() => setStarted(true)}
               onPause={save}
               onEnded={save}

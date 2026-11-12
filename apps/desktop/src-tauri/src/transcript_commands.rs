@@ -48,6 +48,7 @@ pub struct TranscriptDto {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentDto {
+    pub id: String,
     pub start_ms: i64,
     pub end_ms: i64,
     pub text: String,
@@ -268,6 +269,7 @@ pub async fn get_transcript<R: Runtime>(
             .into_iter()
             .take(MAX_SEGMENTS)
             .map(|s| SegmentDto {
+                id: s.id,
                 start_ms: s.start_ms,
                 end_ms: s.end_ms,
                 text: s.text,
@@ -278,6 +280,58 @@ pub async fn get_transcript<R: Runtime>(
             segments,
             truncated,
         })
+    })
+    .await
+}
+
+/// Where a search moment opens (F6.4, PLAY-06).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MomentTarget {
+    pub item_id: String,
+    pub transcript_id: String,
+    pub segment_id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+}
+
+/// Checks that a moment from a search result still holds before the
+/// player seeks to it (§16.2): the segment exists, its transcript is still
+/// `ready` or `partial`, and the item is in the library. Otherwise
+/// `INPUT_REJECTED` with `moment-gone` (search again).
+pub fn moment_target(c: &Connection, segment_id: &str) -> Result<MomentTarget, DomainError> {
+    let gone = || DomainError::new(ErrorCode::InputRejected, "moment-gone");
+    let p = transcripts::segment_place(c, segment_id)
+        .map_err(db_err)?
+        .ok_or_else(gone)?;
+    if !matches!(
+        p.status,
+        transcripts::Status::Ready | transcripts::Status::Partial
+    ) {
+        return Err(gone());
+    }
+    let it = repo::get_item(c, &p.item_id)
+        .map_err(|_| internal("moment-item"))?
+        .ok_or_else(gone)?;
+    if it.removed_at.is_some() {
+        return Err(gone());
+    }
+    Ok(MomentTarget {
+        item_id: p.item_id,
+        transcript_id: p.transcript_id,
+        segment_id: p.segment_id,
+        start_ms: p.start_ms,
+        end_ms: p.end_ms,
+    })
+}
+
+#[tauri::command]
+pub async fn get_moment<R: Runtime>(
+    app: AppHandle<R>,
+    segment_id: String,
+) -> Result<MomentTarget, DomainError> {
+    blocking(app, move |st| {
+        moment_target(&st.get()?.reader()?, &segment_id)
     })
     .await
 }
