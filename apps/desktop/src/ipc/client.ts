@@ -46,6 +46,7 @@ import type {
   VerifyDto,
   ModelClient,
   ModelOverview,
+  AiProcessing,
   TranscriptClient,
   ItemTranscripts,
   TranscriptDetail,
@@ -58,7 +59,7 @@ import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
 import { createFixtureData } from "./fixtureData";
 import { createFixtureDownloads } from "./fixtureDownloads";
-import { createFixtureModels } from "./fixtureModels";
+import { createFixtureModels, fixtureMachine } from "./fixtureModels";
 import { createFixtureTranscripts } from "./fixtureTranscripts";
 
 export { IpcError } from "./errors";
@@ -107,12 +108,15 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   const transcripts = createFixtureTranscripts(recs, undefined, scenario);
   const library = createFixtureLibrary(recs, scenario, transcripts.spokenMatches);
   const downloads = createFixtureDownloads(recs, scenario);
+  const data = createFixtureData(recs, scenario, library);
+  const models = createFixtureModels(scenario);
   return {
-    ...createFixtureData(recs, scenario, library),
+    ...data,
     ...downloads.client,
     ...downloads.sessions,
-    ...createFixtureModels(scenario),
+    ...models,
     ...transcripts,
+    getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs() }),
     // Transcription jobs live with the fixture transcripts; the rest are downloads.
     cancelJob: async (jobId) => transcripts.cancelOwnJob(jobId) ?? downloads.client.cancelJob(jobId),
     downloads,
@@ -256,6 +260,7 @@ const modelCommands: ModelClient = {
   downloadModel: (modelId, agreed) => call<ModelOverview>("download_model", { modelId, agreed }),
   verifyModel: (modelId) => call<ModelOverview>("verify_model", { modelId }),
   removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),
+  getAiProcessing: () => call<AiProcessing>("get_ai_processing"),
 };
 
 /** Transcripts (F6.2). */
@@ -263,7 +268,7 @@ const transcriptCommands: TranscriptClient = {
   listTranscripts: (itemId) => call<ItemTranscripts>("list_transcripts", { itemId }),
   getTranscript: (transcriptId) => call<TranscriptDetail>("get_transcript", { transcriptId }),
   fetchCaptions: (itemId) => call<ItemTranscripts>("fetch_captions", { itemId }),
-  transcribeLocally: (itemId, modelId, language) => call<ItemTranscripts>("transcribe_locally", { itemId, modelId, language }),
+  transcribeLocally: (itemId, modelId, language, allowLowMemory = false) => call<ItemTranscripts>("transcribe_locally", { itemId, modelId, language, allowLowMemory }),
   deleteTranscript: (transcriptId) => call<ItemTranscripts>("delete_transcript", { transcriptId }),
   getMoment: (segmentId) => call<MomentTarget>("get_moment", { segmentId }),
   previewNote: (itemId, segmentIds) => call<NotePreview>("preview_note", { itemId, segmentIds }),
@@ -299,9 +304,9 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory"];
 
-/** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts` picks a fixture data set (fixture mode only). */
+/** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts|low-memory` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
   const s = new URLSearchParams(search).get("fixture");
   return SCENARIOS.includes(s as FixtureScenario) ? (s as FixtureScenario) : "default";

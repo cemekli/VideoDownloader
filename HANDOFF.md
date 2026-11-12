@@ -4,6 +4,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Nerede kaldık
 
+- **12 Kas akşam: F6.6 yazıldı (🟨, ADR-0033): kaynak sınırları ve AI Processing.** Kenar çubuğunda "AI Processing": bilgisayarın belleği, iş parçacığı sayısı, ses için boş alan, whisper-cli durumu; işlemci kullanımı (Light/Balanced/Full); transkripsiyon kuyruğu ve Cancel; modeller ve her birinin bu bilgisayara sığıp sığmadığı. Details → Transcript'te varsayılan model artık sığan en büyük model; sığmayan model seçilince uyarı çıkar ve "Use … anyway" işaretlenmeden başlamaz. whisper ve FFmpeg düşük öncelikte çalışır. Döküm satırı model ve sürümü gösterir. Sıradaki: F6.7 kalite raporu.
 - **12 Kas: F6.4 yazıldı (🟨, ADR-0030): dökümde arama.** Arama kutusuna videoda söylenen bir kelime yazınca öğe bulunur. Kartta ilk an zaman koduyla görünür (`0:03 … Kadıköy …`). Details'te "Said in the video" bölümü anları listeler; dosyası olan öğede "Play from 0:12" oynatıcıyı o segmentin başından açar. Döküm aramadan sonra değiştiyse uyarı verir. Aynı PR'da F6.5 (🟨, ADR-0031): dökümü olan öğede oynatıcının yanında döküm paneli açılır; o an söylenen satır işaretlenir, zaman koduna tıklayınca video oradan oynar; satırlar seçilip "Export note…" ile Markdown not (önizleme, sonra "Save as…") kaydedilir. Sıradaki: F6.6 (kaynak sınırları ve AI Processing ekranı) ve F6.7 kalite raporu.
 - **11 Kas akşam: F6.2 bitti (✅).** Cuma yerel transkripsiyonu Windows'ta 21:44'lük bir videoda dört modelle çalıştırdı. Süreler: Tiny 0:49, Base 1:20, Small 3:29, Medium 10:29 (CPU). PR #49 ile iş sürerken model adı, geçen/kalan süre ve bitince "Last run: …, took …" görünüyor. Kalite karşılaştırması (F6.7) henüz yapılmadı. F6.3 yazıldı (ADR-0029), Cuma'nın testini bekliyor; sonra F6.4–F6.5 (arama, panel, zaman koduna gitme).
 - **11 Kas: F6.2 ikinci yarı yazıldı (🟨, ADR-0028): yerel transkripsiyon.** Details → Transcript → "Transcribe on this PC": dil (otomatik/Türkçe/İngilizce), model (indirilmiş olanlar, varsayılan en büyük), ilerleme yüzdesi, iptal. İş: FFmpeg öğenin dosyasını 16 kHz mono WAV yapar → `whisper-cli` (CPU) JSON yazar → `generated_local` döküm. Çevrimdışı çalışır. Dosyası olmayan öğede düğme yok.
@@ -33,12 +34,13 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 - **İlk açılış gecikmesi çözüldü (9 Kas):** taze derlemeden sonra thumbnail'lerin geç gelmesi ve pencerenin bir kez küçülmesi Avast Antivirus'ün taramasıymış; Avast kapalıyken hemen geliyor. Kodda değişiklik gerekmiyor; F4.7 bilinen kısıtlarına not düşülecek.
 - **F5.1 (9 Kas, PR #32, merge edildi):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
 - **Son durum (9 Kas, akşam):** F3 tamamlandı (PR #25–#30). Cuma Windows 11'de YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch VOD ve Dailymotion indirdi; sonuçlar `docs/platform-support.md`'de. Reddit girişsiz engelli (yt-dlp tek başına da `Account authentication is required` diyor).
-- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5, F6.1, F6.2, F6.4, F6.5 (49/74).
+- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5, F6.1, F6.2, F6.4, F6.5 (49/74). F6.6 yazıldı, testi bekliyor.
 - **Sıra değişikliği:** F4 (installer, imzalı güncelleme) ertelendi; sıradaki faz **F5 yetkili oturum** (Cuma'nın kararı, 9 Kas).
 - **Uygulamada şu an:** bookmark kaydedilince başlık, kanal, süre ve küçük resim gelir; Download ile dört önayar; Downloads ekranı; canlı yayınlar reddedilir; yerel import thumbnail'leri arka planda, en yeniden başlayarak, paralel yapılır. Bilinen platformlar: YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion, Twitch, Reddit.
 
 ## Sonraki ilk adımlar
 
+0. **F6.6 elle test (Cuma, release exe).** (a) Kenar çubuğu → AI Processing: bellek (boş/toplam) Görev Yöneticisi'ndekine yakın mı, whisper-cli "Ready" mi, modellerde "fits this PC" yazıyor mu? (b) Processor use → Light seç, bir videoyu Medium ile yazıya dök: Görev Yöneticisi'nde whisper-cli düşük öncelikte ve iş sürerken bilgisayar rahat kullanılıyor mu; kuyrukta iş görünüyor ve Cancel çalışıyor mu? Süreyi Full ile karşılaştır (F6.7'ye not). (c) Döküm satırında "Model: Medium (whisper.cpp, revision 5359861)" ve "complete" görünmeli. (d) Görev Yöneticisi'nde whisper-cli'nin en yüksek bellek kullanımını not et (tahmin: Medium ~2,7 GB).
 0. ~~F6.4 elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
 0. ~~Zaman kayması düzeltmesi (ADR-0032) elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
 0. ~~F6.5 elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
@@ -59,7 +61,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 - **Windows yerel komutları:**
   - `npm run verify`: tüm kapılar.
   - `npm run desktop`: uygulamayı geliştirme modunda açar. İndirme ve import için önce `node scripts/fetch-tools.mjs` (yt-dlp, Deno, FFmpeg, ffprobe `tools/bin`'e iner); yoksa Diagnostics "Missing" der ve Download düğmesi çalışmaz.
-  - `npm run dev:fixture`, sonra tarayıcıda `?fixture=empty|many|error|slow|first-run|download-error`. `download-error`: her indirmenin ilk denemesi ağ hatasıyla düşer, Try again başarır (Yolculuk 6).
+  - `npm run dev:fixture`, sonra tarayıcıda `?fixture=empty|many|error|slow|first-run|download-error|low-memory`. `low-memory`: 4 GB'lık bir bilgisayar, Base ve Medium kurulu, Medium sığmıyor (F6.6). `download-error`: her indirmenin ilk denemesi ağ hatasıyla düşer, Try again başarır (Yolculuk 6).
   - `npm run desktop:e2e-exe` ve ardından `npm run e2e:desktop`: gerçek uygulama E2E.
 - **Testler:** motor `crates/vv-engine/tests` (sahte yt-dlp `src/bin/vv-fake-ytdlp.rs`; `real_ytdlp.rs` gerçek araçlarla yerel sunucuya karşı, araçlar yoksa yerelde atlanır, CI'da zorunlu).
 - **Açık noktalar:** oturum gerektiren içerik `blocked`/`auth` olur (giriş M3'te). Pause motor tarafında var, arayüzde yok. `MEDIA_URL_EXPIRED` henüz üretilmiyor (ADR-0003). FFmpeg kurulum boyutu (ADR-0006) F4'te.

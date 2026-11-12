@@ -27,7 +27,7 @@ describe("Settings → Transcription", () => {
     expect(within(dlg).getByTestId("consent-size")).toHaveTextContent("MB");
     expect(within(dlg).getByTestId("consent-source")).toHaveTextContent("huggingface.co/ggerganov/whisper.cpp");
     expect(within(dlg).getByTestId("consent-license")).toHaveTextContent("MIT");
-    expect(dlg).toHaveTextContent("not yet measured");
+    expect(dlg).toHaveTextContent("not a measurement");
     await user.click(within(dlg).getByTestId("consent-cancel"));
     expect(screen.queryByTestId("model-consent")).toBeNull();
     const v = await client.listModels();

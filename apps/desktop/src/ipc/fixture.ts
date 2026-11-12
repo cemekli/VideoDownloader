@@ -38,7 +38,7 @@ export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${item
 
 /** `download-error`: the first try of every download fails on the network; a retry succeeds (Journey 6).
  *  `transcripts`: the first YouTube item starts with the real Turkish captions fixture, so search finds its words (F6.4). */
-export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts";
+export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts" | "low-memory";
 
 export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript"> {
   creator: string | null;

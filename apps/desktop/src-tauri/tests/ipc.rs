@@ -280,6 +280,7 @@ fn main_capability_grants_only_app_commands() {
         "allow-download-model",
         "allow-verify-model",
         "allow-remove-model",
+        "allow-get-ai-processing",
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
@@ -1456,6 +1457,30 @@ fn model_commands_match_contract_and_need_consent() {
         assert_eq!(r["models"][0]["status"], "not_installed");
         assert_eq!(r["models"][0]["job"]["status"], "canceled");
     }
+
+    // F6.6: AI Processing shows this PC, the models and the queue; no path.
+    let a = ok(&w, "get_ai_processing", json!({}));
+    let s = spec("get_ai_processing");
+    assert_same_shape(&a, &with_nulls_of(&a, &s), "get_ai_processing");
+    assert_same_shape(
+        &a["machine"],
+        &with_nulls_of(&a["machine"], &s["machine"]),
+        "get_ai_processing.machine",
+    );
+    assert!(a["machine"]["threads"].as_u64().unwrap() >= 1);
+    assert_eq!(a["machine"]["cpuUse"], "full");
+    assert!(a["jobs"].as_array().unwrap().is_empty());
+    let text = a.to_string();
+    assert!(!text.contains(&*d.path().to_string_lossy()), "{text}");
+    let st = ok(
+        &w,
+        "update_settings",
+        json!({ "patch": { "transcriptionCpu": "light" } }),
+    );
+    assert_eq!(st["transcriptionCpu"], "light");
+    let a = ok(&w, "get_ai_processing", json!({}));
+    assert_eq!(a["machine"]["cpuUse"], "light");
+    assert!(a["machine"]["threads"].as_u64().unwrap() <= 2);
 }
 
 #[test]

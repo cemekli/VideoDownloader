@@ -1224,3 +1224,30 @@ STATE.md F6.5. SPEC NFR-10, PLAY-06, AC-22.
 - Windows CI'daki gerçek whisper-cli (tiny) testi yeni bayraklarla çalışır.
 - Flash attention kapalı olduğu için CPU'da döküm biraz yavaşlayabilir; F6.7 ölçümünde not edilir. NFR-10 doğrulaması Cuma'nın aynı videoyu yeniden dökümüyle.
 
+
+## ADR-0033: Transkripsiyonda bellek, disk ve işlemci sınırları; AI Processing ekranı
+
+STATE.md F6.6. SPEC AI-A05, AI-A06, §9.3 (AI Processing), §17.1 (`estimate_resources`), §19 (`RESOURCE_LIMIT`).
+
+**Bağlam.** F6.2'den beri yerel transkripsiyon, indirilmiş en büyük modeli varsayılan seçiyordu ve whisper.cpp tüm çekirdekler eksi bir (en çok 8) iş parçacığıyla, normal öncelikte çalışıyordu. 4 GB'lık bir bilgisayarda Medium seçilirse model sessizce yüklenir, sistem diske taşar ya da iş çöker. AI-A05 bunu yasaklar: RAM/disk yetersizliği önceden söylenmeli, büyük model düşük bellekli cihazda sessizce yüklenmemeli. SPEC §9.3 ayrıca model kataloğu, disk/RAM bilgisi, kuyruk ve iptal içeren bir AI Processing ekranı ister.
+
+**Karar.**
+
+- `vv_engine::resources`: toplam ve boş RAM işletim sisteminden okunur (Windows `GlobalMemoryStatusEx`, Linux `/proc/meminfo`); başka bilgi okunmaz, hiçbir şey bilgisayardan çıkmaz. Debug derlemeleri testler için `VV_FAKE_MEMORY_MB=<toplam>,<boş>` değerini kabul eder; release derlemesi okumaz.
+- Bir modelin ihtiyacı tahmindir, ölçüm değil: whisper.cpp'nin listelediği bellek + dörtte biri (flash attention kapalı DTW, ADR-0032) + 128 MB ses tamponu. Medium için yaklaşık 2,7 GB.
+- Uyum üç durum: `ok` (o kadar bellek şu an boş), `tight` (bilgisayarda var ama şu an boş değil), `too_big` (sistem ve uygulama için 1,5 GB ayrıldıktan sonra toplam bellek yetmiyor). Bellek okunamazsa `unknown` ve bir iddiada bulunulmaz.
+- Details → Transcript: varsayılan model, sığan en büyük model. Sığmayan model listede "(needs more memory)" diye görünür; seçilirse uyarı çıkar ve "Use Medium anyway" işaretlenmeden "Transcribe on this PC" kapalıdır. `transcribe_locally` aynı kuralı arka uçta uygular (`RESOURCE_LIMIT`, `model-needs-more-memory`); onay işin yüküne `allowLowMemory` olarak yazılır. İş başlarken bilgisayar modeli hiç taşıyamıyorsa (`too_big`) ve onay yoksa FFmpeg ya da whisper başlamadan `RESOURCE_LIMIT` ile durur (§19: kullanıcıyı bekler, `blocked`).
+- Disk: işin yazacağı WAV (16 kHz mono, saniyede 32 000 bayt) + bir parça + 64 MB; süre biliniyorsa önceden, iş başlarken yeniden denetlenir (`DISK_FULL`).
+- İşlemci: Settings anahtarı `transcription_cpu` (`light` 2 iş parçacığı, `balanced` çekirdeklerin yarısı, `full` tüm çekirdekler eksi bir, en çok 8; varsayılan `full`, F6.2'de ölçülen hızlar). FFmpeg ve whisper-cli düşük öncelikte çalışır (Windows `BELOW_NORMAL_PRIORITY_CLASS`, Unix nice 10) ki diğer programlar önde olsun. Aynı anda tek transkripsiyon kuralı (F6.2) sürer.
+- Kenar çubuğunda **AI Processing**: bu bilgisayar (bellek, iş parçacığı, yalnız CPU, ses için boş alan, whisper-cli durumu), işlemci kullanımı seçimi, transkripsiyon kuyruğu (açık işler, son 10 biten; iptal) ve modeller (Settings → Transcription ile aynı blok, her modelin bellek ihtiyacı ve uyumu). Komut: `get_ai_processing`.
+- AI-A06: döküm satırı kaynağı, dili, durumu ("complete", "partial, up to …", …) ve yerel dökümde model ile sürümü ("Model: Medium (whisper.cpp, revision 5359861)") gösterir. `TranscriptDto.modelVersion` eklendi.
+- GPU yok: ekran "Graphics cards are not used yet" der (§17.2 önerisi: GPU yalnız gerçek ortam testiyle).
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-engine/src/resources.rs` birim testleri: ihtiyaç hesabı, 4 GB'ta Medium `too_big` / Small `ok`, 16 GB'ta dolu bellekle `tight`, `/proc/meminfo` okuma, disk ihtiyacı, iş parçacığı sayıları; CI makinesinin belleği okunur.
+- `crates/vv-engine/tests/low_memory.rs` (düşük bellek senaryosu, STATE F6.6 doğrulaması): 1 GB'lık sahte bilgisayarda onaysız iş `RESOURCE_LIMIT` ile durur, ses yazılmaz, döküm oluşmaz; "use it anyway" ile iş biter.
+- `crates/vv-process/tests/process.rs::low_priority_child_is_niced` (Linux).
+- `apps/desktop/src-tauri/tests/ipc.rs`: `get_ai_processing` sözleşme şekli, yol sızmaz, CPU ayarı iş parçacığını değiştirir.
+- UI: `src/AiProcessing.test.tsx`, `src/Transcripts.test.tsx` ("low memory"), `e2e/ai-processing.spec.ts` (`?fixture=low-memory`), axe taraması.
+- Bellek ihtiyacı tahmini F6.7 ölçümünde Cuma'nın bilgisayarında gerçek kullanımla karşılaştırılmalı.

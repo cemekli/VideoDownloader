@@ -4,14 +4,48 @@
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import type { FixtureScenario } from "./fixture";
-import type { JobDto, ModelClient, ModelDto, ModelOverview } from "./types";
+import type { CpuUse, JobDto, MachineDto, MemoryFit, MemoryInfo, ModelClient, ModelDto, ModelOverview } from "./types";
+
+const MB = 1024 * 1024;
+
+/** Same estimate as the backend (`resources::need_mb`). */
+export const needMb = (upstreamMb: number) => upstreamMb + Math.floor(upstreamMb / 4) + 128;
+
+/** Same rule as the backend (`resources::fit`): 1.5 GB stays for the system. */
+export function fitOf(need: number, mem: MemoryInfo | null): MemoryFit {
+  if (!mem) return "unknown";
+  if (mem.totalBytes < (need + 1536) * MB) return "too_big";
+  return mem.availableBytes < need * MB ? "tight" : "ok";
+}
+
+/** `low-memory`: a 4 GB PC with 2.5 GB free, where Medium does not fit (AI-A05). Otherwise 16 GB. */
+export const fixtureMemory = (scenario: FixtureScenario): MemoryInfo =>
+  scenario === "low-memory" ? { totalBytes: 4096 * MB, availableBytes: 2500 * MB } : { totalBytes: 16384 * MB, availableBytes: 9000 * MB };
+
+export function fixtureMachine(scenario: FixtureScenario, cpuUse: CpuUse): MachineDto {
+  const cores = 8;
+  const full = Math.min(8, Math.max(1, cores - 1));
+  const threads = cpuUse === "light" ? Math.min(full, 2) : cpuUse === "balanced" ? Math.max(1, Math.min(full, Math.floor(cores / 2))) : full;
+  return { memory: fixtureMemory(scenario), cores, cpuUse, threads, transcriber: "ok", stagingFreeBytes: 120_000_000_000 };
+}
+
+/** Medium as the catalog has it, for the low-memory scenario. */
+const MEDIUM = { id: "whisper-medium", label: "Medium", sizeBytes: 1533763059, upstreamMemoryMb: 2100 };
 
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
 
-export function createFixtureModels(_scenario: FixtureScenario, stepMs = 300): ModelClient {
+export function createFixtureModels(scenario: FixtureScenario, stepMs = 300): Omit<ModelClient, "getAiProcessing"> {
   const base = contract.commands.list_models.response as ModelOverview;
-  const models: ModelDto[] = base.models.map((m) => ({ ...m, status: "not_installed", consentAt: null, verifiedAt: null, job: null }));
+  const mem = fixtureMemory(scenario);
+  const models: ModelDto[] = base.models.map((m) => ({ ...m, needMemoryMb: needMb(m.upstreamMemoryMb), fit: fitOf(needMb(m.upstreamMemoryMb), mem), status: "not_installed", consentAt: null, verifiedAt: null, job: null }));
+  if (scenario === "low-memory") {
+    // Base and Medium installed; Medium needs more than this PC has.
+    const b = models[1]!;
+    const ready = { status: "ready" as const, consentAt: 1_793_000_000_000, verifiedAt: 1_793_000_100_000 };
+    models[1] = { ...b, ...ready };
+    models.push({ ...b, ...ready, ...MEDIUM, needMemoryMb: needMb(MEDIUM.upstreamMemoryMb), fit: fitOf(needMb(MEDIUM.upstreamMemoryMb), mem) });
+  }
   let clock = 1_793_600_000_000;
   const now = () => (clock += 1_000);
   const timers = new Map<string, ReturnType<typeof setTimeout>>();

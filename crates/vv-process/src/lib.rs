@@ -12,6 +12,9 @@
 //!   On Unix the child leads its own process group (development only; a
 //!   crash of the app does not kill the group there).
 //! - **Timeout and cancel** kill the whole tree, then reap the child.
+//! - **Low priority** ([`ManagedCommand::low_priority`]) for long CPU work
+//!   such as transcription (F6.6): below-normal priority class on Windows,
+//!   nice 10 on Unix, so the PC stays responsive.
 
 mod env;
 #[cfg(windows)]
@@ -28,6 +31,7 @@ use std::time::{Duration, Instant};
 /// A command that will run with a clean environment inside its own job.
 pub struct ManagedCommand {
     cmd: Command,
+    low_priority: bool,
 }
 
 impl ManagedCommand {
@@ -38,7 +42,10 @@ impl ManagedCommand {
             cmd.env(k, v);
         }
         cmd.stdin(Stdio::null());
-        ManagedCommand { cmd }
+        ManagedCommand {
+            cmd,
+            low_priority: false,
+        }
     }
 
     pub fn arg(&mut self, a: impl AsRef<OsStr>) -> &mut Self {
@@ -66,6 +73,12 @@ impl ManagedCommand {
         self
     }
 
+    /// Runs the child (and what it starts) below normal priority.
+    pub fn low_priority(&mut self) -> &mut Self {
+        self.low_priority = true;
+        self
+    }
+
     pub fn stdout(&mut self, s: Stdio) -> &mut Self {
         self.cmd.stdout(s);
         self
@@ -80,8 +93,11 @@ impl ManagedCommand {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            self.cmd
-                .creation_flags(windows::CREATE_SUSPENDED | windows::CREATE_NO_WINDOW);
+            let mut flags = windows::CREATE_SUSPENDED | windows::CREATE_NO_WINDOW;
+            if self.low_priority {
+                flags |= windows::BELOW_NORMAL_PRIORITY_CLASS;
+            }
+            self.cmd.creation_flags(flags);
             let mut child = self.cmd.spawn()?;
             match windows::Job::contain(&child) {
                 Ok(job) => Ok(Managed {
@@ -101,10 +117,15 @@ impl ManagedCommand {
         {
             use std::os::unix::process::CommandExt;
             self.cmd.process_group(0);
-            Ok(Managed {
-                child: self.cmd.spawn()?,
-                done: false,
-            })
+            let child = self.cmd.spawn()?;
+            if self.low_priority {
+                // Best effort: a failure leaves normal priority.
+                // SAFETY: plain syscall on the child's pid.
+                unsafe {
+                    libc::setpriority(libc::PRIO_PROCESS, child.id() as libc::id_t, 10);
+                }
+            }
+            Ok(Managed { child, done: false })
         }
     }
 }
