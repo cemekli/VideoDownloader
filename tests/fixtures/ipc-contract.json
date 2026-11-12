@@ -88,11 +88,47 @@
               ],
               "cutStart": false,
               "cutEnd": false
-            }
+            },
+            "transcript": null
           }
         ],
         "notice": null
-      }
+      },
+      "transcriptShape": {
+        "transcriptId": "00000000-0000-4000-8000-00000000c101",
+        "language": "tr",
+        "provenance": "source_captions",
+        "partial": false,
+        "coveredMs": 6100,
+        "moments": [
+          {
+            "segmentId": "00000000-0000-4000-8000-00000000c202",
+            "startMs": 3200,
+            "endMs": 6100,
+            "snippet": {
+              "field": "transcript",
+              "parts": [
+                {
+                  "text": "Bugün sabah ",
+                  "highlight": false
+                },
+                {
+                  "text": "yürüyüşü",
+                  "highlight": true
+                },
+                {
+                  "text": " yapıyoruz.",
+                  "highlight": false
+                }
+              ],
+              "cutStart": false,
+              "cutEnd": false
+            }
+          }
+        ],
+        "total": 1
+      },
+      "note": "Shape of LibraryItemDto.transcript when a search text was said in the item (F6.4, SEA-06)."
     },
     "get_item": {
       "args": {
@@ -112,7 +148,8 @@
           "isFavorite": false,
           "archived": false,
           "removedAt": null,
-          "snippet": null
+          "snippet": null,
+          "transcript": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "creator": null,
@@ -189,7 +226,8 @@
             "isFavorite": false,
             "archived": false,
             "removedAt": null,
-            "snippet": null
+            "snippet": null,
+            "transcript": null
           },
           "removed": false,
           "matchedBy": "canonical_url"
@@ -218,7 +256,8 @@
           "isFavorite": false,
           "archived": false,
           "removedAt": null,
-          "snippet": null
+          "snippet": null,
+          "transcript": null
         },
         "removed": false,
         "matchedBy": null,
@@ -242,7 +281,8 @@
         "isFavorite": false,
         "archived": false,
         "removedAt": null,
-        "snippet": null
+        "snippet": null,
+        "transcript": null
       }
     },
     "get_sidebar": {
@@ -582,7 +622,8 @@
           "isFavorite": false,
           "archived": false,
           "removedAt": null,
-          "snippet": null
+          "snippet": null,
+          "transcript": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "creator": null,
@@ -640,7 +681,8 @@
             "isFavorite": false,
             "archived": false,
             "removedAt": null,
-            "snippet": null
+            "snippet": null,
+            "transcript": null
           },
           "b": {
             "id": "00000000-0000-4000-8000-0000000000b1",
@@ -655,7 +697,8 @@
             "isFavorite": false,
             "archived": false,
             "removedAt": null,
-            "snippet": null
+            "snippet": null,
+            "transcript": null
           }
         }
       ]
@@ -679,7 +722,8 @@
           "isFavorite": false,
           "archived": false,
           "removedAt": null,
-          "snippet": null
+          "snippet": null,
+          "transcript": null
         },
         "source": {
           "id": "00000000-0000-4000-8000-0000000000b1",
@@ -694,7 +738,8 @@
           "isFavorite": false,
           "archived": false,
           "removedAt": null,
-          "snippet": null
+          "snippet": null,
+          "transcript": null
         },
         "notesAfter": "",
         "tagsToAdd": [
@@ -768,7 +813,8 @@
         "isFavorite": false,
         "archived": false,
         "removedAt": null,
-        "snippet": null
+        "snippet": null,
+        "transcript": null
       }
     },
     "delete_orphan": {
@@ -1858,16 +1904,19 @@
         },
         "segments": [
           {
+            "id": "00000000-0000-4000-8000-00000000c201",
             "startMs": 0,
             "endMs": 3200,
             "text": "Günaydın, deniz kenarındayız."
           },
           {
+            "id": "00000000-0000-4000-8000-00000000c202",
             "startMs": 3200,
             "endMs": 6100,
             "text": "Bugün sabah yürüyüşü yapıyoruz."
           },
           {
+            "id": "00000000-0000-4000-8000-00000000c203",
             "startMs": 6100,
             "endMs": 9500,
             "text": "Martılar ve dalgalar eşlik ediyor."
@@ -2097,6 +2146,44 @@
             "en"
           ]
         }
+      }
+    },
+    "get_moment": {
+      "args": {
+        "segmentId": "00000000-0000-4000-8000-00000000c202"
+      },
+      "response": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "transcriptId": "00000000-0000-4000-8000-00000000c101",
+        "segmentId": "00000000-0000-4000-8000-00000000c202",
+        "startMs": 3200,
+        "endMs": 6100
+      }
+    },
+    "preview_note": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "segmentIds": [
+          "00000000-0000-4000-8000-00000000c202"
+        ]
+      },
+      "response": {
+        "fileName": "Deniz kenarında sabah - note.md",
+        "markdown": "# Deniz kenarında sabah\n\nSource: <https://www.youtube.com/watch?v=aaaaaaaaaaa>\n\nWritten with VideoVault on 2026-11-12.\n\n## Moments\n\nTranscript: tr, site captions\n\n- [0:03](<https://www.youtube.com/watch?v=aaaaaaaaaaa&t=3s>) Bugün sabah yürüyüşü yapıyoruz.\n",
+        "moments": 1
+      }
+    },
+    "export_note": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "segmentIds": [
+          "00000000-0000-4000-8000-00000000c202"
+        ]
+      },
+      "response": {
+        "saved": true,
+        "fileName": "Deniz kenarında sabah - note.md",
+        "moments": 1
       }
     }
   },

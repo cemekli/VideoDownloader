@@ -13,6 +13,12 @@
 //!   records what matches and the accepted limits.
 //! - Ranking: BM25 with title > tags = notes > description = creator, then
 //!   newest first and id (stable pages).
+//! - Transcripts (F6.4, SEA-06, §16.2, ADR-0030): an item also matches when
+//!   the query is found in one of its `ready` or `partial` transcripts. Its
+//!   transcript BM25 is added to the metadata BM25 with
+//!   [`TRANSCRIPT_WEIGHT`]. The moments are grouped under the item, taken
+//!   from one transcript, and each opens at the real start of the segment
+//!   that holds the first matched word.
 
 use super::repo::{self, LibraryItem};
 use super::{ItemKind, MetadataStatus, SourcePlatform};
@@ -26,6 +32,18 @@ const HL_END: char = '\u{2}';
 
 /// BM25 weights in column order: title, description, creator, notes, tags.
 pub const WEIGHTS: [f64; 5] = [10.0, 2.0, 2.0, 5.0, 5.0];
+
+/// Weight of the best transcript chunk's BM25 next to the metadata BM25.
+/// Below the description's: words said in a video count, but a title or a
+/// note that names the topic ranks first.
+pub const TRANSCRIPT_WEIGHT: f64 = 1.0;
+
+/// Moments listed under one item; [`TranscriptMatches::total`] counts all.
+pub const MAX_MOMENTS: usize = 5;
+
+/// Transcript states that are searched. `partial` ones carry the range
+/// they cover (§16.2); `stale`, `failed` and the rest are not searched.
+const SEARCHED: &str = "('ready', 'partial')";
 
 /// Text as stored in the index: markers removed, dotless `ı` → `i`.
 /// Character for character the same length as [`display`] of the input.
@@ -182,6 +200,8 @@ pub enum Field {
     Creator,
     Notes,
     Tags,
+    /// Words said in the video (F6.4); never in [`FIELDS`].
+    Transcript,
 }
 
 /// Column order of `search_document`, and the order a snippet prefers.
@@ -222,12 +242,41 @@ impl Snippet {
     }
 }
 
+/// One place in a transcript where the query was found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Moment {
+    /// The segment holding the first matched word; opening the moment
+    /// seeks to its start (PLAY-06).
+    pub segment_id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub snippet: Snippet,
+}
+
+/// The query's matches in one transcript of an item (SEA-06).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TranscriptMatches {
+    pub transcript_id: String,
+    pub language: String,
+    /// `source_captions`, `generated_local` or `imported`.
+    pub provenance: String,
+    /// A partial transcript: only up to `covered_ms` was processed (§16.2).
+    pub partial: bool,
+    pub covered_ms: Option<i64>,
+    /// The first [`MAX_MOMENTS`] matches in time order.
+    pub moments: Vec<Moment>,
+    /// All matching chunks of this transcript.
+    pub total: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hit {
     pub item: LibraryItem,
-    /// Fields the query matched, in column order (match source, SEA-03).
+    /// Fields the query matched, in column order (match source, SEA-03);
+    /// [`Field::Transcript`] last.
     pub matched: Vec<Field>,
     pub snippet: Option<Snippet>,
+    pub transcript: Option<TranscriptMatches>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -341,82 +390,87 @@ pub fn search(c: &Connection, q: &SearchQuery) -> super::Result<SearchPage> {
     let limit = q.limit.clamp(1, MAX_PAGE);
 
     let mut params: Vec<Value> = Vec::new();
-    let (from, select_extra) = match &fts {
+    // `?1` is the match, used by both indexes; filters bind `?2…` in order.
+    let (with, from, select_extra) = match &fts {
         Some(m) => {
             params.push(Value::Text(m.clone()));
             let w = WEIGHTS.map(|x| x.to_string()).join(", ");
-            let hl = (0..FIELDS.len())
-                .map(|k| format!("highlight(search_document, {k}, char(1), char(2))"))
-                .collect::<Vec<_>>()
-                .join(", ");
             (
-                "search_document JOIN library_item i ON i.seq = search_document.rowid WHERE search_document MATCH ? AND ".to_owned(),
-                format!(", bm25(search_document, {w}) AS rank, {hl}"),
+                format!(
+                    "WITH m AS MATERIALIZED (SELECT rowid AS seq, bm25(search_document, {w}) AS rank \
+                       FROM search_document WHERE search_document MATCH ?1), \
+                     tc AS MATERIALIZED (SELECT c.item_id, bm25(transcript_search) AS rank \
+                       FROM transcript_search JOIN search_chunk c ON c.seq = transcript_search.rowid \
+                       JOIN transcript t ON t.id = c.transcript_id \
+                       WHERE transcript_search MATCH ?1 AND t.status IN {SEARCHED}), \
+                     tm AS MATERIALIZED (SELECT item_id, min(rank) AS rank FROM tc GROUP BY item_id) "
+                ),
+                "library_item i LEFT JOIN m ON m.seq = i.seq LEFT JOIN tm ON tm.item_id = i.id \
+                 WHERE (m.seq IS NOT NULL OR tm.item_id IS NOT NULL) AND "
+                    .to_owned(),
+                format!(
+                    ", ifnull(m.rank, 0) + {TRANSCRIPT_WEIGHT:?} * ifnull(tm.rank, 0) AS rank, \
+                     m.seq IS NOT NULL, tm.item_id IS NOT NULL"
+                ),
             )
         }
-        None => ("library_item i WHERE ".to_owned(), String::new()),
+        None => (
+            String::new(),
+            "library_item i WHERE ".to_owned(),
+            String::new(),
+        ),
     };
     let wh = filter_sql(&q.filters, &mut params);
 
     let total: i64 = c.query_row(
-        &format!("SELECT count(*) FROM {from}{wh}"),
+        &format!("{with}SELECT count(*) FROM {from}{wh}"),
         params_from_iter(params.iter()),
         |r| r.get(0),
     )?;
 
     let order = order_sql(q.sort, fts.is_some());
     let sql = format!(
-        "SELECT i.id{select_extra} FROM {from}{wh} ORDER BY {order} LIMIT {limit} OFFSET {}",
+        "{with}SELECT i.id, i.seq{select_extra} FROM {from}{wh} ORDER BY {order} LIMIT {limit} OFFSET {}",
         q.offset
     );
     let mut stmt = c.prepare(&sql)?;
+    // (id, seq, metadata matched, transcript matched)
     let rows = stmt
         .query_map(params_from_iter(params.iter()), |r| {
-            let id: String = r.get(0)?;
-            let hl: Vec<String> = if fts.is_some() {
-                (0..FIELDS.len())
-                    .map(|k| r.get(2 + k))
-                    .collect::<rusqlite::Result<_>>()?
+            let (meta, tr) = if fts.is_some() {
+                (r.get::<_, bool>(3)?, r.get::<_, bool>(4)?)
             } else {
-                Vec::new()
+                (false, false)
             };
-            Ok((id, hl))
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, meta, tr))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
+    let moments = match &fts {
+        Some(m) => {
+            let ids: Vec<&str> = rows.iter().filter(|r| r.3).map(|r| r.0.as_str()).collect();
+            transcript_matches(c, m, &ids)?
+        }
+        None => Default::default(),
+    };
+    let mut moments = moments;
+
     let mut hits = Vec::with_capacity(rows.len());
-    for (id, hl) in rows {
+    for (id, seq, meta, _) in rows {
         let item = repo::get_item(c, &id)?.ok_or(super::LibraryError::NotFound)?;
-        let (matched, snippet) = if hl.is_empty() {
-            (Vec::new(), None)
-        } else {
-            let text = repo::search_text(&item);
-            let originals = [
-                &text.title,
-                &text.description,
-                &text.creator,
-                &text.notes,
-                &text.tags,
-            ];
-            let matched: Vec<Field> = FIELDS
-                .iter()
-                .zip(&hl)
-                .filter(|(_, h)| h.contains(HL_START))
-                .map(|(f, _)| *f)
-                .collect();
-            let snippet = SNIPPET_PREFERENCE
-                .iter()
-                .find(|f| matched.contains(f))
-                .map(|&f| {
-                    let k = FIELDS.iter().position(|x| *x == f).unwrap();
-                    make_snippet(f, &hl[k], originals[k])
-                });
-            (matched, snippet)
+        let (mut matched, snippet) = match (&fts, meta) {
+            (Some(m), true) => metadata_snippet(c, m, seq, &item)?,
+            _ => (Vec::new(), None),
         };
+        let transcript = moments.remove(&id);
+        if transcript.is_some() {
+            matched.push(Field::Transcript);
+        }
         hits.push(Hit {
             item,
             matched,
             snippet,
+            transcript,
         });
     }
     Ok(SearchPage {
@@ -424,6 +478,160 @@ pub fn search(c: &Connection, q: &SearchQuery) -> super::Result<SearchPage> {
         hits,
         notice,
     })
+}
+
+/// Matched fields and the snippet of one item's metadata.
+fn metadata_snippet(
+    c: &Connection,
+    m: &str,
+    seq: i64,
+    item: &LibraryItem,
+) -> super::Result<(Vec<Field>, Option<Snippet>)> {
+    let hl_cols = (0..FIELDS.len())
+        .map(|k| format!("highlight(search_document, {k}, char(1), char(2))"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let hl: Vec<String> = c.query_row(
+        &format!(
+            "SELECT {hl_cols} FROM search_document WHERE search_document MATCH ?1 AND rowid = ?2"
+        ),
+        rusqlite::params![m, seq],
+        |r| (0..FIELDS.len()).map(|k| r.get(k)).collect(),
+    )?;
+    let text = repo::search_text(item);
+    let originals = [
+        &text.title,
+        &text.description,
+        &text.creator,
+        &text.notes,
+        &text.tags,
+    ];
+    let matched: Vec<Field> = FIELDS
+        .iter()
+        .zip(&hl)
+        .filter(|(_, h)| h.contains(HL_START))
+        .map(|(f, _)| *f)
+        .collect();
+    let snippet = SNIPPET_PREFERENCE
+        .iter()
+        .find(|f| matched.contains(f))
+        .and_then(|&f| {
+            let k = FIELDS.iter().position(|x| *x == f)?;
+            Some(make_snippet(f, &hl[k], originals[k]))
+        });
+    Ok((matched, snippet))
+}
+
+/// The moments of `items` where the match `m` is found, grouped per item.
+/// Each item's moments come from one transcript: a `ready` one before a
+/// `partial` one, then the newest, so the same words said once are not
+/// listed twice from site captions and a local transcript.
+fn transcript_matches(
+    c: &Connection,
+    m: &str,
+    items: &[&str],
+) -> super::Result<std::collections::HashMap<String, TranscriptMatches>> {
+    let mut out = std::collections::HashMap::new();
+    if items.is_empty() {
+        return Ok(out);
+    }
+    let ph = items.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT c.item_id, t.id, t.language, t.provenance, t.status, t.covered_ms, \
+             c.start_segment_id, c.end_segment_id, c.text, \
+             highlight(transcript_search, 0, char(1), char(2)) \
+         FROM transcript_search JOIN search_chunk c ON c.seq = transcript_search.rowid \
+         JOIN transcript t ON t.id = c.transcript_id \
+         WHERE transcript_search MATCH ?1 AND t.status IN {SEARCHED} AND c.item_id IN ({ph}) \
+         ORDER BY c.item_id, t.status = 'ready' DESC, t.updated_at DESC, t.id, c.start_ms"
+    );
+    let mut params: Vec<Value> = vec![Value::Text(m.to_owned())];
+    params.extend(items.iter().map(|s| Value::Text((*s).to_owned())));
+    let mut st = c.prepare(&sql)?;
+    let mut rows = st.query(params_from_iter(params.iter()))?;
+    while let Some(r) = rows.next()? {
+        let item: String = r.get(0)?;
+        let tid: String = r.get(1)?;
+        let entry = out.entry(item).or_insert_with(|| TranscriptMatches {
+            transcript_id: tid.clone(),
+            language: String::new(),
+            provenance: String::new(),
+            partial: false,
+            covered_ms: None,
+            moments: Vec::new(),
+            total: 0,
+        });
+        if entry.transcript_id != tid {
+            continue; // another transcript of the same item
+        }
+        if entry.total == 0 {
+            entry.language = r.get(2)?;
+            entry.provenance = r.get(3)?;
+            entry.partial = r.get::<_, String>(4)? == "partial";
+            entry.covered_ms = r.get(5)?;
+        }
+        entry.total += 1;
+        if entry.moments.len() >= MAX_MOMENTS {
+            continue;
+        }
+        let (first, last): (String, String) = (r.get(6)?, r.get(7)?);
+        let text: String = r.get(8)?;
+        let hl: String = r.get(9)?;
+        if let Some(mo) = moment(c, &tid, &first, &last, &text, &hl)? {
+            entry.moments.push(mo);
+        }
+    }
+    Ok(out)
+}
+
+/// The segment of a chunk that holds the first matched word, with a
+/// snippet around it. A chunk's text is its segments joined by one space
+/// (`transcripts::write_chunks`), so a character offset names a segment.
+fn moment(
+    c: &Connection,
+    transcript_id: &str,
+    first: &str,
+    last: &str,
+    text: &str,
+    highlighted: &str,
+) -> super::Result<Option<Moment>> {
+    let mut st = c.prepare_cached(
+        "SELECT s.id, s.start_ms, s.end_ms, s.text FROM transcript_segment s \
+         WHERE s.transcript_id = ?1 \
+           AND s.ordinal BETWEEN (SELECT ordinal FROM transcript_segment WHERE id = ?2) \
+                             AND (SELECT ordinal FROM transcript_segment WHERE id = ?3) \
+         ORDER BY s.ordinal",
+    )?;
+    let segs = st
+        .query_map(rusqlite::params![transcript_id, first, last], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let at = highlighted
+        .chars()
+        .filter(|&ch| ch != HL_END)
+        .position(|ch| ch == HL_START)
+        .unwrap_or(0);
+    let mut end = 0;
+    let mut pick = segs.last();
+    for s in &segs {
+        end += s.3.chars().count() + 1; // the joining space
+        if at < end {
+            pick = Some(s);
+            break;
+        }
+    }
+    Ok(pick.map(|s| Moment {
+        segment_id: s.0.clone(),
+        start_ms: s.1,
+        end_ms: s.2,
+        snippet: make_snippet(Field::Transcript, highlighted, text),
+    }))
 }
 
 /// Characters of context kept before the first match and in total.

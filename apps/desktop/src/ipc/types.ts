@@ -21,7 +21,8 @@ export interface SnippetPart {
 
 /** A real substring of one field. Rendered as text, never as HTML (SEA-03). */
 export interface Snippet {
-  field: "title" | "description" | "creator" | "notes" | "tags";
+  /** `transcript`: words said in the video (F6.4). */
+  field: "title" | "description" | "creator" | "notes" | "tags" | "transcript";
   parts: SnippetPart[];
   cutStart: boolean;
   cutEnd: boolean;
@@ -45,6 +46,52 @@ export interface LibraryItemDto {
   removedAt: number | null;
   /** Only with a search text. */
   snippet: Snippet | null;
+  /** Where the search text was said, grouped under the item (F6.4, SEA-06); only with a search text. */
+  transcript: TranscriptMatchesDto | null;
+}
+
+/** One place in a transcript; it opens at the start of the segment holding the matched word (PLAY-06). */
+export interface MomentDto {
+  segmentId: string;
+  startMs: number;
+  endMs: number;
+  snippet: Snippet;
+}
+
+/** A search text's matches in one transcript of an item (F6.4, §16.2). */
+export interface TranscriptMatchesDto {
+  transcriptId: string;
+  language: string;
+  provenance: TranscriptProvenance;
+  /** Only up to `coveredMs` was transcribed. */
+  partial: boolean;
+  coveredMs: number | null;
+  /** The first few, in time order. */
+  moments: MomentDto[];
+  /** All matches in this transcript. */
+  total: number;
+}
+
+/** A Markdown note; every timecode in it comes from a stored segment (F6.5). */
+export interface NotePreview {
+  fileName: string;
+  markdown: string;
+  moments: number;
+}
+
+export interface NoteExport {
+  saved: boolean;
+  fileName: string | null;
+  moments: number;
+}
+
+/** `get_moment`: a search moment checked again before the player seeks (§16.2). */
+export interface MomentTarget {
+  itemId: string;
+  transcriptId: string;
+  segmentId: string;
+  startMs: number;
+  endMs: number;
 }
 
 /** `inbox`: not archived and in no manual collection; `removed`: Recently removed (§7.3). */
@@ -794,6 +841,7 @@ export interface TranscriptDto {
 }
 
 export interface TranscriptSegmentDto {
+  id: string;
   startMs: number;
   endMs: number;
   /** Plain text from the source; always rendered as text, never as HTML. */
@@ -843,6 +891,12 @@ export interface TranscriptClient {
   /** Queues a transcription of the item's file on this PC (AI-A02); works offline. */
   transcribeLocally(itemId: string, modelId: string, language: TranscribeLanguage): Promise<ItemTranscripts>;
   deleteTranscript(transcriptId: string): Promise<ItemTranscripts>;
+  /** Checks a search moment before seeking; INPUT_REJECTED `moment-gone` when its transcript changed (F6.4). */
+  getMoment(segmentId: string): Promise<MomentTarget>;
+  /** The Markdown note as it will be saved: title, source, notes, picked moments (F6.5, DATA-11). */
+  previewNote(itemId: string, segmentIds: string[]): Promise<NotePreview>;
+  /** Saves that note to a `.md` file the user picks; `saved: false` when the dialog was closed. */
+  exportNote(itemId: string, segmentIds: string[]): Promise<NoteExport>;
 }
 
 export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient;

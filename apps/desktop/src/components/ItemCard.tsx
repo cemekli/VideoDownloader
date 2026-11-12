@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LibraryItemDto, Snippet } from "../ipc/types";
 import { formatDate, formatDuration } from "../format";
 import { LOCAL_STATE, PLATFORM_LABEL } from "../labels";
+import { tn } from "../i18n";
 
 export function StateBadge({ state }: { state: LibraryItemDto["localState"] }) {
   const s = LOCAL_STATE[state];
@@ -22,6 +23,22 @@ export function SnippetText({ snippet }: { snippet: Snippet }) {
       {snippet.cutStart && "…"}
       {snippet.parts.map((p, i) => (p.highlight ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
       {snippet.cutEnd && "…"}
+    </p>
+  );
+}
+
+/** The first place a search text was said, with its timecode (F6.4, SEA-06). */
+export function MomentLine({ item }: { item: LibraryItemDto }) {
+  const tr = item.transcript;
+  const m = tr?.moments[0];
+  if (!tr || !m) return null;
+  const more = tr.total - 1;
+  return (
+    <p className="snippet snippet-moment" data-testid="snippet" data-field="transcript">
+      <span className="timecode">{formatDuration(m.startMs)}</span> {m.snippet.cutStart && "…"}
+      {m.snippet.parts.map((p, i) => (p.highlight ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
+      {m.snippet.cutEnd && "…"}
+      {more > 0 && <span className="muted"> {tn("search.moments_more", more)}</span>}
     </p>
   );
 }
@@ -95,7 +112,7 @@ export function ItemCard({ item, layout, index, total, selected, focused, style,
         <h3 className="card-title" title={item.title}>
           {item.snippet?.field === "title" ? item.snippet.parts.map((p, i) => (p.highlight ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>)) : item.title}
         </h3>
-        {item.snippet && item.snippet.field !== "title" && <SnippetText snippet={item.snippet} />}
+        {item.snippet && item.snippet.field !== "title" ? <SnippetText snippet={item.snippet} /> : <MomentLine item={item} />}
         <div className="card-meta">
           <span className="platform">{PLATFORM_LABEL[item.platform]}</span>
           <StateBadge state={item.localState} />

@@ -4,7 +4,7 @@ import { useEffect, useId, useRef } from "react";
  * A modal dialog: Esc closes, Tab stays inside, focus goes to the first
  * field (or button) on open and back to the opener on close (§9.4).
  */
-export function Modal({ title, onClose, children, testId, wide }: { title: string; onClose: () => void; children: React.ReactNode; testId: string; wide?: boolean }) {
+export function Modal({ title, onClose, children, testId, wide, className }: { title: string; onClose: () => void; children: React.ReactNode; testId: string; wide?: boolean; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -38,7 +38,7 @@ export function Modal({ title, onClose, children, testId, wide }: { title: strin
   };
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={box} className={`modal${wide ? " modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown} data-testid={testId}>
+      <div ref={box} className={`modal${wide ? " modal-wide" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown} data-testid={testId}>
         <h2 id={titleId}>{title}</h2>
         {children}
       </div>

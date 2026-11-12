@@ -451,3 +451,37 @@ pub fn delete(c: &Connection, id: &str) -> Result<()> {
     }
     Ok(())
 }
+
+/// Where a segment is, to open a search moment (F6.4, §16.2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentPlace {
+    pub item_id: String,
+    pub transcript_id: String,
+    pub segment_id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub status: Status,
+}
+
+/// The segment's place, or `None` when it no longer exists (its transcript
+/// was made again or deleted). The caller checks the status: a search
+/// result opens only into a `ready` or `partial` transcript.
+pub fn segment_place(c: &Connection, segment_id: &str) -> Result<Option<SegmentPlace>> {
+    Ok(c.query_row(
+        "SELECT t.item_id, t.id, s.id, s.start_ms, s.end_ms, t.status \
+         FROM transcript_segment s JOIN transcript t ON t.id = s.transcript_id WHERE s.id = ?1",
+        [segment_id],
+        |r| {
+            let status: String = r.get(5)?;
+            Ok(SegmentPlace {
+                item_id: r.get(0)?,
+                transcript_id: r.get(1)?,
+                segment_id: r.get(2)?,
+                start_ms: r.get(3)?,
+                end_ms: r.get(4)?,
+                status: Status::parse(&status).unwrap_or(Status::Failed),
+            })
+        },
+    )
+    .optional()?)
+}

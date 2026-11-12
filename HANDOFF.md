@@ -1,9 +1,10 @@
-# Devir notu — 11 Kasım 2026 (akşam)
+# Devir notu — 12 Kasım 2026
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
+- **12 Kas: F6.4 yazıldı (🟨, ADR-0030): dökümde arama.** Arama kutusuna videoda söylenen bir kelime yazınca öğe bulunur. Kartta ilk an zaman koduyla görünür (`0:03 … Kadıköy …`). Details'te "Said in the video" bölümü anları listeler; dosyası olan öğede "Play from 0:12" oynatıcıyı o segmentin başından açar. Döküm aramadan sonra değiştiyse uyarı verir. Aynı PR'da F6.5 (🟨, ADR-0031): dökümü olan öğede oynatıcının yanında döküm paneli açılır; o an söylenen satır işaretlenir, zaman koduna tıklayınca video oradan oynar; satırlar seçilip "Export note…" ile Markdown not (önizleme, sonra "Save as…") kaydedilir. Sıradaki: F6.6 (kaynak sınırları ve AI Processing ekranı) ve F6.7 kalite raporu.
 - **11 Kas akşam: F6.2 bitti (✅).** Cuma yerel transkripsiyonu Windows'ta 21:44'lük bir videoda dört modelle çalıştırdı. Süreler: Tiny 0:49, Base 1:20, Small 3:29, Medium 10:29 (CPU). PR #49 ile iş sürerken model adı, geçen/kalan süre ve bitince "Last run: …, took …" görünüyor. Kalite karşılaştırması (F6.7) henüz yapılmadı. F6.3 yazıldı (ADR-0029), Cuma'nın testini bekliyor; sonra F6.4–F6.5 (arama, panel, zaman koduna gitme).
 - **11 Kas: F6.2 ikinci yarı yazıldı (🟨, ADR-0028): yerel transkripsiyon.** Details → Transcript → "Transcribe on this PC": dil (otomatik/Türkçe/İngilizce), model (indirilmiş olanlar, varsayılan en büyük), ilerleme yüzdesi, iptal. İş: FFmpeg öğenin dosyasını 16 kHz mono WAV yapar → `whisper-cli` (CPU) JSON yazar → `generated_local` döküm. Çevrimdışı çalışır. Dosyası olmayan öğede düğme yok.
   - Paket bulguları: whisper.cpp v1.9.2 `whisper-bin-x64.zip` (8 194 445 bayt, SHA-256 `49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a`). `whisper-cli.exe` yanında `whisper.dll`, `ggml.dll`, `ggml-base.dll` ve 9 `ggml-cpu-*.dll` gerekir (CPU'ya göre biri yüklenir); hepsi `tools/manifest.json` → `companions` altında hash'li. SDL2/parakeet alınmaz.
@@ -38,6 +39,8 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
+0. **F6.4 elle test (Cuma, release exe).** Dökümü olan bir videoda (site altyazısı ya da yerel) dökümde geçen bir kelimeyi arama kutusuna yaz. Kart bulunmalı ve satırda zaman kodu görünmeli. Kartı aç → Details → "Said in the video" → bir ana tıkla: video o saniyeden başlamalı (±1 sn). Türkçe bir kelimeyi büyük harfle (ör. `ISIK`) ara: yine bulmalı.
+0. **F6.5 elle test (Cuma, release exe).** Dökümü olan videoyu oynat: sağda döküm paneli açılmalı, o an söylenen satır işaretli olmalı. Bir satırın zaman koduna tıkla: video o satırın başından oynamalı; sesle metnin farkı yarım saniyeyi geçmemeli (NFR-10). İki satır seç → "Export note…" → önizleme → "Save as…": `.md` dosyası başlık, kaynak bağlantısı, notların ve seçilen iki an (zaman sırasıyla) ile kaydedilmeli.
 0. ~~F6.2 yerel transkripsiyon elle test~~: yapıldı (11 Kas, Cuma), süreler STATE F6.7'de. Kalan F6.7 işi: aynı TR ve bir EN videoda modellerin metin kalitesini karşılaştırmak (Türkçe karakter, özel isim, noktalama).
 0. **F6.3 elle test (Cuma, release exe).** 20 dakikadan uzun bir video seç → "Transcribe on this PC" (Small ya da Medium). İlk parça (~10 dk ses) bitince döküm satırında "partial, up to …" görünmeli ve metin açılabilmeli. Sonra uygulamayı kapat ve yeniden aç: iş kendiliğinden devam etmeli, yüzde ilk parçanın sonundan başlamalı. Bitince satır "partial" olmadan görünmeli ve parça sınırında tekrar eden ya da eksik cümle olmamalı. Bir kez de ikinci parçada Cancel'a bas: ilk parçanın metni "partial" olarak kalmalı.
 

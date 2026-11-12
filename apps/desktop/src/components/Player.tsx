@@ -5,6 +5,7 @@ import { formatDuration } from "../format";
 import { t } from "../i18n";
 import { errorMessage } from "../labels";
 import { Modal } from "./Modal";
+import { TranscriptPanel } from "./TranscriptPanel";
 
 /** How often the position is saved while playing (PLAY-02). */
 export const SAVE_EVERY_MS = 5_000;
@@ -17,16 +18,32 @@ type Problem = "partial" | "failed" | null;
  * the user stopped, and decides "plays / sound only / fails" from what the
  * element actually did, not from `canPlayType`.
  */
-export function Player({ client, itemId, onClose, notify }: { client: BackendClient; itemId: string; onClose: () => void; notify: (text: string, tone?: "info" | "error") => void }) {
+export function Player({
+  client,
+  itemId,
+  startAtMs = null,
+  onClose,
+  notify,
+}: {
+  client: BackendClient;
+  itemId: string;
+  /** Start here instead of offering the saved position: a search moment (F6.4, PLAY-06). */
+  startAtMs?: number | null;
+  onClose: () => void;
+  notify: (text: string, tone?: "info" | "error") => void;
+}) {
   const [info, setInfo] = useState<PlaybackInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem>(null);
   const [started, setStarted] = useState(false);
+  // Media time for the transcript beside the video (F6.5).
+  const [nowMs, setNowMs] = useState(startAtMs ?? 0);
+  const [panel, setPanel] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const lastSaved = useRef(0);
   const source: PlaybackSource | null = info?.sources.find((s) => s.available) ?? info?.sources[0] ?? null;
-  const resume = info?.state?.resumable && info.state.assetId === source?.assetId ? info.state : null;
+  const resume = startAtMs === null && info?.state?.resumable && info.state.assetId === source?.assetId ? info.state : null;
 
   const load = useCallback(() => {
     client
@@ -75,10 +92,23 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
   useEffect(() => {
     if (autoStarted.current || !source?.available || resume) return;
     autoStarted.current = true;
-    start(0);
+    start(startAtMs ?? 0);
     // start only reads refs and setters; it runs once per opened file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.available, source?.assetId, resume]);
+
+  /** A transcript line was clicked: play from that segment (PLAY-06). */
+  const seekTo = (ms: number) => {
+    const v = video.current;
+    if (!v) return;
+    if (!started) {
+      start(ms);
+      return;
+    }
+    v.currentTime = ms / 1000;
+    setNowMs(ms);
+    void Promise.resolve(v.play()).catch(() => {});
+  };
 
   const close = () => {
     save();
@@ -156,7 +186,7 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
   };
 
   return (
-    <Modal title={info?.title ?? t("player.title")} onClose={close} testId="player" wide>
+    <Modal title={info?.title ?? t("player.title")} onClose={close} testId="player" wide className={panel ? "modal-player" : undefined}>
       <div ref={dialog} className="player" onKeyDown={onKey}>
         {loadError && (
           <p className="warning" role="alert">
@@ -182,61 +212,68 @@ export function Player({ client, itemId, onClose, notify }: { client: BackendCli
           </div>
         )}
         {source?.available && (
-          <>
-            {source.support === "unsupported" && !problem && (
-              <p className="warning small" data-testid="player-codec-warning">
-                {t("player.codec_warning")}
-              </p>
-            )}
-            {problem && (
-              <p className="warning" role="alert" data-testid="player-problem" data-problem={problem}>
-                {t(problem === "partial" ? "player.partial" : "player.failed")}
-              </p>
-            )}
-            <video
-              ref={video}
-              className="player-video"
-              src={source.url}
-              controls
-              preload="metadata"
-              tabIndex={0}
-              aria-label={info?.title}
-              data-autofocus={resume ? undefined : true}
-              data-testid="player-video"
-              onPlay={() => setStarted(true)}
-              onPause={save}
-              onEnded={save}
-              onTimeUpdate={() => Date.now() - lastSaved.current >= SAVE_EVERY_MS && save()}
-              onLoadedData={(e) => {
-                // ADR-0004: HEVC opens and plays sound, with no picture.
-                if (source.mediaKind === "video" && e.currentTarget.videoWidth === 0) setProblem("partial");
-              }}
-              onError={() => setProblem("failed")}
-            />
-            {resume && !started && (
-              <div className="player-resume" data-testid="player-resume">
-                <button type="button" className="button button-primary" onClick={() => start(resume.positionMs)} data-autofocus data-testid="player-resume-button">
-                  {t("player.resume", { time: formatDuration(resume.positionMs) })}
-                </button>
-                <button type="button" className="button" onClick={() => start(0)} data-testid="player-start-over">
-                  {t("player.start_over")}
-                </button>
+          <div className={`player-body${panel ? " with-panel" : ""}`}>
+            <div className="player-main">
+              {source.support === "unsupported" && !problem && (
+                <p className="warning small" data-testid="player-codec-warning">
+                  {t("player.codec_warning")}
+                </p>
+              )}
+              {problem && (
+                <p className="warning" role="alert" data-testid="player-problem" data-problem={problem}>
+                  {t(problem === "partial" ? "player.partial" : "player.failed")}
+                </p>
+              )}
+              <video
+                ref={video}
+                className="player-video"
+                src={source.url}
+                controls
+                preload="metadata"
+                tabIndex={0}
+                aria-label={info?.title}
+                data-autofocus={resume ? undefined : true}
+                data-testid="player-video"
+                data-start-ms={startAtMs ?? undefined}
+                onPlay={() => setStarted(true)}
+                onPause={save}
+                onEnded={save}
+                onTimeUpdate={(e) => {
+                  setNowMs(Math.round(e.currentTarget.currentTime * 1000));
+                  if (Date.now() - lastSaved.current >= SAVE_EVERY_MS) save();
+                }}
+                onLoadedData={(e) => {
+                  // ADR-0004: HEVC opens and plays sound, with no picture.
+                  if (source.mediaKind === "video" && e.currentTarget.videoWidth === 0) setProblem("partial");
+                }}
+                onError={() => setProblem("failed")}
+              />
+              {resume && !started && (
+                <div className="player-resume" data-testid="player-resume">
+                  <button type="button" className="button button-primary" onClick={() => start(resume.positionMs)} data-autofocus data-testid="player-resume-button">
+                    {t("player.resume", { time: formatDuration(resume.positionMs) })}
+                  </button>
+                  <button type="button" className="button" onClick={() => start(0)} data-testid="player-start-over">
+                    {t("player.start_over")}
+                  </button>
+                </div>
+              )}
+              <div className="player-foot">
+                <span className="muted small">{t("player.keys")}</span>
+                {(source.support !== "supported" || problem) && (
+                  <button type="button" className="button" onClick={openExternal} data-testid="player-open-external">
+                    {t("player.open_external")}
+                  </button>
+                )}
+                {info?.hasSourceUrl && (
+                  <button type="button" className="link-button" onClick={openSource} data-testid="player-open-source">
+                    {t("player.open_source")}
+                  </button>
+                )}
               </div>
-            )}
-            <div className="player-foot">
-              <span className="muted small">{t("player.keys")}</span>
-              {(source.support !== "supported" || problem) && (
-                <button type="button" className="button" onClick={openExternal} data-testid="player-open-external">
-                  {t("player.open_external")}
-                </button>
-              )}
-              {info?.hasSourceUrl && (
-                <button type="button" className="link-button" onClick={openSource} data-testid="player-open-source">
-                  {t("player.open_source")}
-                </button>
-              )}
             </div>
-          </>
+            <TranscriptPanel client={client} itemId={itemId} nowMs={nowMs} onSeek={seekTo} onAvailable={setPanel} notify={notify} />
+          </div>
         )}
         <div className="modal-actions">
           <button type="button" className="button" onClick={close} data-testid="player-close">

@@ -90,7 +90,7 @@ function VirtualResults({ items, total, layout, selection, onSelection, onOpen, 
   // jsdom and the first frame have no layout; assume a desktop-sized area.
   const width = size.w || 1024;
   const height = size.h || 800;
-  const withSnippets = items.some((i) => i.snippet && i.snippet.field !== "title");
+  const withSnippets = items.some((i) => (i.snippet && i.snippet.field !== "title") || (i.transcript?.moments.length ?? 0) > 0);
   const g = geometry(width, layout, withSnippets);
   const rows = Math.ceil(items.length / g.cols);
   const first = Math.max(0, Math.floor(scrollTop / g.rowHeight) - OVERSCAN);

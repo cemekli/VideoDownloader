@@ -73,7 +73,7 @@ describe("Details → Transcript", () => {
     expect(languageName("xx-not-a-tag-!!")).toBe("xx-not-a-tag-!!");
     expect(sourceLabel(t)).toBe("Site captions (automatic)");
     const client = createFixtureClient();
-    client.getTranscript = async () => ({ transcript: t, segments: [{ startMs: 0, endMs: 1, text: "<img src=x onerror=alert(1)>" }], truncated: false });
+    client.getTranscript = async () => ({ transcript: t, segments: [{ id: "s1", startMs: 0, endMs: 1, text: "<img src=x onerror=alert(1)>" }], truncated: false });
     client.listTranscripts = async () => ({ itemId: YOUTUBE, transcripts: [t], captionsJob: null, canFetchCaptions: true, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-media", models: [], languages: ["auto", "tr", "en"] } });
     const user = userEvent.setup();
     const { container } = render(<Transcripts client={client} itemId={YOUTUBE} />);

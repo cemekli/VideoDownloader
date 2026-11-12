@@ -24,6 +24,7 @@ import type {
   LocalState,
   Platform,
   Snippet,
+  TranscriptMatchesDto,
 } from "./types";
 
 /** 2026-11-01T00:00:00Z: "now" for fixture data, so Recently Added is stable. */
@@ -35,10 +36,11 @@ export const RECENT_DAYS = 30;
 /** The one asset of a fixture item: its id with the last group marked "a". */
 export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${itemId.slice(25)}`;
 
-/** `download-error`: the first try of every download fails on the network; a retry succeeds (Journey 6). */
-export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error";
+/** `download-error`: the first try of every download fails on the network; a retry succeeds (Journey 6).
+ *  `transcripts`: the first YouTube item starts with the real Turkish captions fixture, so search finds its words (F6.4). */
+export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts";
 
-export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt"> {
+export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript"> {
   creator: string | null;
   description: string | null;
   canonicalUrl: string | null;
@@ -148,14 +150,14 @@ export function fold(s: string): string {
     .replace(/ı/g, "i");
 }
 
-function terms(text: string): string[] {
+export function terms(text: string): string[] {
   return fold(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 }
 
 /** Highlights where any term starts a word in `value`; null if none does. */
-function highlight(field: Snippet["field"], value: string, ts: string[]): Snippet | null {
+export function highlight(field: Snippet["field"], value: string, ts: string[]): Snippet | null {
   const folded = fold(value);
   // NFD folding can change length; only highlight when it did not.
   if (folded.length !== value.length) {
@@ -203,7 +205,10 @@ function matchRecord(r: FixtureRecord, ts: string[]): Snippet | null | undefined
   return null;
 }
 
-export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW, org?: OrganizeState): ItemPage {
+/** Where search terms were said in an item (F6.4); the fixture transcripts answer it. */
+export type SpokenMatch = (itemId: string, ts: string[]) => TranscriptMatchesDto | null;
+
+export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW, org?: OrganizeState, spoken?: SpokenMatch): ItemPage {
   const smart = q.smartCollectionId ? org?.smart.find((x) => x.id === q.smartCollectionId)?.rules : undefined;
   if (q.smartCollectionId && !smart) throw new IpcError("INTERNAL_ERROR", "list_items: error.internal");
   const text = smart?.text.trim() ? `${smart.text} ${q.text}` : q.text;
@@ -221,8 +226,8 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
     .filter((r) => q.view !== "recent" || r.addedAt >= now - RECENT_DAYS * DAY)
     .filter((r) => q.platforms.length === 0 || q.platforms.includes(r.platform))
     .filter((r) => q.kinds.length === 0 || q.kinds.includes(r.kind))
-    .map((r) => ({ r, snippet: ts.length ? matchRecord(r, ts) : null }))
-    .filter((x) => x.snippet !== undefined);
+    .map((r) => ({ r, snippet: ts.length ? matchRecord(r, ts) : null, said: ts.length && spoken ? spoken(r.id, ts) : null }))
+    .filter((x) => x.snippet !== undefined || x.said !== null);
   const dir = q.descending ? -1 : 1;
   const nullsLast = (a: number | null, b: number | null) => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : dir * (a - b));
   rows = rows.sort((a, b) => {
@@ -233,8 +238,9 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
         return nullsLast(a.r.durationMs, b.r.durationMs) || a.r.id.localeCompare(b.r.id);
       case "relevance":
         if (ts.length) {
-          const rank = (s: Snippet | null | undefined) => (s?.field === "title" ? 0 : 1);
-          return rank(a.snippet) - rank(b.snippet) || b.r.addedAt - a.r.addedAt;
+          // Like the backend: title first, metadata and transcript together next, transcript alone last.
+          const rank = (x: { snippet: Snippet | null | undefined; said: TranscriptMatchesDto | null }) => (x.snippet?.field === "title" ? 0 : x.snippet === undefined ? 2 : 1);
+          return rank(a) - rank(b) || b.r.addedAt - a.r.addedAt;
         }
         return b.r.addedAt - a.r.addedAt;
       default:
@@ -246,11 +252,11 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
     total: rows.length,
     offset: q.offset,
     notice,
-    items: page.map(({ r, snippet }) => toDto(r, snippet ?? null)),
+    items: page.map(({ r, snippet, said }) => toDto(r, snippet ?? null, said)),
   };
 }
 
-function toDto(r: FixtureRecord, snippet: Snippet | null): LibraryItemDto {
+function toDto(r: FixtureRecord, snippet: Snippet | null, transcript: TranscriptMatchesDto | null = null): LibraryItemDto {
   return {
     id: r.id,
     title: r.title,
@@ -265,6 +271,7 @@ function toDto(r: FixtureRecord, snippet: Snippet | null): LibraryItemDto {
     archived: r.archived,
     removedAt: r.removed ? r.removedAt : null,
     snippet,
+    transcript,
   };
 }
 
@@ -311,7 +318,7 @@ export interface FixtureLibrary extends LibraryClient {
   emitImportStatus(s: ImportStatus): void;
 }
 
-export function createFixtureLibrary(records: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureLibrary {
+export function createFixtureLibrary(records: FixtureRecord[], scenario: FixtureScenario = "default", spoken?: SpokenMatch): FixtureLibrary {
   const listeners = new Set<(s: ImportStatus) => void>();
   const latency = scenario === "slow" ? 60_000 : 0;
   let saved = 0;
@@ -335,7 +342,7 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
     async listItems(q) {
       if (scenario === "error") return fail();
       if (latency) await delay(latency);
-      return structuredClone(queryRecords(records, q, FIXTURE_NOW, org));
+      return structuredClone(queryRecords(records, q, FIXTURE_NOW, org, spoken));
     },
     async getItem(id) {
       const r = records.find((x) => x.id === id && !x.removed);

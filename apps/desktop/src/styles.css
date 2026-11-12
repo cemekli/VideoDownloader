@@ -253,6 +253,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .player-foot { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; margin-top: var(--s3); }
 .player-foot .muted { flex: 1 1 240px; }
 .player-empty { padding: var(--s4) 0; }
+/* Transcript beside the video (F6.5). */
+.modal-player { width: min(1180px, 100%); }
+.player-body.with-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: var(--s4); align-items: start; }
+.player-transcript { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.player-transcript-head { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; justify-content: space-between; }
+.player-transcript-head select { max-width: 100%; }
+.panel-follow { display: inline-flex; gap: 4px; align-items: center; }
+.player-lines { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.player-lines li { display: grid; grid-template-columns: auto 4.2em 1fr; gap: var(--s1); align-items: baseline; padding: 4px var(--s1); }
+.player-lines li.current { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.player-lines .timecode { padding: 0; font-variant-numeric: tabular-nums; text-align: left; }
+.player-transcript-foot { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; justify-content: space-between; }
+.note-markdown { max-height: 48vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; padding: var(--s2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); margin: 0; }
+@media (max-width: 900px) {
+  .player-body.with-panel { grid-template-columns: 1fr; }
+  .player-lines { max-height: 32vh; }
+}
 .player-empty p { margin: 0 0 var(--s3); }
 .player .warning { margin: 0 0 var(--s3); }
 
@@ -343,5 +360,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .transcript-lines li { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--s2); padding: 2px 0; }
 .transcript-lines .timecode { color: var(--muted); font-variant-numeric: tabular-nums; }
 .transcript-text { overflow-wrap: anywhere; }
+/* Search moments (F6.4): where a search text was said. */
+.snippet-moment .timecode { color: var(--accent); font-variant-numeric: tabular-nums; }
+.moments { list-style: none; margin: var(--s1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.moment-button { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--s2); width: 100%; text-align: left; padding: var(--s1); border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; }
+button.moment-button { cursor: pointer; }
+button.moment-button:hover, button.moment-button:focus-visible { background: var(--surface-3); }
+.moment-button .timecode { color: var(--accent); font-variant-numeric: tabular-nums; }
+.moment-text { overflow-wrap: anywhere; }
 .transcribe-local { margin-top: var(--s2); }
 .transcribe-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s1); }

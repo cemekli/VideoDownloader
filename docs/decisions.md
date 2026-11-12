@@ -1158,3 +1158,47 @@ STATE.md F6.3. SPEC AI-A03, AI-A04, AC-23, §13.2; ADR-0028'in "uzun dosyalar te
   - İptal ve parça hatası `partial` dökümü bırakır, staging temizlenir.
   - Bitmiş döküm, iptal edilen yeniden çalıştırmadan sonra aynen kalır.
 - `apps/desktop/src/Transcripts.test.tsx`: kısmi döküm satırı "partial, up to 10:00".
+
+## ADR-0030: Dökümde arama, öğe altında gruplanan anlar ve o saniyeden oynatma
+
+STATE.md F6.4 (ve F6.5'in "zaman koduna gitme" kısmı). SPEC SEA-06, PLAY-06, §16.2, AC-22, NFR-04.
+
+**Bağlam.** F6.1'den beri dökümler `search_chunk` + `transcript_search` (FTS5) olarak yazılıyordu, ama kütüphane araması yalnızca `search_document`'a (başlık, açıklama, not, etiket, üretici) bakıyordu. "Videoda söylenen kelimeyle bul ve o saniyeden aç" yoktu.
+
+**Karar.**
+
+- **Tek arama kutusu.** `library::search::search` aynı kullanıcı sorgusunu (aynı güvenli FTS kurucusu, ADR-0012) iki indekse verir. Bir öğe, metadata'sında ya da `ready`/`partial` dökümlerinden birinde eşleşirse sonuçtadır. `stale`, `failed`, `canceled` ve diğerleri aranmaz. Filtreler (platform, favori, arşiv, koleksiyon…) aynen uygulanır.
+- **Sıralama.** `rank = bm25(metadata) + TRANSCRIPT_WEIGHT × min(bm25(döküm parçası))`, `TRANSCRIPT_WEIGHT = 1.0`. Başlığında geçen öğe, kelimenin bir kez söylendiği öğenin önündedir; hem başlıkta hem dökümde geçen en öndedir. Eşitlikte eskisi gibi eklenme tarihi ve id. İki indeks ayrı CTE'lerde (`MATERIALIZED`) hesaplanır; FTS5 `bm25()` bir aggregate içinde çağrılamadığı için döküm skoru önce satır satır, sonra öğe başına en iyisi alınır.
+- **Gruplama (SEA-06).** Bir öğenin anları tek bir dökümden gelir: önce `ready`, sonra en yeni. Böylece site altyazısı ve yerel döküm aynı cümleyi iki kez listelemez. Öğe başına ilk 5 an (`MAX_MOMENTS`) zaman sırasıyla gelir, `total` hepsini sayar. Yalnızca o sayfadaki öğeler için tek bir sorgu çalışır.
+- **Gerçek segment zamanı (PLAY-06).** Bir parça (chunk) 30 sn'ye kadar birkaç segmenti birleştirir. Anın zamanı parçanın başı değil, eşleşen ilk kelimeyi içeren segmentin `start_ms`'idir: parça metni segmentlerin bir boşlukla birleşimi olduğundan, `highlight()` çıktısındaki ilk işaretin karakter konumu segmenti belirler. Snippet parçanın gerçek alt metnidir; `ı` katlaması tek karakterlik olduğundan orijinal harfler geri konur (§16.1).
+- **Kısmi döküm (§16.2).** `partial` dökümden gelen anlar `partial: true` ve `coveredMs` taşır; arayüz "Partial transcript: searched up to 10:00." der.
+- **Açmadan önce yeniden denetim (§16.2).** Ana tıklanınca `get_moment(segmentId)` çağrılır. Segment hâlâ varsa, dökümü `ready`/`partial` ise ve öğe kütüphanedeyse öğe ve `startMs` döner; oynatıcı oradan başlar ve "Resume from" sormaz. Döküm yeniden üretildiyse (segment kimlikleri değişir) ya da silindiyse `INPUT_REJECTED` (`moment-gone`) döner; arayüz "This transcript changed after the search. Search again…" der ve listeyi yeniler.
+- **Arayüz.** Kartta, metadata snippet'i yoksa ilk an zaman koduyla gösterilir (`0:03 … Kadıköy …`, "+N more"). Details'te "Said in the video" bölümü dil ve kaynakla birlikte anları listeler. Öğenin bu bilgisayarda dosyası varsa her an "Play from 0:12" düğmesidir; yoksa yalnızca metin olarak görünür. Metin her zaman metin olarak işlenir (SEA-03).
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/transcript_search.rs`: söylenen kelimeyle bulma ve doğru segment, zaman sırası, Türkçe katlama (`ISIK` → `IŞIK`, `ışık`), 5 an + toplam, sıralama (başlık+döküm > başlık > yalnızca döküm), `ready` dökümün `partial`'ın önüne geçmesi, `stale`/`failed`/`canceled`/silinmiş dökümün aranmaması, filtreler, yeniden üretilen dökümde eski anın bulunamaması.
+- NFR-04: aynı dosyadaki `#[ignore]` test 10.000 öğe ve 100.000 segmentle (1.000 öğede döküm) gerçek tablolarda ölçer. Bulut konteynerinde (release) 30 aramada p50 70 ms, p95 85 ms; hedef p95 ≤ 500 ms. Windows ölçümü ayrıca yapılacak.
+- `apps/desktop/src-tauri/tests/ipc.rs`: `list_items` öğesinde `transcript` alanı ve `get_moment` sözleşmeyle aynı şekilde; silinen dökümde `moment-gone`.
+- `apps/desktop/src/Moments.test.tsx`: kart, Details listesi, anın segment zamanıyla oynatıcının açılması, değişen dökümde uyarı, dosyası olmayan öğede düğmesiz liste.
+- Bilinen sınır: anlar öğe başına tek dökümden gelir; aynı öğenin başka dilde dökümündeki eşleşmeler o dökümün kendi satırında (Transcript bölümü) okunur. Oynatıcı yanında döküm paneli ve Markdown not F6.5'te gelir.
+
+## ADR-0031: Oynatıcı yanında döküm paneli ve Markdown not
+
+STATE.md F6.5. SPEC PLAY-06, DATA-11, §8.4 adım 6, AC-22, NFR-10.
+
+**Bağlam.** F6.4 ile aramadan bir ana gidilebiliyordu, ama oynatıcıda dökümü okuyup satırlar arasında gezinmek ve "kaynak ve zaman kodu içeren not" çıkarmak (DATA-11) yoktu.
+
+**Karar.**
+
+- **Panel.** Öğenin `ready` ya da `partial` dökümü varsa oynatıcı genişler ve sağda döküm paneli açılır (900 px altında videonun altında). Önce `ready`, sonra en yeni döküm seçilir; birden fazlaysa açılır listeden değiştirilir. Kısmi döküm "partial, up to …" der. Dökümü olmayan öğede oynatıcı eskisi gibidir.
+- **O an söylenen satır.** Videonun `timeupdate` zamanıyla başlangıcı geçmiş son segment (ikili arama) işaretlenir (`aria-current`) ve "Follow video" açıksa görünür tutulur.
+- **Zamana atlama (PLAY-06).** Satırın zaman kodu bir düğmedir; `currentTime` o segmentin `start_ms`'i olur ve video oynar. Zaman, webview'a gelen saklı segmentten gelir; uydurulmaz.
+- **Not (DATA-11).** Satırlar onay kutusuyla seçilir. "Export note…" önce notu gösterir (`preview_note`), "Save as…" kaydeder (`export_note`, yerel `.md` kaydetme penceresi; yol webview'a dönmez, yalnızca dosya adı). Notu Rust kurar (`vv_persistence::note`): webview yalnızca segment kimliklerini verir, zaman ve metin veritabanından okunur. Başka öğenin ya da artık olmayan bir segment bütün notu `INPUT_REJECTED` ile reddeder. Not: başlık, `Source: <url>`, üretici, yazılma tarihi, kullanıcının notları ve seçilen anlar (zaman sırasıyla, tekrarsız, en çok 500). Hangi dökümden geldiği ("tr, site captions") yazılır. YouTube'da her an `&t=Ns` ile kaynağa bağlanır; diğer sitelerde zaman kodu kalın yazıdır. Site ve döküm metni Markdown olarak kaçışlanır (`\<`, `\*`, `\[` …): bir görüntüleyicide etiket, bağlantı ya da başlık olmaz. URL yalnızca `https://` ve boşluksuz/`<>`'siz ise yazılır.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/src/note.rs` birim testleri (zaman kodu, kaçış, dosya adı, YouTube bağlantısı) ve `tests/transcript_search.rs` (seçilen anlar zaman sırasıyla ve tekrarsız, kaçışlı başlık ve not, başka öğenin segmenti ve olmayan segment reddedilir).
+- `apps/desktop/src-tauri/tests/ipc.rs`: `preview_note` sözleşme şekli, gerçek segment zamanı, bilinmeyen segment `INPUT_REJECTED`.
+- `apps/desktop/src/TranscriptPanel.test.tsx` ve Playwright `transcripts.spec.ts`: o anki satır, zaman koduna tıklayınca `currentTime`, seçilen satırlardan not önizlemesi ve kaydetme, dökümsüz öğede panel yok.
+- NFR-10 (±500 ms) gerçek medya ve WebView2 ile Cuma'nın Windows denemesinde ölçülecek; fixture klibi altyazıdan kısa olduğundan e2e yalnızca atlamanın gerçekleştiğini doğrular.

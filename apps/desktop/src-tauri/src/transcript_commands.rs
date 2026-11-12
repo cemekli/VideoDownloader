@@ -48,6 +48,7 @@ pub struct TranscriptDto {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentDto {
+    pub id: String,
     pub start_ms: i64,
     pub end_ms: i64,
     pub text: String,
@@ -268,6 +269,7 @@ pub async fn get_transcript<R: Runtime>(
             .into_iter()
             .take(MAX_SEGMENTS)
             .map(|s| SegmentDto {
+                id: s.id,
                 start_ms: s.start_ms,
                 end_ms: s.end_ms,
                 text: s.text,
@@ -277,6 +279,151 @@ pub async fn get_transcript<R: Runtime>(
             transcript: dto(&t),
             segments,
             truncated,
+        })
+    })
+    .await
+}
+
+/// Where a search moment opens (F6.4, PLAY-06).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MomentTarget {
+    pub item_id: String,
+    pub transcript_id: String,
+    pub segment_id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+}
+
+/// Checks that a moment from a search result still holds before the
+/// player seeks to it (§16.2): the segment exists, its transcript is still
+/// `ready` or `partial`, and the item is in the library. Otherwise
+/// `INPUT_REJECTED` with `moment-gone` (search again).
+pub fn moment_target(c: &Connection, segment_id: &str) -> Result<MomentTarget, DomainError> {
+    let gone = || DomainError::new(ErrorCode::InputRejected, "moment-gone");
+    let p = transcripts::segment_place(c, segment_id)
+        .map_err(db_err)?
+        .ok_or_else(gone)?;
+    if !matches!(
+        p.status,
+        transcripts::Status::Ready | transcripts::Status::Partial
+    ) {
+        return Err(gone());
+    }
+    let it = repo::get_item(c, &p.item_id)
+        .map_err(|_| internal("moment-item"))?
+        .ok_or_else(gone)?;
+    if it.removed_at.is_some() {
+        return Err(gone());
+    }
+    Ok(MomentTarget {
+        item_id: p.item_id,
+        transcript_id: p.transcript_id,
+        segment_id: p.segment_id,
+        start_ms: p.start_ms,
+        end_ms: p.end_ms,
+    })
+}
+
+#[tauri::command]
+pub async fn get_moment<R: Runtime>(
+    app: AppHandle<R>,
+    segment_id: String,
+) -> Result<MomentTarget, DomainError> {
+    blocking(app, move |st| {
+        moment_target(&st.get()?.reader()?, &segment_id)
+    })
+    .await
+}
+
+/// A Markdown note of an item (F6.5, DATA-11).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotePreview {
+    pub file_name: String,
+    pub markdown: String,
+    pub moments: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteExport {
+    /// False when the user closed the save dialog.
+    pub saved: bool,
+    pub file_name: Option<String>,
+    pub moments: usize,
+}
+
+/// Builds the note from stored rows only; the webview names segments.
+pub fn build_note(
+    c: &Connection,
+    item_id: &str,
+    segment_ids: &[String],
+    now_ms: i64,
+) -> Result<NotePreview, DomainError> {
+    let today: String = vv_persistence::portable::iso_utc(now_ms)
+        .chars()
+        .take(10)
+        .collect();
+    let n = vv_persistence::note::build(c, item_id, segment_ids, &today).map_err(|e| match e {
+        TranscriptError::NotFound => {
+            DomainError::new(ErrorCode::InputRejected, "note-segment-not-found")
+        }
+        TranscriptError::Invalid(_) => DomainError::new(ErrorCode::InputRejected, "note-too-many"),
+        TranscriptError::Sqlite(_) => internal("note-db"),
+    })?;
+    Ok(NotePreview {
+        file_name: n.file_name,
+        markdown: n.markdown,
+        moments: n.moments,
+    })
+}
+
+/// The note as it will be saved, to show before "Save as…".
+#[tauri::command]
+pub async fn preview_note<R: Runtime>(
+    app: AppHandle<R>,
+    item_id: String,
+    segment_ids: Vec<String>,
+) -> Result<NotePreview, DomainError> {
+    blocking(app, move |st| {
+        build_note(&st.get()?.reader()?, &item_id, &segment_ids, now())
+    })
+    .await
+}
+
+/// Writes the note to a `.md` file the user picks (DATA-11). The path
+/// never reaches the webview; only the file name comes back.
+#[tauri::command]
+pub async fn export_note<R: Runtime>(
+    app: AppHandle<R>,
+    item_id: String,
+    segment_ids: Vec<String>,
+) -> Result<NoteExport, DomainError> {
+    use tauri_plugin_dialog::DialogExt;
+    blocking(app.clone(), move |st| {
+        let note = build_note(&st.get()?.reader()?, &item_id, &segment_ids, now())?;
+        let mut dialog = app
+            .dialog()
+            .file()
+            .add_filter("Markdown", &["md"])
+            .set_file_name(&note.file_name);
+        if let Some(w) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&w);
+        }
+        let Some(dest) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else {
+            return Ok(NoteExport {
+                saved: false,
+                file_name: None,
+                moments: note.moments,
+            });
+        };
+        std::fs::write(&dest, note.markdown.as_bytes())
+            .map_err(|_| DomainError::new(ErrorCode::PathNotWritable, "note-write"))?;
+        Ok(NoteExport {
+            saved: true,
+            file_name: dest.file_name().map(|f| f.to_string_lossy().into_owned()),
+            moments: note.moments,
         })
     })
     .await
