@@ -336,6 +336,99 @@ pub async fn get_moment<R: Runtime>(
     .await
 }
 
+/// A Markdown note of an item (F6.5, DATA-11).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotePreview {
+    pub file_name: String,
+    pub markdown: String,
+    pub moments: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteExport {
+    /// False when the user closed the save dialog.
+    pub saved: bool,
+    pub file_name: Option<String>,
+    pub moments: usize,
+}
+
+/// Builds the note from stored rows only; the webview names segments.
+pub fn build_note(
+    c: &Connection,
+    item_id: &str,
+    segment_ids: &[String],
+    now_ms: i64,
+) -> Result<NotePreview, DomainError> {
+    let today: String = vv_persistence::portable::iso_utc(now_ms)
+        .chars()
+        .take(10)
+        .collect();
+    let n = vv_persistence::note::build(c, item_id, segment_ids, &today).map_err(|e| match e {
+        TranscriptError::NotFound => {
+            DomainError::new(ErrorCode::InputRejected, "note-segment-not-found")
+        }
+        TranscriptError::Invalid(_) => DomainError::new(ErrorCode::InputRejected, "note-too-many"),
+        TranscriptError::Sqlite(_) => internal("note-db"),
+    })?;
+    Ok(NotePreview {
+        file_name: n.file_name,
+        markdown: n.markdown,
+        moments: n.moments,
+    })
+}
+
+/// The note as it will be saved, to show before "Save as…".
+#[tauri::command]
+pub async fn preview_note<R: Runtime>(
+    app: AppHandle<R>,
+    item_id: String,
+    segment_ids: Vec<String>,
+) -> Result<NotePreview, DomainError> {
+    blocking(app, move |st| {
+        build_note(&st.get()?.reader()?, &item_id, &segment_ids, now())
+    })
+    .await
+}
+
+/// Writes the note to a `.md` file the user picks (DATA-11). The path
+/// never reaches the webview; only the file name comes back.
+#[tauri::command]
+pub async fn export_note<R: Runtime>(
+    app: AppHandle<R>,
+    item_id: String,
+    segment_ids: Vec<String>,
+) -> Result<NoteExport, DomainError> {
+    use tauri_plugin_dialog::DialogExt;
+    blocking(app.clone(), move |st| {
+        let note = build_note(&st.get()?.reader()?, &item_id, &segment_ids, now())?;
+        let mut dialog = app
+            .dialog()
+            .file()
+            .add_filter("Markdown", &["md"])
+            .set_file_name(&note.file_name);
+        if let Some(w) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&w);
+        }
+        let Some(dest) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else {
+            return Ok(NoteExport {
+                saved: false,
+                file_name: None,
+                moments: note.moments,
+            });
+        };
+        std::fs::write(&dest, note.markdown.as_bytes())
+            .map_err(|_| DomainError::new(ErrorCode::PathNotWritable, "note-write"))?;
+        Ok(NoteExport {
+            saved: true,
+            file_name: dest.file_name().map(|f| f.to_string_lossy().into_owned()),
+            moments: note.moments,
+        })
+    })
+    .await
+}
+
 /// Queues the site-captions job for an item (AI-A01). One open job per
 /// item; asking again while it runs returns the same job.
 #[tauri::command]

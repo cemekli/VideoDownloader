@@ -483,6 +483,18 @@ export const en = {
   "search.said_more.other": "{count} more places in this transcript.",
   "search.moment_label": "Play from {time}: {text}",
   "search.moment_gone": "This transcript changed after the search. Search again to find the moment.",
+  // Transcript beside the player and the Markdown note (STATE.md F6.5, PLAY-06, DATA-11)
+  "panel.choose": "Transcript",
+  "panel.follow": "Follow video",
+  "panel.loading": "Loading the transcript…",
+  "panel.pick": "Add {time} to the note",
+  "panel.picked.one": "{count} line picked for the note",
+  "panel.picked.other": "{count} lines picked for the note",
+  "note.export": "Export note…",
+  "note.preview_hint": "This is the note as it will be saved ({file}). Timecodes come from the transcript.",
+  "note.back": "Back",
+  "note.save": "Save as…",
+  "note.saved": "Saved the note as {file}.",
   // Transcripts in the details panel (STATE.md F6.2, SPEC §8.4, AI-A01)
   "transcripts.title": "Transcript",
   "transcripts.empty": "No transcript yet. If the site has captions for this video, VideoVault can keep them as searchable text.",

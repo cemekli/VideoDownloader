@@ -286,6 +286,8 @@ fn main_capability_grants_only_app_commands() {
         "allow-transcribe-locally",
         "allow-delete-transcript",
         "allow-get-moment",
+        "allow-preview-note",
+        "allow-export-note",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
     ]
@@ -1603,6 +1605,26 @@ fn transcript_commands_match_contract_and_queue_captions() {
     let plain = ok(&w, "list_items", json!({ "query": {} }));
     assert!(plain["items"][0]["transcript"].is_null());
 
+    // F6.5, DATA-11: the note's timecodes come from stored segments.
+    let note = ok(
+        &w,
+        "preview_note",
+        json!({ "itemId": id, "segmentIds": [seg.clone()] }),
+    );
+    assert_same_shape(&note, &spec("preview_note"), "preview_note");
+    assert_eq!(note["moments"], 1);
+    let md = note["markdown"].as_str().unwrap();
+    assert!(md.contains("## Moments"), "{md}");
+    assert!(md.contains("0:03"), "{md}");
+    let e = invoke(
+        &w,
+        "preview_note",
+        json!({ "itemId": id, "segmentIds": ["not-a-segment"] }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
+
     let x = ok(&w, "delete_transcript", json!({ "transcriptId": t.id }));
     assert_same_shape(&x, &spec("delete_transcript"), "delete_transcript");
     assert_eq!(x["transcripts"], json!([]));
@@ -1614,7 +1636,7 @@ fn transcript_commands_match_contract_and_queue_captions() {
         (Some("INPUT_REJECTED"), Some("moment-gone"))
     );
 
-    for v in [&l, &r, &g, &x, &found, &m] {
+    for v in [&l, &r, &g, &x, &found, &m, &note] {
         let s = v.to_string();
         assert!(!s.contains(&*d.path().to_string_lossy()), "no paths: {s}");
     }

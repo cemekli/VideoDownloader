@@ -137,6 +137,18 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
     }
   }
 
+  /** The note as the backend writes it (`vv_persistence::note`), in short. */
+  const note = (itemId: string, segmentIds: string[]) => {
+    const r = item(itemId, "preview_note");
+    const all = [...segments.entries()].filter(([tid]) => (byItem.get(itemId) ?? []).some((t) => t.id === tid)).flatMap(([, s]) => s);
+    const picked = [...new Set(segmentIds)].map((id) => all.find((s) => s.id === id) ?? (() => { throw err("INPUT_REJECTED", "preview_note"); })());
+    picked.sort((a, b) => a.startMs - b.startMs);
+    const tc = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+    const lines = [`# ${r.title}`, "", ...(r.canonicalUrl ? [`Source: <${r.canonicalUrl}>`, ""] : []), "Written with VideoVault on 2026-11-12.", ...(r.notes.trim() ? ["", "## Notes", "", r.notes.trim()] : [])];
+    if (picked.length) lines.push("", "## Moments", "", ...picked.map((s) => `- **${tc(s.startMs)}** ${s.text}`));
+    return { fileName: `${r.title.replace(/[^\p{L}\p{N} -]+/gu, " ").replace(/\s+/g, " ").trim()} - note.md`, markdown: lines.join("\n") + "\n", moments: picked.length };
+  };
+
   /** One segment per moment; a moment opens at the segment's start. */
   const spokenMatches = (itemId: string, ts: string[]): TranscriptMatchesDto | null => {
     const list = (byItem.get(itemId) ?? []).filter((t) => t.status === "ready" || t.status === "partial");
@@ -162,6 +174,13 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
 
   return {
     spokenMatches,
+    async previewNote(itemId, segmentIds) {
+      return note(itemId, segmentIds);
+    },
+    async exportNote(itemId, segmentIds) {
+      const n = note(itemId, segmentIds);
+      return { saved: true, fileName: n.fileName, moments: n.moments };
+    },
     async getMoment(segmentId) {
       for (const [tid, segs] of segments) {
         const sg = segs.find((x) => x.id === segmentId);

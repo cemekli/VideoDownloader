@@ -1182,3 +1182,23 @@ STATE.md F6.4 (ve F6.5'in "zaman koduna gitme" kısmı). SPEC SEA-06, PLAY-06, �
 - `apps/desktop/src-tauri/tests/ipc.rs`: `list_items` öğesinde `transcript` alanı ve `get_moment` sözleşmeyle aynı şekilde; silinen dökümde `moment-gone`.
 - `apps/desktop/src/Moments.test.tsx`: kart, Details listesi, anın segment zamanıyla oynatıcının açılması, değişen dökümde uyarı, dosyası olmayan öğede düğmesiz liste.
 - Bilinen sınır: anlar öğe başına tek dökümden gelir; aynı öğenin başka dilde dökümündeki eşleşmeler o dökümün kendi satırında (Transcript bölümü) okunur. Oynatıcı yanında döküm paneli ve Markdown not F6.5'te gelir.
+
+## ADR-0031: Oynatıcı yanında döküm paneli ve Markdown not
+
+STATE.md F6.5. SPEC PLAY-06, DATA-11, §8.4 adım 6, AC-22, NFR-10.
+
+**Bağlam.** F6.4 ile aramadan bir ana gidilebiliyordu, ama oynatıcıda dökümü okuyup satırlar arasında gezinmek ve "kaynak ve zaman kodu içeren not" çıkarmak (DATA-11) yoktu.
+
+**Karar.**
+
+- **Panel.** Öğenin `ready` ya da `partial` dökümü varsa oynatıcı genişler ve sağda döküm paneli açılır (900 px altında videonun altında). Önce `ready`, sonra en yeni döküm seçilir; birden fazlaysa açılır listeden değiştirilir. Kısmi döküm "partial, up to …" der. Dökümü olmayan öğede oynatıcı eskisi gibidir.
+- **O an söylenen satır.** Videonun `timeupdate` zamanıyla başlangıcı geçmiş son segment (ikili arama) işaretlenir (`aria-current`) ve "Follow video" açıksa görünür tutulur.
+- **Zamana atlama (PLAY-06).** Satırın zaman kodu bir düğmedir; `currentTime` o segmentin `start_ms`'i olur ve video oynar. Zaman, webview'a gelen saklı segmentten gelir; uydurulmaz.
+- **Not (DATA-11).** Satırlar onay kutusuyla seçilir. "Export note…" önce notu gösterir (`preview_note`), "Save as…" kaydeder (`export_note`, yerel `.md` kaydetme penceresi; yol webview'a dönmez, yalnızca dosya adı). Notu Rust kurar (`vv_persistence::note`): webview yalnızca segment kimliklerini verir, zaman ve metin veritabanından okunur. Başka öğenin ya da artık olmayan bir segment bütün notu `INPUT_REJECTED` ile reddeder. Not: başlık, `Source: <url>`, üretici, yazılma tarihi, kullanıcının notları ve seçilen anlar (zaman sırasıyla, tekrarsız, en çok 500). Hangi dökümden geldiği ("tr, site captions") yazılır. YouTube'da her an `&t=Ns` ile kaynağa bağlanır; diğer sitelerde zaman kodu kalın yazıdır. Site ve döküm metni Markdown olarak kaçışlanır (`\<`, `\*`, `\[` …): bir görüntüleyicide etiket, bağlantı ya da başlık olmaz. URL yalnızca `https://` ve boşluksuz/`<>`'siz ise yazılır.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/src/note.rs` birim testleri (zaman kodu, kaçış, dosya adı, YouTube bağlantısı) ve `tests/transcript_search.rs` (seçilen anlar zaman sırasıyla ve tekrarsız, kaçışlı başlık ve not, başka öğenin segmenti ve olmayan segment reddedilir).
+- `apps/desktop/src-tauri/tests/ipc.rs`: `preview_note` sözleşme şekli, gerçek segment zamanı, bilinmeyen segment `INPUT_REJECTED`.
+- `apps/desktop/src/TranscriptPanel.test.tsx` ve Playwright `transcripts.spec.ts`: o anki satır, zaman koduna tıklayınca `currentTime`, seçilen satırlardan not önizlemesi ve kaydetme, dökümsüz öğede panel yok.
+- NFR-10 (±500 ms) gerçek medya ve WebView2 ile Cuma'nın Windows denemesinde ölçülecek; fixture klibi altyazıdan kısa olduğundan e2e yalnızca atlamanın gerçekleştiğini doğrular.

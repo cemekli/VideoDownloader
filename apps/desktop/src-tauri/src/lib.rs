@@ -120,7 +120,9 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             transcript_commands::fetch_captions,
             transcript_commands::transcribe_locally,
             transcript_commands::delete_transcript,
-            transcript_commands::get_moment
+            transcript_commands::get_moment,
+            transcript_commands::preview_note,
+            transcript_commands::export_note
         ])
         // Both protocols answer off the UI thread. On Windows a synchronous
         // handler runs on the window's thread: hundreds of thumbnails (each

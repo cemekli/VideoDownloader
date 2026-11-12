@@ -2159,6 +2159,32 @@
         "startMs": 3200,
         "endMs": 6100
       }
+    },
+    "preview_note": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "segmentIds": [
+          "00000000-0000-4000-8000-00000000c202"
+        ]
+      },
+      "response": {
+        "fileName": "Deniz kenarında sabah - note.md",
+        "markdown": "# Deniz kenarında sabah\n\nSource: <https://www.youtube.com/watch?v=aaaaaaaaaaa>\n\nWritten with VideoVault on 2026-11-12.\n\n## Moments\n\nTranscript: tr, site captions\n\n- [0:03](<https://www.youtube.com/watch?v=aaaaaaaaaaa&t=3s>) Bugün sabah yürüyüşü yapıyoruz.\n",
+        "moments": 1
+      }
+    },
+    "export_note": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "segmentIds": [
+          "00000000-0000-4000-8000-00000000c202"
+        ]
+      },
+      "response": {
+        "saved": true,
+        "fileName": "Deniz kenarında sabah - note.md",
+        "moments": 1
+      }
     }
   },
   "domainError": {

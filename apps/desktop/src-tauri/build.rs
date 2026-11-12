@@ -92,6 +92,8 @@ const COMMANDS: &[&str] = &[
     "transcribe_locally",
     "delete_transcript",
     "get_moment",
+    "preview_note",
+    "export_note",
 ];
 
 fn main() {

@@ -96,6 +96,8 @@
     "allow-transcribe-locally",
     "allow-delete-transcript",
     "allow-get-moment",
+    "allow-preview-note",
+    "allow-export-note",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

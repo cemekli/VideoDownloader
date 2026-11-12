@@ -92,3 +92,22 @@ test.describe("Search in transcripts", () => {
     await expect(page.getByTestId("player-video")).toHaveAttribute("data-start-ms", "3040");
   });
 });
+
+// STATE.md F6.5 (PLAY-06, DATA-11): the transcript beside the player.
+test.describe("Transcript beside the player", () => {
+  test("a line's time seeks there and picked lines make a Markdown note", async ({ page }, info) => {
+    await page.goto("/?fixture=transcripts");
+    await page.locator('[data-testid="library-card"][data-id$="0001"]').dblclick();
+    await page.getByTestId("inspector").getByTestId("inspector-play").click();
+    const panel = page.getByTestId("player-transcript");
+    await expect(panel.getByTestId("panel-lines").locator("li")).toHaveCount(8);
+    await panel.getByRole("button", { name: /Play from 0:12/ }).click();
+    // The fixture clip is shorter than the captions: the seek lands at 12.76 s or the clip's end.
+    await expect.poll(() => page.getByTestId("player-video").evaluate((v: HTMLVideoElement) => Math.abs(v.currentTime - Math.min(12.76, v.duration)) < 0.3)).toBe(true);
+    await panel.getByRole("checkbox", { name: "Add 0:03 to the note" }).check();
+    await shot(page, "player-panel", info);
+    await panel.getByTestId("note-export").click();
+    await expect(panel.getByTestId("note-markdown")).toContainText("## Moments");
+    await shot(page, "note-preview", info);
+  });
+});

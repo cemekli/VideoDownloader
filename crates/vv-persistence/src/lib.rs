@@ -12,6 +12,7 @@ pub mod library;
 pub mod lock;
 pub mod migrations;
 pub mod models;
+pub mod note;
 pub mod portable;
 pub mod restore;
 pub mod settings;

@@ -50,6 +50,8 @@ import type {
   ItemTranscripts,
   TranscriptDetail,
   MomentTarget,
+  NotePreview,
+  NoteExport,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -264,6 +266,8 @@ const transcriptCommands: TranscriptClient = {
   transcribeLocally: (itemId, modelId, language) => call<ItemTranscripts>("transcribe_locally", { itemId, modelId, language }),
   deleteTranscript: (transcriptId) => call<ItemTranscripts>("delete_transcript", { transcriptId }),
   getMoment: (segmentId) => call<MomentTarget>("get_moment", { segmentId }),
+  previewNote: (itemId, segmentIds) => call<NotePreview>("preview_note", { itemId, segmentIds }),
+  exportNote: (itemId, segmentIds) => call<NoteExport>("export_note", { itemId, segmentIds }),
 };
 
 /** Real Tauri IPC client (STATE.md F0.3, F1.7). */

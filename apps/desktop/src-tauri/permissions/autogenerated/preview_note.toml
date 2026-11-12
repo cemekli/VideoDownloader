@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-note"
+description = "Enables the preview_note command without any pre-configured scope."
+commands.allow = ["preview_note"]
+
+[[permission]]
+identifier = "deny-preview-note"
+description = "Denies the preview_note command without any pre-configured scope."
+commands.deny = ["preview_note"]

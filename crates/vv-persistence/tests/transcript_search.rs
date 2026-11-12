@@ -427,3 +427,58 @@ fn a_moment_is_found_again_until_its_transcript_changes() {
             .is_none()
     );
 }
+
+// STATE.md F6.5, DATA-11: the Markdown note takes its timecodes from
+// stored segments only.
+#[test]
+fn a_note_lists_picked_moments_from_real_segments_in_time_order() {
+    use vv_persistence::note;
+    let (_d, mut db) = open();
+    let mut it = LibraryItem::new(ItemKind::RemoteVideo, SourcePlatform::Youtube, 1);
+    it.canonical_url = Some("https://www.youtube.com/watch?v=aaaaaaaaaaa".into());
+    it.title = Some("Ders 4: <b>Replikasyon</b>".into());
+    it.user_notes = "İzle: *gecikme* kısmı".into();
+    repo::insert_item(db.writer(), &it).unwrap();
+    let tid = save(
+        &mut db,
+        &captions(&it.id, "tr"),
+        Status::Ready,
+        None,
+        &lecture(),
+        5,
+    );
+    let segs = transcripts::segments(&db.reader().unwrap(), &tid).unwrap();
+    let c = db.reader().unwrap();
+    let ids = vec![segs[3].id.clone(), segs[1].id.clone(), segs[3].id.clone()];
+    let n = note::build(&c, &it.id, &ids, "2026-11-12").unwrap();
+    assert_eq!(n.moments, 2);
+    assert_eq!(n.file_name, "Ders 4 b Replikasyon b - note.md");
+    let md = &n.markdown;
+    assert!(
+        md.starts_with("# Ders 4: \\<b\\>Replikasyon\\</b\\>\n"),
+        "{md}"
+    );
+    assert!(md.contains("Source: <https://www.youtube.com/watch?v=aaaaaaaaaaa>"));
+    assert!(md.contains("## Notes\n\nİzle: \\*gecikme\\* kısmı\n"));
+    assert!(md.contains("Transcript: tr, site captions"));
+    let a = md
+        .find(
+            "[0:02](<https://www.youtube.com/watch?v=aaaaaaaaaaa&t=2s>) PostgreSQL replikasyonunu",
+        )
+        .unwrap();
+    let b = md
+        .find("[1:01](<https://www.youtube.com/watch?v=aaaaaaaaaaa&t=61s>) Replikasyon gecikmesi")
+        .unwrap();
+    assert!(a < b, "time order:\n{md}");
+
+    // Nothing picked: title, source and notes only.
+    let plain = note::build(&c, &it.id, &[], "2026-11-12").unwrap();
+    assert_eq!(plain.moments, 0);
+    assert!(!plain.markdown.contains("## Moments"));
+
+    // A segment of another item, or one that no longer exists, is refused.
+    let other = item(&mut db, "https://example.com/b", "Başka", 2);
+    let c = db.reader().unwrap();
+    assert!(note::build(&c, &other, &[segs[1].id.clone()], "x").is_err());
+    assert!(note::build(&c, &it.id, &["nope".into()], "x").is_err());
+}

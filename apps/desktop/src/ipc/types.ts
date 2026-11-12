@@ -72,6 +72,19 @@ export interface TranscriptMatchesDto {
   total: number;
 }
 
+/** A Markdown note; every timecode in it comes from a stored segment (F6.5). */
+export interface NotePreview {
+  fileName: string;
+  markdown: string;
+  moments: number;
+}
+
+export interface NoteExport {
+  saved: boolean;
+  fileName: string | null;
+  moments: number;
+}
+
 /** `get_moment`: a search moment checked again before the player seeks (§16.2). */
 export interface MomentTarget {
   itemId: string;
@@ -880,6 +893,10 @@ export interface TranscriptClient {
   deleteTranscript(transcriptId: string): Promise<ItemTranscripts>;
   /** Checks a search moment before seeking; INPUT_REJECTED `moment-gone` when its transcript changed (F6.4). */
   getMoment(segmentId: string): Promise<MomentTarget>;
+  /** The Markdown note as it will be saved: title, source, notes, picked moments (F6.5, DATA-11). */
+  previewNote(itemId: string, segmentIds: string[]): Promise<NotePreview>;
+  /** Saves that note to a `.md` file the user picks; `saved: false` when the dialog was closed. */
+  exportNote(itemId: string, segmentIds: string[]): Promise<NoteExport>;
 }
 
 export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient;
