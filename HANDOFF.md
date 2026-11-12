@@ -1,9 +1,10 @@
-# Devir notu — 11 Kasım 2026
+# Devir notu — 11 Kasım 2026 (akşam)
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
+- **11 Kas akşam: F6.2 bitti (✅).** Cuma yerel transkripsiyonu Windows'ta 21:44'lük bir videoda dört modelle çalıştırdı. Süreler: Tiny 0:49, Base 1:20, Small 3:29, Medium 10:29 (CPU). PR #49 ile iş sürerken model adı, geçen/kalan süre ve bitince "Last run: …, took …" görünüyor. Kalite karşılaştırması (F6.7) henüz yapılmadı. F6.3 yazıldı (ADR-0029), Cuma'nın testini bekliyor; sonra F6.4–F6.5 (arama, panel, zaman koduna gitme).
 - **11 Kas: F6.2 ikinci yarı yazıldı (🟨, ADR-0028): yerel transkripsiyon.** Details → Transcript → "Transcribe on this PC": dil (otomatik/Türkçe/İngilizce), model (indirilmiş olanlar, varsayılan en büyük), ilerleme yüzdesi, iptal. İş: FFmpeg öğenin dosyasını 16 kHz mono WAV yapar → `whisper-cli` (CPU) JSON yazar → `generated_local` döküm. Çevrimdışı çalışır. Dosyası olmayan öğede düğme yok.
   - Paket bulguları: whisper.cpp v1.9.2 `whisper-bin-x64.zip` (8 194 445 bayt, SHA-256 `49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a`). `whisper-cli.exe` yanında `whisper.dll`, `ggml.dll`, `ggml-base.dll` ve 9 `ggml-cpu-*.dll` gerekir (CPU'ya göre biri yüklenir); hepsi `tools/manifest.json` → `companions` altında hash'li. SDL2/parakeet alınmaz.
   - İkili Visual C++ çalışma zamanını ister (MSVCP140, VCRUNTIME140, VCOMP140); zip'te yok. Cuma'nın makinesinde (Visual Studio Build Tools kurulu) ve GitHub Windows imajında var. Yoksa Diagnostics'te whisper-cli "Missing" görünür. F4 kurulumu bunu çözmeli.
@@ -31,13 +32,14 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 - **İlk açılış gecikmesi çözüldü (9 Kas):** taze derlemeden sonra thumbnail'lerin geç gelmesi ve pencerenin bir kez küçülmesi Avast Antivirus'ün taramasıymış; Avast kapalıyken hemen geliyor. Kodda değişiklik gerekmiyor; F4.7 bilinen kısıtlarına not düşülecek.
 - **F5.1 (9 Kas, PR #32, merge edildi):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
 - **Son durum (9 Kas, akşam):** F3 tamamlandı (PR #25–#30). Cuma Windows 11'de YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch VOD ve Dailymotion indirdi; sonuçlar `docs/platform-support.md`'de. Reddit girişsiz engelli (yt-dlp tek başına da `Account authentication is required` diyor).
-- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5 (45/74).
+- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5, F6.1, F6.2 (47/74).
 - **Sıra değişikliği:** F4 (installer, imzalı güncelleme) ertelendi; sıradaki faz **F5 yetkili oturum** (Cuma'nın kararı, 9 Kas).
 - **Uygulamada şu an:** bookmark kaydedilince başlık, kanal, süre ve küçük resim gelir; Download ile dört önayar; Downloads ekranı; canlı yayınlar reddedilir; yerel import thumbnail'leri arka planda, en yeniden başlayarak, paralel yapılır. Bilinen platformlar: YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion, Twitch, Reddit.
 
 ## Sonraki ilk adımlar
 
-0. **F6.2 yerel transkripsiyon elle test (Cuma, release exe).** `git pull`, sonra `node scripts/fetch-tools.mjs` (yeni: whisper-cli ve DLL'leri iner), `npm run desktop:exe`, `tools\bin`'i `target\release\tools`'a yeniden kopyala (whisper-cli klasörü dahil). Settings → Diagnostics'te `whisper-cli` "OK" olmalı. Settings → Transcription'da bir model (Base ya da Small) indir. Türkçe konuşmalı indirilmiş bir video seç → Details → Transcript → Language: Turkish → "Transcribe on this PC". Yüzde ilerlemeli, sonunda "Transcribed on this PC (whisper-…)" satırı ve zaman kodlu Türkçe metin gelmeli. Aynısını İngilizce bir video ve "Detect automatically" ile dene; bir kez de Cancel'a bas. Sonuç ve süre (video uzunluğu, model, geçen süre) F6.7 için not edilsin.
+0. ~~F6.2 yerel transkripsiyon elle test~~: yapıldı (11 Kas, Cuma), süreler STATE F6.7'de. Kalan F6.7 işi: aynı TR ve bir EN videoda modellerin metin kalitesini karşılaştırmak (Türkçe karakter, özel isim, noktalama).
+0. **F6.3 elle test (Cuma, release exe).** 20 dakikadan uzun bir video seç → "Transcribe on this PC" (Small ya da Medium). İlk parça (~10 dk ses) bitince döküm satırında "partial, up to …" görünmeli ve metin açılabilmeli. Sonra uygulamayı kapat ve yeniden aç: iş kendiliğinden devam etmeli, yüzde ilk parçanın sonundan başlamalı. Bitince satır "partial" olmadan görünmeli ve parça sınırında tekrar eden ya da eksik cümle olmamalı. Bir kez de ikinci parçada Cancel'a bas: ilk parçanın metni "partial" olarak kalmalı.
 
 1. PR #44 (F6.2 ilk yarı) merge edildi (11 Kas). Site altyazısı testi (aşağıda 5. adım) hâlâ bekliyor.
 

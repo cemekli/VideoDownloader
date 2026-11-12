@@ -162,6 +162,7 @@ pub fn library(setup: Setup) -> Lib {
         whisper: setup.whisper.map(|exe| vv_engine::WhisperTool {
             exe,
             version: "1.9.2".into(),
+            chunk_ms: vv_engine::transcribe::DEFAULT_CHUNK_MS,
         }),
     };
     let cx = Context {

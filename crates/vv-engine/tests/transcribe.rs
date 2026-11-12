@@ -350,4 +350,244 @@ fn real_whisper_cli_runs_with_the_tiny_model() {
         assert!(t.covered_ms.unwrap() > 0);
     }
     assert!(staging_is_clean(&lib));
+    // F6.3: the real binary reads the part WAVs the engine writes itself.
+    short_parts(&lib);
+    let job = transcribe(&lib, &item, "auto");
+    let j = lib.job(&job);
+    assert_eq!(
+        j.status,
+        JobStatus::Succeeded,
+        "parts: {:?} {:?}",
+        j.error_code,
+        j.redacted_error_message
+    );
+    assert!(staging_is_clean(&lib));
+}
+
+// ---- F6.3: parts, checkpoint, restart and cancel (AI-A03, AI-A04, AC-23)
+
+/// Parts of 1 s, so the 3 s fixture runs in several.
+fn short_parts(lib: &Lib) {
+    let mut tools = lib.cx().tools.write().unwrap();
+    tools.whisper.as_mut().expect("fake whisper").chunk_ms = 1_000;
+}
+
+/// One line per whisper-cli run: "<wav ms> <language>".
+fn calls(lib: &Lib) -> Vec<String> {
+    std::fs::read_to_string(lib.cx().dirs.models.join("fake-whisper-calls"))
+        .map(|s| s.lines().map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
+fn clear_calls(lib: &Lib) {
+    let _ = std::fs::remove_file(lib.cx().dirs.models.join("fake-whisper-calls"));
+}
+
+fn checkpoint(lib: &Lib, job: &str) -> Option<transcribe::Checkpoint> {
+    let dir = transcribe::staging_dir(&lib.cx().dirs.staging, job);
+    let raw = std::fs::read(dir.join("checkpoint.json")).ok()?;
+    serde_json::from_slice(&raw).ok()
+}
+
+/// Starts the job, waits until whisper-cli runs for the second part, then
+/// calls `then` while it is still running.
+fn during_second_part(lib: &Lib, item: &str, then: impl FnOnce(&str)) -> String {
+    let now = lib.clock.now_ms();
+    let job = lib.write(|c| transcribe::enqueue(c, item, MODEL, "auto", now).unwrap().id);
+    std::thread::scope(|s| {
+        let h = s.spawn(|| lib.run());
+        for _ in 0..2000 {
+            if calls(lib).len() >= 2 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(calls(lib).len(), 2, "the second part never started");
+        then(&job);
+        h.join().unwrap();
+    });
+    job
+}
+
+fn assert_no_repeats(segs: &[transcripts::Segment], wav_ms: i64) {
+    for w in segs.windows(2) {
+        assert!(w[0].end_ms <= w[1].start_ms, "overlap: {segs:?}");
+    }
+    assert!(segs.last().unwrap().end_ms <= wav_ms);
+}
+
+#[test]
+fn a_long_recording_runs_in_parts_without_repeats() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    let job = transcribe(&lib, &item, "auto");
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    let runs = calls(&lib);
+    assert!(runs.len() >= 2, "{runs:?}");
+    // The first part detects the language; the rest are told it.
+    assert!(runs[0].ends_with(" auto"), "{runs:?}");
+    assert!(runs[1..].iter().all(|r| r.ends_with(" tr")), "{runs:?}");
+    let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1);
+    assert_eq!(ts[0].status, Status::Ready);
+    assert_eq!(ts[0].origin.language, "tr");
+    let segs = lib.write(|c| transcripts::segments(c, &ts[0].id).unwrap());
+    // Two segments per part (the zero-length one is dropped), in order.
+    assert_eq!(segs.len(), 2 * runs.len());
+    assert_eq!(segs[0].start_ms, 0);
+    assert_no_repeats(&segs, ts[0].covered_ms.unwrap());
+    // The parts' lengths add up to the recording.
+    let total: i64 = runs
+        .iter()
+        .map(|r| r.split(' ').next().unwrap().parse::<i64>().unwrap())
+        .sum();
+    assert!((total - ts[0].covered_ms.unwrap()).abs() <= runs.len() as i64);
+    assert!(staging_is_clean(&lib));
+}
+
+#[test]
+fn a_restart_continues_after_the_last_finished_part() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    mode(&lib, "slow-after-1");
+    let job = during_second_part(&lib, &item, |_| {
+        // The app is closed mid-part and opened again (§13.2).
+        mode(&lib, "ok");
+        let now = lib.clock.now_ms();
+        lib.write(|c| jobs::recover(c, now).unwrap());
+    });
+    assert_eq!(lib.job(&job).status, JobStatus::Queued);
+    let cp = checkpoint(&lib, &job).expect("checkpoint kept for the next run");
+    assert_eq!(cp.done, 1);
+    let parts = cp.chunks.len();
+    assert!(parts >= 2);
+    // The first part's text is there, labelled partial.
+    let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1);
+    assert_eq!(ts[0].status, Status::Partial);
+    assert_eq!(ts[0].covered_ms, Some(cp.chunks[0].1));
+    // Next start: only the parts not done run.
+    lib.run();
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    assert_eq!(calls(&lib).len(), 2 + (parts - 1));
+    let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1);
+    assert_eq!(ts[0].status, Status::Ready);
+    let segs = lib.write(|c| transcripts::segments(c, &ts[0].id).unwrap());
+    assert_eq!(segs.len(), 2 * parts, "no part twice, none missing");
+    assert_no_repeats(&segs, ts[0].covered_ms.unwrap());
+    assert!(staging_is_clean(&lib));
+}
+
+#[test]
+fn a_checkpoint_from_other_settings_is_not_used() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    let now = lib.clock.now_ms();
+    let job = lib.write(|c| {
+        transcribe::enqueue(c, &item, MODEL, "auto", now)
+            .unwrap()
+            .id
+    });
+    // Left by a run with another model: says one part is done.
+    let dir = transcribe::staging_dir(&lib.cx().dirs.staging, &job);
+    std::fs::create_dir_all(&dir).unwrap();
+    let stale = transcribe::Checkpoint {
+        version: transcribe::TRANSCRIBE_CONFIG_VERSION,
+        fingerprint: "asset:x:model:other".into(),
+        wav_ms: 3000,
+        chunks: vec![(0, 1500), (1500, 3000)],
+        done: 1,
+        language: Some("en".into()),
+        segments: vec![(0, 1000, "stale".into())],
+    };
+    std::fs::write(
+        dir.join("checkpoint.json"),
+        serde_json::to_vec(&stale).unwrap(),
+    )
+    .unwrap();
+    lib.run();
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    let runs = calls(&lib);
+    assert!(runs[0].ends_with(" auto"), "started over: {runs:?}");
+    let t = lib
+        .write(|c| transcripts::list_for_item(c, &item).unwrap())
+        .remove(0);
+    let segs = lib.write(|c| transcripts::segments(c, &t.id).unwrap());
+    assert!(segs.iter().all(|s| s.text != "stale"));
+    assert_eq!(segs.len(), 2 * runs.len());
+}
+
+#[test]
+fn cancel_keeps_the_text_of_finished_parts_as_partial() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    mode(&lib, "slow-after-1");
+    let job = during_second_part(&lib, &item, |job| {
+        let now = lib.clock.now_ms();
+        lib.write(|c| jobs::cancel(c, job, CancelReason::User, now).unwrap());
+    });
+    assert_eq!(lib.job(&job).status, JobStatus::Canceled);
+    let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1);
+    assert_eq!(ts[0].status, Status::Partial);
+    let covered = ts[0].covered_ms.unwrap();
+    let segs = lib.write(|c| transcripts::segments(c, &ts[0].id).unwrap());
+    assert_eq!(segs.len(), 2);
+    assert!(segs.iter().all(|s| s.end_ms <= covered));
+    assert!(staging_is_clean(&lib));
+}
+
+#[test]
+fn a_failing_part_keeps_the_partial_and_cleans_up() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    mode(&lib, "fail-after-1");
+    let job = transcribe(&lib, &item, "auto");
+    let j = lib.job(&job);
+    assert_eq!(j.status, JobStatus::Failed);
+    assert_eq!(j.error_code.as_deref(), Some("INTERNAL_ERROR"));
+    let ts = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(ts.len(), 1);
+    assert_eq!(ts[0].status, Status::Partial);
+    assert!(staging_is_clean(&lib));
+}
+
+#[test]
+fn a_rerun_never_hides_a_finished_transcript_behind_a_partial() {
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    short_parts(&lib);
+    transcribe(&lib, &item, "auto");
+    let before = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(before[0].status, Status::Ready);
+    let n = lib
+        .write(|c| transcripts::segments(c, &before[0].id).unwrap())
+        .len();
+    clear_calls(&lib);
+    mode(&lib, "slow-after-1");
+    let job = during_second_part(&lib, &item, |job| {
+        let now = lib.clock.now_ms();
+        lib.write(|c| jobs::cancel(c, job, CancelReason::User, now).unwrap());
+    });
+    assert_eq!(lib.job(&job).status, JobStatus::Canceled);
+    let after = lib.write(|c| transcripts::list_for_item(c, &item).unwrap());
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].status, Status::Ready);
+    assert_eq!(
+        lib.write(|c| transcripts::segments(c, &after[0].id).unwrap())
+            .len(),
+        n
+    );
 }

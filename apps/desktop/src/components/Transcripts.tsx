@@ -26,6 +26,13 @@ export function sourceLabel(tr: TranscriptDto): string {
   return t("transcripts.source.imported");
 }
 
+/** Not finished: a partial one says how far it goes (F6.3, AC-23). */
+function statusText(tr: TranscriptDto): string {
+  if (tr.status === "ready") return "";
+  if (tr.status === "partial") return ` · ${t("transcripts.partial", { covered: formatDuration(tr.coveredMs) })}`;
+  return ` · ${tr.status}`;
+}
+
 /** What the open captions job is doing right now, in words. */
 export function captionsJobText(j: JobDto): string {
   if (j.status === "queued") return t("transcripts.job.queued");
@@ -142,7 +149,7 @@ export function Transcripts({ client, itemId }: { client: TranscriptClient & Par
               <div>
                 <strong>{languageName(tr.language)}</strong> <span className="muted small">· {sourceLabel(tr)}</span>
               </div>
-              <div className="muted small">{tn("transcripts.lines", tr.segmentCount)}{tr.status !== "ready" ? ` · ${tr.status}` : ""}</div>
+              <div className="muted small">{tn("transcripts.lines", tr.segmentCount)}{statusText(tr)}</div>
               <div className="row-actions">
                 <button type="button" className="link-button" aria-expanded={shown?.transcript.id === tr.id} onClick={() => void toggle(tr)} data-testid="transcript-show">
                   {shown?.transcript.id === tr.id ? t("transcripts.hide") : t("transcripts.show")}

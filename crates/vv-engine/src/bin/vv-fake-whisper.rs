@@ -5,7 +5,9 @@
 //!
 //! The environment is cleared by `vv-process`, so the scenario comes from a
 //! file `fake-whisper-mode` next to the model (`-m`): `ok` (default),
-//! `silence`, `fail`, `garbage`, `slow`, `beyond`.
+//! `silence`, `fail`, `garbage`, `slow`, `beyond`, `slow-after-1` (the
+//! first run is quick, later ones slow), `fail-after-1`. Each run appends
+//! its WAV's length and `-l` to `fake-whisper-calls` there.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -80,6 +82,22 @@ fn main() {
         fail("expected -oj", 1);
     }
     let ms = wav_ms(&wav);
+    let calls_file = model.with_file_name("fake-whisper-calls");
+    let earlier = std::fs::read_to_string(&calls_file)
+        .map(|s| s.lines().count())
+        .unwrap_or(0);
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&calls_file)
+        .unwrap_or_else(|_| fail("cannot log", 1));
+    let _ = writeln!(log, "{ms} {lang}");
+    let mode = match mode {
+        "slow-after-1" if earlier >= 1 => "slow",
+        "fail-after-1" if earlier >= 1 => "fail",
+        "slow-after-1" | "fail-after-1" => "ok",
+        m => m,
+    };
     if mode == "fail" {
         fail("failed to process audio", 7);
     }

@@ -86,6 +86,9 @@ pub struct WhisperTool {
     pub exe: PathBuf,
     /// The pinned whisper.cpp version, recorded with each transcript.
     pub version: String,
+    /// Length of one part of a long recording ([`crate::transcribe::DEFAULT_CHUNK_MS`];
+    /// tests use short parts).
+    pub chunk_ms: i64,
 }
 
 impl Tools {
@@ -111,6 +114,7 @@ impl Tools {
         let whisper = report.is_ok(ToolId::WhisperCli).then(|| WhisperTool {
             exe: paths.whisper.clone(),
             version: whisper_version.to_owned(),
+            chunk_ms: crate::transcribe::DEFAULT_CHUNK_MS,
         });
         Tools {
             report,

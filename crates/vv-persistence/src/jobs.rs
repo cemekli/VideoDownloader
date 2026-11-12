@@ -616,12 +616,27 @@ pub fn set_checkpoint(
     checkpoint: Option<&str>,
     now: i64,
 ) -> Result<()> {
+    checkpoint_with(c, id, generation, checkpoint, now, |_| Ok(()))
+}
+
+/// [`set_checkpoint`] and the handler's own writes in one transaction, so
+/// a worker that lost its lease writes neither (e.g. a partial transcript
+/// with the checkpoint it belongs to, F6.3).
+pub fn checkpoint_with(
+    c: &mut Connection,
+    id: &str,
+    generation: i64,
+    checkpoint: Option<&str>,
+    now: i64,
+    with: impl FnOnce(&Transaction<'_>) -> Result<()>,
+) -> Result<()> {
     let tx = c.transaction()?;
     held(&tx, id, generation)?;
     tx.execute(
         "UPDATE job SET checkpoint_ref = ?2, updated_at = ?3 WHERE id = ?1",
         params![id, checkpoint, now],
     )?;
+    with(&tx)?;
     tx.commit()?;
     Ok(())
 }

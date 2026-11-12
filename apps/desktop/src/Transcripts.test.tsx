@@ -82,6 +82,29 @@ describe("Details → Transcript", () => {
     expect(container.querySelector("img")).toBeNull();
   });
 
+  it("a partial transcript says how far it goes (F6.3, AC-23)", async () => {
+    const t: TranscriptDto = {
+      id: "p",
+      itemId: LOCAL,
+      language: "tr",
+      provenance: "generated_local",
+      provider: "whisper_cpp",
+      captionKind: null,
+      modelId: "whisper-medium",
+      status: "partial",
+      coveredMs: 600_000,
+      segmentCount: 120,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const client = createFixtureClient();
+    client.listTranscripts = async () => ({ itemId: LOCAL, transcripts: [t], captionsJob: null, canFetchCaptions: false, transcribeJob: null, transcribeModel: null, transcribeElapsedMs: null, local: { ready: false, reason: "no-model", models: [], languages: ["auto", "tr", "en"] } });
+    render(<Transcripts client={client} itemId={LOCAL} />);
+    const row = await screen.findByTestId("transcript-row");
+    expect(row).toHaveTextContent("120 lines · partial, up to 10:00");
+    expect(row).toHaveTextContent("Transcribed on this PC (whisper-medium)");
+  });
+
   it("transcribes a local file on this PC and shows the model as the source (F6.2, AI-A02)", async () => {
     const user = userEvent.setup();
     const client = createFixtureClient();
