@@ -48,8 +48,9 @@ use vv_persistence::transcripts::{self, NewSegment, Origin, Provenance, Status};
 use vv_process::ManagedCommand;
 use vv_ytdlp::outcome::{Exit, Stream};
 
-/// Bumped when what a transcription job writes changes.
-pub const TRANSCRIBE_CONFIG_VERSION: u32 = 1;
+/// Bumped when what a transcription job writes changes (2: segment starts
+/// from DTW word times).
+pub const TRANSCRIBE_CONFIG_VERSION: u32 = 2;
 
 /// Languages the user can ask for; `auto` lets the model detect it.
 /// Turkish and English are the app's focus (AI-A07); other languages work
@@ -148,13 +149,32 @@ pub fn threads() -> usize {
         .clamp(1, 8)
 }
 
+/// whisper.cpp's alignment-heads preset for a catalog model, for
+/// DTW token timestamps (`-dtw`); `None` for a model it has none for.
+pub fn dtw_preset(model_id: &str) -> Option<&'static str> {
+    match model_id {
+        "whisper-tiny" => Some("tiny"),
+        "whisper-base" => Some("base"),
+        "whisper-small" => Some("small"),
+        "whisper-medium" => Some("medium"),
+        _ => None,
+    }
+}
+
 /// whisper-cli argv (without the program). `out_base` gets `.json`.
+///
+/// With a `dtw` preset whisper also writes each token's time from the
+/// attention alignment (`-ojf -dtw`); [`parse_output`] starts a segment at
+/// its first spoken word instead of where whisper's window began (a 5 s
+/// intro was put on the first line at 0:00). whisper.cpp turns DTW off when
+/// flash attention is on, hence `-nfa`.
 pub fn whisper_args(
     model: &Path,
     wav: &Path,
     out_base: &Path,
     language: &str,
     threads: usize,
+    dtw: Option<&str>,
 ) -> Vec<OsString> {
     let threads = threads.to_string();
     let mut v: Vec<OsString> = vec![
@@ -172,6 +192,9 @@ pub fn whisper_args(
         ]
         .map(OsString::from),
     );
+    if let Some(preset) = dtw {
+        v.extend(["-ojf", "-dtw", preset, "-nfa"].map(OsString::from));
+    }
     v.push("-of".into());
     v.push(out_base.as_os_str().to_owned());
     v
@@ -209,6 +232,63 @@ struct RawSegment {
     offsets: RawOffsets,
     #[serde(default)]
     text: String,
+    /// Only with `-ojf`.
+    #[serde(default)]
+    tokens: Vec<RawToken>,
+}
+
+#[derive(Deserialize)]
+struct RawToken {
+    #[serde(default)]
+    text: String,
+    /// DTW time in 10 ms units, -1 when not computed.
+    #[serde(default)]
+    t_dtw: Option<f64>,
+}
+
+/// Where the first spoken word of a segment starts, by DTW, in ms.
+/// whisper's own segment start is off by a second or more either way, so
+/// the word may move it up to [`MAX_EARLIER_MS`] earlier (never before
+/// `floor`, the previous segment's start) or later (never past shortly
+/// before its end). Special tokens (`[_BEG_]`, `[_TT_150]`) and punctuation
+/// are skipped; without a DTW time whisper's start stays.
+fn spoken_start(s: &RawSegment, floor: i64) -> i64 {
+    let (from, to) = (s.offsets.from, s.offsets.to);
+    let word = s
+        .tokens
+        .iter()
+        .find(|t| !t.text.starts_with("[_") && t.text.chars().any(char::is_alphanumeric));
+    match word.and_then(|t| t.t_dtw) {
+        Some(c) if (0.0..1e9).contains(&c) => {
+            let ms = (c * 10.0).round() as i64;
+            let lo = (from - MAX_EARLIER_MS).max(floor).max(0).min(from);
+            let hi = (to - MIN_SEGMENT_MS).max(from);
+            ms.clamp(lo, hi)
+        }
+        _ => from,
+    }
+}
+
+/// A segment keeps at least this much time after its start is moved.
+const MIN_SEGMENT_MS: i64 = 200;
+/// How far before whisper's start a segment's first word may move it.
+const MAX_EARLIER_MS: i64 = 1500;
+
+/// Segments with starts from DTW: each starts at its first word, and one
+/// that now runs into the next ends where the next begins.
+fn aligned(raw: Vec<RawSegment>) -> Vec<NewSegment> {
+    let mut out: Vec<NewSegment> = Vec::with_capacity(raw.len());
+    for s in &raw {
+        let floor = out.last().map_or(0, |p| p.start_ms + MIN_SEGMENT_MS);
+        let start = spoken_start(s, floor);
+        if let Some(p) = out.last_mut() {
+            if p.end_ms > start {
+                p.end_ms = start.max(p.start_ms + 1);
+            }
+        }
+        out.push(NewSegment::new(start, s.offsets.to, s.text.trim()));
+    }
+    out
 }
 
 #[derive(Deserialize)]
@@ -302,9 +382,11 @@ pub fn parse_output(raw: &[u8], asked: &str) -> Result<Output, String> {
         .filter(|s| {
             s.offsets.to > s.offsets.from && !s.text.trim().is_empty() && !is_marker(&s.text)
         })
-        .map(|s| NewSegment::new(s.offsets.from, s.offsets.to, s.text.trim()))
         .collect();
-    Ok(Output { language, segments })
+    Ok(Output {
+        language,
+        segments: aligned(segments),
+    })
 }
 
 /// Where the `data` chunk of a WAV starts and how many bytes it has.
@@ -736,7 +818,14 @@ fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) -> End {
         };
         let out_base = j.dir.join("out");
         let _ = std::fs::remove_file(out_base.with_extension("json"));
-        let args = whisper_args(&model_file, &part, &out_base, asked, threads());
+        let args = whisper_args(
+            &model_file,
+            &part,
+            &out_base,
+            asked,
+            threads(),
+            dtw_preset(&j.model.spec.id),
+        );
         let exit = match run_tool(w, &j.whisper.exe, args, j.dir, |l| {
             if let Some(n) = parse_progress(l) {
                 let pct = (from + (to - from) * n / 100) * 100 / total;
@@ -1129,7 +1218,7 @@ mod tests {
     fn whisper_argv_keeps_paths_whole() {
         let base = if cfg!(windows) { r"C:\a b\x" } else { "/a b/x" };
         let p = |s: &str| PathBuf::from(format!("{base}{s}"));
-        let a = whisper_args(&p("m.bin"), &p("audio.wav"), &p("out"), "tr", 4);
+        let a = whisper_args(&p("m.bin"), &p("audio.wav"), &p("out"), "tr", 4, None);
         let s: Vec<String> = a.into_iter().map(|x| x.into_string().unwrap()).collect();
         assert_eq!(
             s[0..4],
@@ -1145,5 +1234,90 @@ mod tests {
         assert!(s.contains(&"-ng".to_string()) && s.contains(&"-oj".to_string()));
         assert_eq!(s[s.len() - 2..], ["-of".to_string(), format!("{base}out")]);
         assert!((1..=8).contains(&threads()));
+        assert!(!s.contains(&"-dtw".to_string()));
+
+        let d = whisper_args(
+            &p("m"),
+            &p("a"),
+            &p("o"),
+            "en",
+            2,
+            dtw_preset("whisper-medium"),
+        );
+        let d: Vec<String> = d.into_iter().map(|x| x.into_string().unwrap()).collect();
+        assert!(d.windows(2).any(|w| w == ["-dtw", "medium"]));
+        assert!(d.contains(&"-ojf".to_string()) && d.contains(&"-nfa".to_string()));
+        assert_eq!(d[d.len() - 2..], ["-of".to_string(), format!("{base}o")]);
+        assert_eq!(dtw_preset("whisper-large-v3"), None);
+    }
+
+    fn whisper_json(segments: &str) -> Vec<u8> {
+        format!(r#"{{"result": {{"language": "en"}}, "transcription": [{segments}]}}"#).into_bytes()
+    }
+
+    fn seg(from: i64, to: i64, text: &str, first_word_cs: Option<f64>) -> String {
+        let tokens = match first_word_cs {
+            None => String::new(),
+            Some(t) => format!(
+                r#", "tokens": [{{"text": "[_BEG_]", "t_dtw": -1}}, {{"text": ",", "t_dtw": 1}}, {{"text": " {text}", "t_dtw": {t}}}]"#
+            ),
+        };
+        format!(r#"{{"offsets": {{"from": {from}, "to": {to}}}, "text": " {text}"{tokens}}}"#)
+    }
+
+    fn starts(raw: &[u8]) -> Vec<(i64, i64)> {
+        parse_output(raw, "en")
+            .unwrap()
+            .segments
+            .iter()
+            .map(|s| (s.start_ms, s.end_ms))
+            .collect()
+    }
+
+    #[test]
+    fn segments_start_at_their_first_spoken_word() {
+        // The intro: whisper says 0:00, the first word is at 5.02 s.
+        let raw = whisper_json(
+            &[
+                seg(0, 7_000, "This", Some(502.0)),
+                seg(7_000, 9_000, "is", Some(610.0)),
+                seg(9_000, 12_000, "late", Some(1_020.0)),
+            ]
+            .join(","),
+        );
+        // Moved later; moved earlier, at most 1.5 s, and the line before
+        // now ends where it begins.
+        assert_eq!(
+            starts(&raw),
+            [(5_020, 6_100), (6_100, 9_000), (10_200, 12_000)]
+        );
+    }
+
+    #[test]
+    fn dtw_times_stay_inside_bounds() {
+        let raw = whisper_json(
+            &[
+                // Past the end: kept 200 ms before it.
+                seg(0, 1_000, "a", Some(500.0)),
+                // Far earlier than whisper's start: at most 1.5 s earlier, and
+                // not before the previous line's start.
+                seg(10_000, 12_000, "b", Some(0.0)),
+                // No DTW time, or a broken one: whisper's own start.
+                seg(13_000, 14_000, "c", Some(-1.0)),
+                seg(14_000, 15_000, "d", Some(1e300)),
+                seg(15_000, 16_000, "e", None),
+            ]
+            .join(","),
+        );
+        assert_eq!(
+            starts(&raw),
+            [
+                (800, 1_000),
+                (8_500, 12_000),
+                (13_000, 14_000),
+                (14_000, 15_000),
+                (15_000, 16_000)
+            ]
+        );
     }
 }

@@ -1202,3 +1202,25 @@ STATE.md F6.5. SPEC PLAY-06, DATA-11, §8.4 adım 6, AC-22, NFR-10.
 - `apps/desktop/src-tauri/tests/ipc.rs`: `preview_note` sözleşme şekli, gerçek segment zamanı, bilinmeyen segment `INPUT_REJECTED`.
 - `apps/desktop/src/TranscriptPanel.test.tsx` ve Playwright `transcripts.spec.ts`: o anki satır, zaman koduna tıklayınca `currentTime`, seçilen satırlardan not önizlemesi ve kaydetme, dökümsüz öğede panel yok.
 - NFR-10 (±500 ms) gerçek medya ve WebView2 ile Cuma'nın Windows denemesinde ölçülecek; fixture klibi altyazıdan kısa olduğundan e2e yalnızca atlamanın gerçekleştiğini doğrular.
+
+## ADR-0032: Yerel dökümde satır başı ilk kelimenin DTW zamanından
+
+STATE.md F6.5. SPEC NFR-10, PLAY-06, AC-22.
+
+**Bağlam.** Cuma'nın Windows denemesinde (12 Kas, whisper Medium, İngilizce video) konuşmacı ilk cümleyi 5. saniyede söylüyordu ama satır 0:00'da görünüyordu; diğer satırlar 1–1,2 sn kayıyordu. Uygulama zamanı doğru gönderiyordu: sorun whisper.cpp'nin segment zamanlarında. whisper segment başını kendi 30 saniyelik penceresinin zaman damgası belirtecinden alır; bu, sessizliğin ya da önceki cümlenin sonunun başı olabilir ve bir saniyeden fazla iki yöne de kayar. NFR-10 ±500 ms ister.
+
+**Karar.**
+
+- Katalog modellerinde (tiny, base, small, medium) whisper-cli `-ojf -dtw <preset> -nfa` ile çalışır. `-dtw` her belirtecin zamanını modelin hizalama başlıklarından (DTW) hesaplar, `-ojf` bunları JSON'a `tokens[].t_dtw` (10 ms birimi, yoksa -1) olarak yazar. whisper.cpp flash attention açıkken DTW'yi kapattığından `-nfa` gerekir.
+- Satırın başı, ilk gerçek kelimenin (`[_BEG_]` gibi özel belirteçler ve noktalama atlanır) DTW zamanıdır. Sınırlar: whisper'ın başından en çok 1,5 sn önce, önceki satırın başından sonra; satırın sonundan en az 200 ms önce. DTW zamanı yoksa ya da bozuksa whisper'ın kendi başı kalır. Yeni başı önceki satırın sonundan önceyse önceki satır orada biter (çakışma olmaz).
+- Satır sonu whisper'ın sonudur (DTW kelimenin başını verir, sonunu değil).
+- `TRANSCRIBE_CONFIG_VERSION` 2 oldu: eski ayarla yazılmış checkpoint kullanılmaz, aynı öğe için yeniden döküm istenebilir. Var olan dökümlerin zamanları değişmez; yeni zamanlar için döküm yeniden yapılmalı.
+- Alternatif olarak whisper `--vad` (Silero) düşünüldü: sessizliği atlar ama ek model indirmesi ister ve satır içindeki kaymayı düzeltmez. Gerekirse sonra eklenebilir.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-engine/src/transcribe.rs` birim testleri: 5 sn'lik giriş, ileri ve geri kayma, sınırlar, DTW'siz ve bozuk zaman; argv'de `-dtw medium -ojf -nfa`.
+- `tests/transcribe.rs::lines_start_at_their_first_spoken_word`: sahte whisper (`late-words`) ile uçtan uca; sahte whisper `-dtw` görünce `-ojf` ve `-nfa` ister.
+- Windows CI'daki gerçek whisper-cli (tiny) testi yeni bayraklarla çalışır.
+- Flash attention kapalı olduğu için CPU'da döküm biraz yavaşlayabilir; F6.7 ölçümünde not edilir. NFR-10 doğrulaması Cuma'nın aynı videoyu yeniden dökümüyle.
+

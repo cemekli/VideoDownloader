@@ -179,6 +179,26 @@ fn an_end_just_past_the_audio_is_cut_to_it() {
 }
 
 #[test]
+fn lines_start_at_their_first_spoken_word() {
+    // NFR-10: whisper's own segment start can be seconds off; the DTW time
+    // of the first word (`-ojf -dtw tiny`) is where a line starts.
+    let Some((lib, item, _)) = ready_lib() else {
+        return;
+    };
+    mode(&lib, "late-words");
+    let job = transcribe(&lib, &item, "en");
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    let t = lib
+        .write(|c| transcripts::list_for_item(c, &item).unwrap())
+        .remove(0);
+    let segs = lib.write(|c| transcripts::segments(c, &t.id).unwrap());
+    let half = segs[1].start_ms - 400;
+    assert_eq!(segs[0].start_ms, 400);
+    assert_eq!(segs[0].end_ms, half);
+    assert_eq!(segs[1].end_ms, t.covered_ms.unwrap());
+}
+
+#[test]
 fn silence_succeeds_without_a_transcript() {
     let Some((lib, item, _)) = ready_lib() else {
         return;
