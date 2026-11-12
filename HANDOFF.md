@@ -33,15 +33,15 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 - **İlk açılış gecikmesi çözüldü (9 Kas):** taze derlemeden sonra thumbnail'lerin geç gelmesi ve pencerenin bir kez küçülmesi Avast Antivirus'ün taramasıymış; Avast kapalıyken hemen geliyor. Kodda değişiklik gerekmiyor; F4.7 bilinen kısıtlarına not düşülecek.
 - **F5.1 (9 Kas, PR #32, merge edildi):** `crates/vv-secrets` (DPAPI secret store), migration 0012 `auth_profile`, `vv_persistence::auth` (izin kapsamı, kanıt kuralı, clear/delete), canary testi `crates/vv-persistence/tests/auth.rs`, ADR-0022. Arayüz ve masaüstü komutu yok; bunlar F5.2 ile gelir.
 - **Son durum (9 Kas, akşam):** F3 tamamlandı (PR #25–#30). Cuma Windows 11'de YouTube, Facebook, Instagram, TikTok, X, VK ve Twitch VOD ve Dailymotion indirdi; sonuçlar `docs/platform-support.md`'de. Reddit girişsiz engelli (yt-dlp tek başına da `Account authentication is required` diyor).
-- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5, F6.1, F6.2 (47/74).
+- **Tamamlananlar:** F0, F1, F2, F3, F5.1, F5.2, F5.4, F5.5, F6.1, F6.2, F6.4, F6.5 (49/74).
 - **Sıra değişikliği:** F4 (installer, imzalı güncelleme) ertelendi; sıradaki faz **F5 yetkili oturum** (Cuma'nın kararı, 9 Kas).
 - **Uygulamada şu an:** bookmark kaydedilince başlık, kanal, süre ve küçük resim gelir; Download ile dört önayar; Downloads ekranı; canlı yayınlar reddedilir; yerel import thumbnail'leri arka planda, en yeniden başlayarak, paralel yapılır. Bilinen platformlar: YouTube, Facebook, Instagram, TikTok, X, VK, Dailymotion, Twitch, Reddit.
 
 ## Sonraki ilk adımlar
 
-0. **F6.4 elle test (Cuma, release exe).** Dökümü olan bir videoda (site altyazısı ya da yerel) dökümde geçen bir kelimeyi arama kutusuna yaz. Kart bulunmalı ve satırda zaman kodu görünmeli. Kartı aç → Details → "Said in the video" → bir ana tıkla: video o saniyeden başlamalı (±1 sn). Türkçe bir kelimeyi büyük harfle (ör. `ISIK`) ara: yine bulmalı.
-0. **Zaman kayması düzeltmesi (ADR-0032) elle test (Cuma, release exe).** Merge'den sonra 12 Kas'ta denenen İngilizce videoyu aynı modelle yeniden dök (Transcribe on this PC). İlk satır konuşmanın başladığı saniyede (yaklaşık 0:05) olmalı; panelde satırlara tıklayınca ses ile metin arasındaki fark yarım saniyeyi geçmemeli. Dökümün eskisinden belirgin yavaş olup olmadığını not et.
-0. **F6.5 elle test (Cuma, release exe).** Dökümü olan videoyu oynat: sağda döküm paneli açılmalı, o an söylenen satır işaretli olmalı. Bir satırın zaman koduna tıkla: video o satırın başından oynamalı; sesle metnin farkı yarım saniyeyi geçmemeli (NFR-10). İki satır seç → "Export note…" → önizleme → "Save as…": `.md` dosyası başlık, kaynak bağlantısı, notların ve seçilen iki an (zaman sırasıyla) ile kaydedilmeli.
+0. ~~F6.4 elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
+0. ~~Zaman kayması düzeltmesi (ADR-0032) elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
+0. ~~F6.5 elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
 0. ~~F6.2 yerel transkripsiyon elle test~~: yapıldı (11 Kas, Cuma), süreler STATE F6.7'de. Kalan F6.7 işi: aynı TR ve bir EN videoda modellerin metin kalitesini karşılaştırmak (Türkçe karakter, özel isim, noktalama).
 0. **F6.3 elle test (Cuma, release exe).** 20 dakikadan uzun bir video seç → "Transcribe on this PC" (Small ya da Medium). İlk parça (~10 dk ses) bitince döküm satırında "partial, up to …" görünmeli ve metin açılabilmeli. Sonra uygulamayı kapat ve yeniden aç: iş kendiliğinden devam etmeli, yüzde ilk parçanın sonundan başlamalı. Bitince satır "partial" olmadan görünmeli ve parça sınırında tekrar eden ya da eksik cümle olmamalı. Bir kez de ikinci parçada Cancel'a bas: ilk parçanın metni "partial" olarak kalmalı.
 
