@@ -200,7 +200,7 @@ export const en = {
   "ai.transcriber.unavailable": "Not available on this system",
   "ai.cpu.title": "Processor use while transcribing",
   "ai.cpu.light": "Light: 2 threads, slowest, the PC stays free",
-  "ai.cpu.balanced": "Balanced: half of the threads",
+  "ai.cpu.balanced": "Balanced: half of Full",
   "ai.cpu.full": "Full: all threads but one, fastest",
   "ai.cpu.threads": "Uses {threads} of {cores} threads, at low priority so other programs come first.",
   "ai.queue.title": "Transcriptions",

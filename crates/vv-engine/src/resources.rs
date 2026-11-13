@@ -149,13 +149,14 @@ pub use vv_persistence::settings::CpuUse;
 
 /// Threads whisper.cpp gets under `u` on `cores` logical processors:
 /// `Full` is all cores but one, at most 8 (F6.2's measured speeds; it
-/// gains little beyond that on a CPU), `Balanced` half the cores, `Light`
-/// two.
+/// gains little beyond that on a CPU), `Balanced` half of `Full` (rounded
+/// up; half the *cores* was also 8 on a 24-thread PC, the same as `Full`:
+/// Cuma, 13 Nov 2026), `Light` two.
 pub fn threads(u: CpuUse, cores: usize) -> usize {
     let full = cores.saturating_sub(1).clamp(1, 8);
     match u {
         CpuUse::Light => full.min(2),
-        CpuUse::Balanced => (cores / 2).clamp(1, full),
+        CpuUse::Balanced => full.div_ceil(2),
         CpuUse::Full => full,
     }
 }
@@ -234,7 +235,9 @@ mod tests {
     #[test]
     fn cpu_use_threads() {
         assert_eq!(threads(CpuUse::Full, 16), 8);
-        assert_eq!(threads(CpuUse::Balanced, 16), 8);
+        assert_eq!(threads(CpuUse::Balanced, 16), 4);
+        assert_eq!(threads(CpuUse::Balanced, 24), 4);
+        assert_eq!(threads(CpuUse::Full, 24), 8);
         assert_eq!(threads(CpuUse::Balanced, 8), 4);
         assert_eq!(threads(CpuUse::Light, 8), 2);
         assert_eq!(threads(CpuUse::Full, 4), 3);

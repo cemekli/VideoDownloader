@@ -240,7 +240,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 | F6.4 | Segment doğrulama, transkript FTS, gruplanmış sonuçlar | SEA-06, §16.2 | AC-22, NFR-04 | ✅ Cuma Windows'ta denedi (12 Kas): dökümde arama, an listesi ve o saniyeden oynatma çalışıyor. Arama kutusu dökümleri de arar (`ready`/`partial`), anlar öğe altında tek dökümden gruplanır (ilk 5 + toplam), her an eşleşen kelimenin segment başlangıcıyla; kısmi döküm "searched up to" der; tıklayınca `get_moment` yeniden denetler ve oynatıcı o saniyeden başlar. 100.000 segmentte p95 85 ms (bulut, release). ADR-0030. |
 | F6.5 | Transkript paneli, zaman koduna gitme, not dışa aktarma | PLAY-06, DATA-11 | AC-22, NFR-10 | ✅ Cuma Windows'ta denedi (12 Kas, PR #53 sonrası yeniden döküm): satırlar konuşmayla hizalı, not dışa aktarma çalışıyor. Oynatıcı yanında döküm paneli (o anki satır işaretli ve takip ediliyor, zaman koduna tıklayınca o segmentten oynar), satır seçip Markdown not (önizleme + "Save as…"; zamanlar saklı segmentlerden, YouTube'da `&t=` bağlantısı, metin kaçışlı). ADR-0031. 12 Kas denemesinde whisper satır başları 1–5 sn kayıyordu; satır başı artık ilk kelimenin DTW zamanı (ADR-0032). |
 | F6.6 | Kaynak sınırları ve AI Processing ekranı | AI-A05, AI-A06 | düşük bellek senaryosu testi | 🟨 yazıldı: model başına bellek ihtiyacı (tahmin) ve bu bilgisayara uyumu; sığmayan model varsayılan seçilmez, "Use … anyway" olmadan başlamaz (arka uç da `RESOURCE_LIMIT` ile reddeder); ses için disk denetimi; işlemci sınırı (Light/Balanced/Full) ve düşük öncelik; kenar çubuğunda AI Processing (bu bilgisayar, kuyruk ve iptal, modeller); döküm satırında model, sürüm ve durum. ADR-0033. Düşük bellek senaryosu: `crates/vv-engine/tests/low_memory.rs`, `e2e/ai-processing.spec.ts`. ✅ için CI ve Cuma'nın Windows denemesi. |
-| F6.7 | Türkçe/İngilizce kalite ve hız raporu | AI-A07 | ölçüm raporu | 🟨 ölçüm aracı yazıldı: `npm run asr:report` her yerel dökümü yükleyicinin altyazısına (yoksa otomatik altyazı, elle denetlenmiş metin ya da en büyük model) karşı WER, CER, Türkçe harf hatası, noktalama, terimler ve iş süresiyle raporlar; kütüphaneyi salt okur. ADR-0034, adımlar `docs/asr-quality.md`. Hız ölçüldü (Cuma'nın PC'si, CPU, 21:44 video): Tiny 0:49 (~27×), Base 1:20 (~16×), Small 3:29 (~6×), Medium 10:29 (~2×). ✅ için Cuma'nın TR ve EN videoda dört modelle raporu ve Medium bellek ölçümü. |
+| F6.7 | Türkçe/İngilizce kalite ve hız raporu | AI-A07 | ölçüm raporu | ✅ Cuma'nın PC'sinde ölçüldü (13 Kas 2026, `docs/asr-quality.md`, tam rapor `docs/asr-reports/2026-11-13-cuma-pc.md`): bir TR (7:38) ve bir EN (17:31) video, dört model; altyazı olmadığından referans Medium (uyum, doğruluk değil). Medium'dan fark TR: Tiny %35,8, Base %22,9, Small %11,5; EN: %7,6 / %6,0 / %4,1. Gerçek zamanın katı: Tiny 16–21×, Base 10–14×, Small 4–5×, Medium 1,5–1,6×. Medium belleği ~2,5 GB (tahmin 2,7). Araç: `npm run asr:report`, ADR-0034. Ölçüm sırasında bulunan 'ends after the media ends' hatası PR #57 ile düzeltildi. |
 
 **Çıkış kapısı:** SPEC §26.2.
 
@@ -297,12 +297,13 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 Kaldığımız yer ve ilk adımlar: [HANDOFF.md](./HANDOFF.md).
 
-**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1, F5.2, F5.4, F5.5, F6.1, F6.2, F6.4 ve F6.5 de ✅, toplam 49/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026). **F6 başladı** (10 Kas 2026; F5'te kalan elle testler: F5.3, F5.7, VK).
+**F0, F1, F2 ve F3 tamamlandı** (M1 ve M2'nin ilk yarısı bitti); F5.1, F5.2, F5.4, F5.5, F6.1, F6.2, F6.4, F6.5 ve F6.7 de ✅, toplam 50/74. F3: PR #23–#30, ADR-0019…0021; gerçek indirmeler Cuma'nın Windows 11 testleriyle (9 Kas 2026, `docs/platform-support.md`). **F4 ertelendi** (Cuma'nın kararı, 9 Kas 2026). **F6 başladı** (10 Kas 2026; F5'te kalan elle testler: F5.3, F5.7, VK).
 
 ## Değişiklik günlüğü
 
 | Tarih | Değişiklik |
 |---|---|
+| 13 Kas 2026 | F6.7 ✅: Cuma TR ve EN videoyu dört modelle ölçtü; Türkçede küçük modeller Medium'dan çok ayrılıyor (Tiny %36, Small %12), İngilizcede yakın (%4–8); Medium belleği ~2,5 GB. Sonda düşen transkripsiyon düzeltildi (PR #57). |
 | 13 Kas 2026 | F6.7 (🟨): transkripsiyon kalite/hız raporu aracı `npm run asr:report` (`crates/vv-asr-quality`), ölçüm adımları `docs/asr-quality.md`. ADR-0034. |
 | 12 Kas 2026 | F6.6 (🟨): bellek/disk denetimi ve "use it anyway" onayı, işlemci sınırı ve düşük öncelik, AI Processing ekranı, dökümde model/sürüm/durum. ADR-0033. |
 | 12 Kas 2026 | F6.4 ve F6.5 ✅: Cuma Windows'ta dökümde aramayı, paneli, zamana atlamayı (PR #53 DTW düzeltmesinden sonra) ve not dışa aktarmayı doğruladı. |
