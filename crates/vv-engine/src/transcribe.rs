@@ -307,6 +307,29 @@ fn aligned(raw: Vec<RawSegment>) -> Vec<NewSegment> {
     out
 }
 
+/// Makes whisper's lines for one part storable (§11.5): a line that starts
+/// at or after the end of the audio (whisper pads its last 30 s window and
+/// sometimes writes a line there) is dropped, an end past the audio is cut
+/// to it, and a line that starts before the one before it (or before
+/// `floor`, the last stored line of the previous part) starts there
+/// instead. A line left with no time is dropped. Times are in the part's
+/// own milliseconds. Found on Cuma's Turkish video with Small (13 Nov
+/// 2026): the job failed at the end with "transcript not saved"-class
+/// errors from `validate`.
+fn fit_part(segs: Vec<NewSegment>, len_ms: i64, floor: i64) -> Vec<NewSegment> {
+    let mut out: Vec<NewSegment> = Vec::with_capacity(segs.len());
+    for mut s in segs {
+        let min_start = out.last().map_or(floor, |p| p.start_ms.max(floor)).max(0);
+        s.start_ms = s.start_ms.max(min_start);
+        s.end_ms = s.end_ms.min(len_ms);
+        if s.start_ms >= len_ms || s.start_ms >= s.end_ms {
+            continue;
+        }
+        out.push(s);
+    }
+    out
+}
+
 #[derive(Deserialize)]
 struct RawOffsets {
     from: i64,
@@ -906,9 +929,12 @@ fn run_in<S: Store>(w: &Work<'_, S>, j: &Job<'_>) -> End {
             Ok(o) => o,
             Err(e) => return fail(w, ErrorCode::InternalError, Some(&e)),
         };
-        // Checked against the part's own length (ends just past it are cut
-        // to it), then moved to the recording's time.
-        let segs = match transcripts::validate(&out.segments, Some(to - from)) {
+        // Fitted into the part (whisper's last window can run past the end
+        // of the audio, and its lines can start out of order), checked
+        // against the part's own length, then moved to the recording's time.
+        let floor = cp.segments.last().map_or(0, |l| (l.0 - from).max(0));
+        let fitted = fit_part(out.segments, to - from, floor);
+        let segs = match transcripts::validate(&fitted, Some(to - from)) {
             Ok(s) => s,
             Err(e) => return fail(w, ErrorCode::InternalError, Some(&e.to_string())),
         };
@@ -1357,5 +1383,51 @@ mod tests {
                 (15_000, 16_000)
             ]
         );
+    }
+
+    #[test]
+    fn part_lines_are_fitted_before_they_are_checked() {
+        let n = |a, b, t: &str| NewSegment::new(a, b, t);
+        let segs = vec![
+            n(0, 2_000, "bir"),
+            // Starts before the line before it (whisper out of order / DTW).
+            n(1_500, 3_000, "iki"),
+            n(2_500, 2_600, "üç"),
+            // Runs past the end of the audio: cut to it.
+            n(9_000, 11_500, "dört"),
+            // Starts after the audio ends: dropped.
+            n(10_000, 12_000, "beş"),
+        ];
+        let fitted = fit_part(segs, 10_000, 0);
+        let got: Vec<(i64, i64, &str)> = fitted
+            .iter()
+            .map(|s| (s.start_ms, s.end_ms, s.text.as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (0, 2_000, "bir"),
+                (1_500, 3_000, "iki"),
+                (2_500, 2_600, "üç"),
+                (9_000, 10_000, "dört")
+            ]
+        );
+        assert!(transcripts::validate(&fitted, Some(10_000)).is_ok());
+        // Out of order, and a line that ends up with no time.
+        let fitted = fit_part(
+            vec![
+                n(5_000, 6_000, "a"),
+                n(1_000, 4_000, "b"),
+                n(1_000, 7_000, "c"),
+            ],
+            10_000,
+            0,
+        );
+        let got: Vec<(i64, i64)> = fitted.iter().map(|s| (s.start_ms, s.end_ms)).collect();
+        assert_eq!(got, [(5_000, 6_000), (5_000, 7_000)]);
+        assert!(transcripts::validate(&fitted, Some(10_000)).is_ok());
+        // The previous part's last line sets the floor.
+        let fitted = fit_part(vec![n(0, 3_000, "x")], 10_000, 1_000);
+        assert_eq!((fitted[0].start_ms, fitted[0].end_ms), (1_000, 3_000));
     }
 }

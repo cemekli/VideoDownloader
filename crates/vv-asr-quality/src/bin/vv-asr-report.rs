@@ -44,6 +44,19 @@ fn run() -> Result<(), report::Error> {
                 i.name()
             );
         }
+        let failed = report::failed_jobs(&c, 10)?;
+        if !failed.is_empty() {
+            println!("\nFailed transcriptions (newest first):");
+            for f in failed {
+                println!(
+                    "  {}  {}  {}  — {}",
+                    report::model_label(&f.model_id),
+                    f.error_code,
+                    f.message.as_deref().unwrap_or("(no message)"),
+                    f.item
+                );
+            }
+        }
         return Ok(());
     }
     let q = val("--item").ok_or("--item ID|TEXT is required (or `list`)")?;

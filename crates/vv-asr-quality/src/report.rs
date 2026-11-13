@@ -50,7 +50,8 @@ pub fn items_with_local(c: &Connection) -> Result<Vec<Item>, Error> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-/// The item `query` names: its id, or a piece of its address or title
+/// The item `query` names: its id (or its first 6+ characters), or a piece
+/// of its address or title
 /// (case-insensitive), among items with local transcripts.
 pub fn find_item(c: &Connection, query: &str) -> Result<Item, Error> {
     let all = items_with_local(c)?;
@@ -64,6 +65,7 @@ pub fn find_item(c: &Connection, query: &str) -> Result<Item, Error> {
             [&i.url, &i.title]
                 .iter()
                 .any(|f| f.as_deref().is_some_and(|s| s.to_lowercase().contains(&q)))
+                || (q.len() >= 6 && i.id.starts_with(&q))
         })
         .collect();
     match hits.as_slice() {
@@ -255,6 +257,8 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
                 && usable(t)
         })
     };
+    // The model transcript used as reference, if it came to that.
+    let mut ref_model: Option<Transcript> = None;
     let reference = if let Some((text, lang)) = &opts.reference_file {
         Reference {
             kind: RefKind::File(opts.reference_path.clone().unwrap_or_default()),
@@ -289,6 +293,7 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
             .ok_or("no local transcript")?;
         let (segs, raw) = segs_of(c, &best)?;
         local.retain(|t| t.id != best.id);
+        ref_model = Some(best.clone());
         Reference {
             kind: RefKind::Model(model_label(best.origin.model_id.as_deref().unwrap_or("?"))),
             language: best.origin.language.clone(),
@@ -358,6 +363,35 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
         punctuation_per_100_words(&reference.raw, reference.words.len())
             .map_or("—".into(), |p| format!("{p:.1}"))
     )?;
+    if let Some(t) = &ref_model {
+        let model = t.origin.model_id.as_deref().unwrap_or("");
+        let run = run_time(c, &item.id, model, &t.origin.language)?;
+        writeln!(
+            out,
+            "- {} (referans) süresi: {}",
+            model_label(model),
+            match (run, duration) {
+                (Some((ms, _)), Some(d)) if ms > 0 => format!(
+                    "{}, gerçek zamanın {:.1} katı.",
+                    clock(ms),
+                    d as f64 / ms as f64
+                ),
+                (Some((ms, _)), _) => format!("{}.", clock(ms)),
+                _ => "bilinmiyor (işi bulunamadı).".into(),
+            }
+        )?;
+    }
+    if rows.is_empty() {
+        writeln!(
+            out,
+            "\n**Karşılaştırılacak döküm yok.** Bu öğede site altyazısı yok ve yalnız bir model ({}) ile yazıya dökülmüş. \
+             Details → Transcript'te **Get site captions** ile altyazıyı al ve/veya videoyu başka modellerle (Tiny, Base, Small) de yazıya dök, sonra raporu yeniden çalıştır.\n",
+            ref_model
+                .as_ref()
+                .map_or("?".into(), |t| model_label(t.origin.model_id.as_deref().unwrap_or("?")))
+        )?;
+        return Ok(out);
+    }
     if rows.iter().any(|r| r.score.windowed) {
         writeln!(out, "- Uzun metin: 5 dakikalık pencerelerle hizalandı (pencere sınırındaki birkaç kelime iki hata sayılabilir).")?;
     }
@@ -453,4 +487,39 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
     }
     writeln!(out)?;
     Ok(out)
+}
+
+/// A transcription job that ended in an error: what it said.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailedJob {
+    pub item: String,
+    pub model_id: String,
+    pub error_code: String,
+    pub message: Option<String>,
+    pub finished_at: i64,
+}
+
+/// The newest failed transcription jobs (at most `limit`): `asr:report list`
+/// shows them, so a run that failed in the app can be told apart without
+/// opening the database.
+pub fn failed_jobs(c: &Connection, limit: usize) -> Result<Vec<FailedJob>, Error> {
+    let mut st = c.prepare(
+        "SELECT ifnull(i.title, ifnull(i.canonical_url, j.item_id)), j.payload, \
+             ifnull(j.error_code, '?'), j.redacted_error_message, ifnull(j.finished_at, j.updated_at) \
+         FROM job j LEFT JOIN library_item i ON i.id = j.item_id \
+         WHERE j.type = 'transcription' AND j.status = 'failed' \
+         ORDER BY ifnull(j.finished_at, j.updated_at) DESC, j.id LIMIT ?1",
+    )?;
+    let rows = st.query_map([limit as i64], |r| {
+        let payload: String = r.get(1)?;
+        let p: serde_json::Value = serde_json::from_str(&payload).unwrap_or_default();
+        Ok(FailedJob {
+            item: r.get(0)?,
+            model_id: p["model_id"].as_str().unwrap_or("?").to_owned(),
+            error_code: r.get(2)?,
+            message: r.get(3)?,
+            finished_at: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }

@@ -2,7 +2,9 @@
 //! transcripts from two models, the job that made each (ADR-0034).
 
 use rusqlite::params;
-use vv_asr_quality::report::{find_item, item_report, items_with_local, run_time, Options};
+use vv_asr_quality::report::{
+    failed_jobs, find_item, item_report, items_with_local, run_time, Options,
+};
 use vv_persistence::library::repo::{self, LibraryItem};
 use vv_persistence::library::{ItemKind, SourcePlatform};
 use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
@@ -133,11 +135,13 @@ fn report_scores_each_model_against_the_uploader_captions() {
     assert_eq!(items_with_local(&c).unwrap().len(), 1);
     assert_eq!(find_item(&c, "VLOG").unwrap().id, it.id);
     assert!(find_item(&c, "nothing").is_err());
+    assert_eq!(find_item(&c, it.id.get(..8).unwrap()).unwrap().id, it.id);
     assert_eq!(
         run_time(&c, &it.id, "whisper-medium", "tr").unwrap(),
         Some((10_000, 2))
     );
     assert_eq!(run_time(&c, &it.id, "whisper-base", "tr").unwrap(), None);
+    assert!(failed_jobs(&c, 10).unwrap().is_empty());
 
     let opts = Options {
         reference_file: None,
@@ -172,4 +176,73 @@ fn report_scores_each_model_against_the_uploader_captions() {
     assert!(md.contains("| Iğdır | 2 | 0 | 2 |"), "{md}");
     // `İstanbul'dayız`: the suffix still counts.
     assert!(md.contains("| İstanbul | 1 | 1 | 1 |"), "{md}");
+}
+
+#[test]
+fn one_model_and_no_captions_says_what_is_missing() {
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("library.sqlite");
+    let mut db = Database::open(&path, &OpenOptions::default()).unwrap();
+    let mut it = LibraryItem::new(ItemKind::Bookmark, SourcePlatform::Youtube, 1);
+    it.canonical_url = Some("https://www.youtube.com/watch?v=one".into());
+    it.title = Some("Tek model".into());
+    it.duration_ms = Some(30_000);
+    repo::insert_item(db.writer(), &it).unwrap();
+    save(
+        &mut db,
+        &origin(&it.id, Provenance::GeneratedLocal, Some("whisper-medium")),
+        Status::Ready,
+        None,
+        &tr_captions(),
+    );
+    job(&mut db, "j", &it.id, "whisper-medium", "tr", &[(0, 15_000)]);
+    drop(db);
+    let c = vv_persistence::open_reader(&path).unwrap();
+    let opts = Options {
+        reference_file: None,
+        reference_path: None,
+        terms: vec![],
+    };
+    let md = item_report(&c, &find_item(&c, &it.id).unwrap(), &opts).unwrap();
+    assert!(
+        md.contains("- Medium (referans) süresi: 0:15, gerçek zamanın 2.0 katı."),
+        "{md}"
+    );
+    assert!(md.contains("**Karşılaştırılacak döküm yok.**"), "{md}");
+    assert!(md.contains("Get site captions"), "{md}");
+    assert!(!md.contains("| Model |"), "{md}");
+}
+
+#[test]
+fn failed_transcriptions_are_listed_with_their_message() {
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("library.sqlite");
+    let mut db = Database::open(&path, &OpenOptions::default()).unwrap();
+    let mut it = LibraryItem::new(ItemKind::Bookmark, SourcePlatform::Youtube, 1);
+    it.canonical_url = Some("https://www.youtube.com/watch?v=f".into());
+    it.title = Some("Türkçe video".into());
+    repo::insert_item(db.writer(), &it).unwrap();
+    db.writer()
+        .execute(
+            "INSERT INTO job (id, type, item_id, status, payload, idempotency_key, error_code, redacted_error_message, created_at, updated_at, finished_at) \
+             VALUES ('jf', 'transcription', ?1, 'failed', '{\"model_id\":\"whisper-small\",\"language\":\"auto\"}', 'jf', 'INTERNAL_ERROR', 'segment 120: ends after the media ends', 1, 2, 3)",
+            params![it.id],
+        )
+        .unwrap();
+    drop(db);
+    let c = vv_persistence::open_reader(&path).unwrap();
+    let f = failed_jobs(&c, 10).unwrap();
+    assert_eq!(f.len(), 1);
+    assert_eq!(
+        (
+            f[0].item.as_str(),
+            f[0].model_id.as_str(),
+            f[0].error_code.as_str()
+        ),
+        ("Türkçe video", "whisper-small", "INTERNAL_ERROR")
+    );
+    assert_eq!(
+        f[0].message.as_deref(),
+        Some("segment 120: ends after the media ends")
+    );
 }
