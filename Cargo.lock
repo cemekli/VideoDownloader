@@ -4400,6 +4400,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "vv-asr-quality"
+version = "0.0.1"
+dependencies = [
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "vv-fuzz",
+ "vv-persistence",
+ "vv-ytdlp",
+]
+
+[[package]]
 name = "vv-benchdata"
 version = "0.0.1"
 dependencies = [

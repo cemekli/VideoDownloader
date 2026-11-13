@@ -75,6 +75,7 @@ CI (`.github/workflows/ci.yml`) her değişikliği Windows ve Linux'ta bir kez t
 | Alt süreç: temiz ortam, iptal/zaman aşımında ağaç öldürme, çökmede sahipsiz süreç yok | `crates/vv-process/tests/process.rs` (yardımcı: `src/bin/vv-process-helper.rs`) | Çökme testi yalnızca Windows'ta (Job Object); ADR-0008 |
 | Tek süreç ve kütüphane kilidi (INV-13, AC-38) | `crates/vv-persistence/tests/lock.rs` + `apps/desktop/e2e-desktop/single-instance.spec.ts` | E2E her uygulamaya geçici `VV_DATA_DIR` verir; ADR-0008 |
 | Yeni P0 gereksinim, AC ya da manuel test | `docs/coverage.json`, ardından `npm run coverage:write` | Test adı ya da yorumu AC/MT kimliğini taşırsa "Test atfı" sütununda görünür |
+| Transkripsiyon kalite ölçüleri (WER/CER, Türkçe normalleştirme, rapor) | `crates/vv-asr-quality/src/lib.rs`, `tests/report.rs`, `tests/fuzz.rs` | Ölçü değişirse `docs/asr-quality.md`'deki eski sonuçlar yeni yöntemle karşılaştırılamaz: raporda belirt; ADR-0034 |
 | Benchmark veri üreticisi, benchmark'lar | `crates/vv-benchdata/tests/determinism.rs` + `tests/fixtures/benchdata/golden.json` | Üretilen veriyi değiştiren her değişiklik `GENERATOR_VERSION`'ı ve golden hash'leri birlikte günceller; ADR-0009 |
 | Yerel medya protokolü (range, yol sınırı) | `apps/desktop/src-tauri/tests/media_protocol.rs` | ADR-0004 |
 | WebView2 oynatma matrisi (DEC-04) | `apps/desktop/e2e-desktop/playback-matrix.spec.ts` → `test-artifacts/playback-matrix/` | Yalnızca MP4 H.264/AAC zorunlu; diğerleri ölçüm. Yeni format: `make-playback-media.mjs` `MATRIX` satırı |
@@ -137,6 +138,10 @@ SPEC §22 performans hedeflerini **önerilen bütçeler** olarak verir ve M0'da 
 
 BM-01…03 şimdilik prototip `bench_*` tablolarında çalışır, çünkü uygulama şeması F1.1'de gelecek. Veritabanı uygulamanınkiyle aynı biçimde açılır (`vv_persistence::Database`). F4.5'te aynı ölçümler gerçek şemada tekrarlanır. Rapor; tarih, commit, CPU, mantıksal CPU sayısı, RAM, depolama türü, güç modu, işletim sistemi build'i, Rust, Node ve SQLite sürümlerini, veri setinin seed ve hash'ini içerir. Hedef karşılanmazsa sonuç gizlenmez (SPEC §22).
 
+## Transkripsiyon kalitesi
+
+Yerel transkripsiyonun TR/EN kalitesi ve hızı (SPEC AI-A07, AC-21) Cuma'nın bilgisayarında, uygulamanın kendi dökümleriyle ölçülür: `npm run asr:report`. Araç kütüphaneyi salt okunur açar; her yerel dökümü yükleyicinin altyazısına (yoksa otomatik altyazıya, elle denetlenmiş bir metne ya da en büyük modele) karşı WER, CER, Türkçe harf hatası, noktalama, terim sayısı ve iş süresiyle raporlar. Adımlar ve sonuçlar `docs/asr-quality.md`'de, yöntem ADR-0034'te. Ölçüm ayrıntılarının testleri `crates/vv-asr-quality/` altında.
+
 ## Kapsama matrisi
 
 Her P0 gereksinim en az bir AC'ye veya kimlikli bir manuel teste bağlanır (SPEC §25.3). Bağlantılar `docs/coverage.json` dosyasındadır. Aşağıdaki bölümü `npm run coverage:write` üretir; `npm run verify` her çalışmada bağlantısız gereksinim, bilinmeyen kimlik ya da eskimiş tablo bulursa başarısız olur.
@@ -158,7 +163,7 @@ Kapsam: SPEC §7'deki P0 gereksinimler, §5'teki tüm değişmezler (INV) ve §2
 | INV-07 | tüm aşamalar | Arama kaynağı ile sonuç açıklaması tutarlıdır; transkript yokken transkript eşleşmesi gös… | AC-22, AC-41 | `apps/desktop/e2e/transcripts.spec.ts`, `apps/desktop/src/Moments.test.tsx`, `apps/desktop/src/TranscriptPanel.test.tsx`, `crates/vv-persistence/tests/transcript_search.rs` |
 | INV-08 | tüm aşamalar | Webview doğrudan shell, dosya sistemi veya gizli verilere erişmez. | MT-16 | `apps/desktop/e2e-desktop/desktop-shell.spec.ts`, `apps/desktop/src-tauri/tests/ipc.rs` |
 | INV-09 | tüm aşamalar | Çerezler/kimlik bilgileri SQLite, uygulama logları ve taşınabilir yedekte bulunmaz. | AC-18, AC-55 | `crates/vv-engine/tests/engine.rs`, `crates/vv-persistence/tests/auth.rs` |
-| INV-10 | tüm aşamalar | Sahte indirme sayısı, yapay AI puanı, uydurma test veya destek iddiası gösterilemez. | AC-09, AC-21 | `apps/desktop/src-tauri/src/download_commands.rs`, `apps/desktop/src/Downloads.test.tsx`, `crates/vv-engine/src/download.rs`, `crates/vv-engine/tests/engine.rs` |
+| INV-10 | tüm aşamalar | Sahte indirme sayısı, yapay AI puanı, uydurma test veya destek iddiası gösterilemez. | AC-09, AC-21 | `apps/desktop/src-tauri/src/download_commands.rs`, `apps/desktop/src/Downloads.test.tsx`, `crates/vv-asr-quality/src/lib.rs`, `crates/vv-engine/src/download.rs`, `crates/vv-engine/tests/engine.rs` |
 | INV-11 | tüm aşamalar | Kütüphane kaydını kaldırmak ile fiziksel dosyayı silmek ayrı işlemlerdir. | AC-37, AC-53 | `apps/desktop/src-tauri/src/organize_commands.rs`, `apps/desktop/src/Organize.test.tsx` |
 | INV-12 | tüm aşamalar | Kullanıcı notları ve düzeltmeleri, tekrar metadata çekme veya AI çalıştırma ile ezilmez. | AC-13, AC-60 | henüz yok |
 | INV-13 | tüm aşamalar | Aynı kütüphane veritabanını ve iş kuyruğunu aynı anda yalnızca tek bir uygulama süreci aç… | AC-38 | `apps/desktop/e2e-desktop/single-instance.spec.ts`, `apps/desktop/src-tauri/src/commands.rs`, `apps/desktop/src-tauri/src/library.rs`, `crates/vv-persistence/tests/lock.rs`, `crates/vv-process/tests/process.rs` |

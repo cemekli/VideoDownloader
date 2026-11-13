@@ -1,9 +1,10 @@
-# Devir notu — 12 Kasım 2026
+# Devir notu — 13 Kasım 2026
 
 Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya kaldığımız yeri ve ilk adımları özetler; bir sonraki oturum başlarken okunur, iş ilerledikçe güncellenir.
 
 ## Nerede kaldık
 
+- **13 Kas: F6.7 ölçüm aracı yazıldı (🟨, ADR-0034).** `npm run asr:report` uygulamanın kütüphanesini salt okur ve her yerel dökümü (model başına ayrı saklanıyor) yükleyicinin altyazısıyla karşılaştırır: WER, CER, Türkçe harf hataları (ç ğ ı ö ş ü), noktalama, özel isimler (`--terms`), iş süresi ve gerçek zamanın katı. Altyazı yoksa otomatik altyazı, elle denetlenmiş metin (`--reference`) ya da en büyük model referans olur ve rapor bunu söyler. Adımlar ve sonuç tablosu `docs/asr-quality.md`'de. Sıradaki: Cuma'nın TR ve EN videoda ölçümü (aşağıda 0. adım), sonra F6 kapanışı ve F7.
 - **12 Kas akşam: F6.6 yazıldı (🟨, ADR-0033): kaynak sınırları ve AI Processing.** Kenar çubuğunda "AI Processing": bilgisayarın belleği, iş parçacığı sayısı, ses için boş alan, whisper-cli durumu; işlemci kullanımı (Light/Balanced/Full); transkripsiyon kuyruğu ve Cancel; modeller ve her birinin bu bilgisayara sığıp sığmadığı. Details → Transcript'te varsayılan model artık sığan en büyük model; sığmayan model seçilince uyarı çıkar ve "Use … anyway" işaretlenmeden başlamaz. whisper ve FFmpeg düşük öncelikte çalışır. Döküm satırı model ve sürümü gösterir. Sıradaki: F6.7 kalite raporu.
 - **12 Kas: F6.4 yazıldı (🟨, ADR-0030): dökümde arama.** Arama kutusuna videoda söylenen bir kelime yazınca öğe bulunur. Kartta ilk an zaman koduyla görünür (`0:03 … Kadıköy …`). Details'te "Said in the video" bölümü anları listeler; dosyası olan öğede "Play from 0:12" oynatıcıyı o segmentin başından açar. Döküm aramadan sonra değiştiyse uyarı verir. Aynı PR'da F6.5 (🟨, ADR-0031): dökümü olan öğede oynatıcının yanında döküm paneli açılır; o an söylenen satır işaretlenir, zaman koduna tıklayınca video oradan oynar; satırlar seçilip "Export note…" ile Markdown not (önizleme, sonra "Save as…") kaydedilir. Sıradaki: F6.6 (kaynak sınırları ve AI Processing ekranı) ve F6.7 kalite raporu.
 - **11 Kas akşam: F6.2 bitti (✅).** Cuma yerel transkripsiyonu Windows'ta 21:44'lük bir videoda dört modelle çalıştırdı. Süreler: Tiny 0:49, Base 1:20, Small 3:29, Medium 10:29 (CPU). PR #49 ile iş sürerken model adı, geçen/kalan süre ve bitince "Last run: …, took …" görünüyor. Kalite karşılaştırması (F6.7) henüz yapılmadı. F6.3 yazıldı (ADR-0029), Cuma'nın testini bekliyor; sonra F6.4–F6.5 (arama, panel, zaman koduna gitme).
@@ -40,6 +41,7 @@ Projenin ayrıntılı durumu [STATE.md](./STATE.md) dosyasındadır. Bu dosya ka
 
 ## Sonraki ilk adımlar
 
+0. **F6.7 ölçüm (Cuma, release exe).** `docs/asr-quality.md` "Nasıl ölçülür": bir TR ve bir EN video (tercihen yükleyici altyazılı) → Get site captions → Tiny, Base, Small, Medium ile Transcribe (Processor use: Full; Medium'da Görev Yöneticisi'nden `whisper-cli.exe` en yüksek bellek) → `git pull`, `npm run asr:report -- --item "<TR>" --item "<EN>" --terms "…"` → `test-artifacts\asr\report.md`'yi Claude'a gönder. Bu, F6.6'nın (d) adımını da kapsar.
 0. **F6.6 elle test (Cuma, release exe).** (a) Kenar çubuğu → AI Processing: bellek (boş/toplam) Görev Yöneticisi'ndekine yakın mı, whisper-cli "Ready" mi, modellerde "fits this PC" yazıyor mu? (b) Processor use → Light seç, bir videoyu Medium ile yazıya dök: Görev Yöneticisi'nde whisper-cli düşük öncelikte ve iş sürerken bilgisayar rahat kullanılıyor mu; kuyrukta iş görünüyor ve Cancel çalışıyor mu? Süreyi Full ile karşılaştır (F6.7'ye not). (c) Döküm satırında "Model: Medium (whisper.cpp, revision 5359861)" ve "complete" görünmeli. (d) Görev Yöneticisi'nde whisper-cli'nin en yüksek bellek kullanımını not et (tahmin: Medium ~2,7 GB).
 0. ~~F6.4 elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).
 0. ~~Zaman kayması düzeltmesi (ADR-0032) elle test (Cuma, release exe)~~: yapıldı (12 Kas, Cuma).

@@ -1251,3 +1251,26 @@ STATE.md F6.6. SPEC AI-A05, AI-A06, §9.3 (AI Processing), §17.1 (`estimate_res
 - `apps/desktop/src-tauri/tests/ipc.rs`: `get_ai_processing` sözleşme şekli, yol sızmaz, CPU ayarı iş parçacığını değiştirir.
 - UI: `src/AiProcessing.test.tsx`, `src/Transcripts.test.tsx` ("low memory"), `e2e/ai-processing.spec.ts` (`?fixture=low-memory`), axe taraması.
 - Bellek ihtiyacı tahmini F6.7 ölçümünde Cuma'nın bilgisayarında gerçek kullanımla karşılaştırılmalı.
+
+## ADR-0034: Transkripsiyon kalite ve hız raporu (`npm run asr:report`)
+
+STATE.md F6.7. SPEC AI-A07 (kalite ve hız gerçek fixture ile ölçülür, sabit doğruluk/hız sözü verilmez), AC-21 (TR ve EN döküm; kalite ve hız raporlanır), DEC-11 (Whisper modeli ve kaynak sınırları: TR/EN kalite/hız/RAM ölçümü).
+
+**Bağlam.** F6.2'de Cuma 21:44'lük bir videoyu dört modelle yazıya döktü ve süreleri elle not etti. Kaliteyi göz kararı karşılaştırmak tekrarlanamaz: hangi modelin Türkçe harfleri, özel isimleri, noktalamayı ne kadar tuttuğu sayıyla söylenmeli. Bulut ortamı Hugging Face'e erişemiyor ve whisper.cpp Linux ikilisi yayımlamıyor (ADR-0028), yani ölçüm Cuma'nın Windows bilgisayarında, uygulamanın kendi ürettiği dökümlerle yapılmalı. Kütüphane her öğe için model ve dil başına ayrı yerel döküm saklar (`transcript` kimliği: öğe + kaynak + dil + model), sitenin altyazısını da ayrı saklar; işin denemeleri `job_attempt`'te zamanlıdır. Yani ölçüm için gereken her şey zaten veritabanında.
+
+**Karar.**
+
+- Yeni geliştirici aracı `crates/vv-asr-quality` (uygulamaya girmez): `vv-asr-report` ikilisi kütüphaneyi **salt okunur** açar (`vv_persistence::open_reader`; uygulama açık kalabilir), bir öğenin her yerel dökümünü bir referansla karşılaştırır ve Markdown yazar. `scripts/asr-report.mjs` (`npm run asr:report`) kütüphaneyi varsayılan yerinde bulur (`%APPDATA%\dev.videovault.desktop\db\library.sqlite`), release derler, makine açıklamasını ekler (`npm run bench` gibi) ve `test-artifacts/asr/report.md`'ye kaydeder.
+- **Referans** sırası: (1) yükleyicinin kendi altyazısı (`manual`): gerçeğe en yakın, sayılar hatayı ölçer; (2) sitenin otomatik altyazısı: o da bir tanıyıcıdır, sayılar yalnız uyuşmayı ölçer ve rapor bunu söyler; (3) `--reference metin.txt --reference-language tr`: elle denetlenmiş metin (zamanı yoksa kelimeler süreye eşit yayılır); (4) hiçbiri yoksa en büyük modelin dökümü, yalnız modeller arası uyum.
+- **Normalleştirme** (iki taraf aynı): `[Müzik]`, `(alkış)`, `[BLANK_AUDIO]` gibi etiketler ve işaretleme atılır; Türkçede `I` → `ı`, `İ` → `i` (NFD `İ` dahil), İngilizcede `I` → `i`; kesme işareti kelimeyi birleştirir (`Kadıköy'de` → `kadıköyde`, `don't` → `dont`); harf ve rakam dışı her şey kelime sınırıdır. Dil, referansın dilidir.
+- **Ölçüler:** WER (kelime düzeyinde yerine geçen + eksik + fazla / referans kelime); CER (aynısı harf düzeyinde, ek hatalarını daha az cezalandırır); "ç ğ ı ö ş ü hariç" WER (yalnız Türkçe harfi yanlış kelimeler sayılmazsa; fark = Türkçe harf hataları); 100 kelimede noktalama; `--terms` ile verilen isimlerin kaç kez geçtiği (son kelimeye ek gelebilir: `Kadıköy` `Kadıköy'de`'yi de sayar); en sık karışan 10 kelime çifti; işin süresi (denemelerin toplamı, uygulamanın kapalı kaldığı süre sayılmaz) ve gerçek zamanın katı. Kısmi döküm yalnız kapsadığı süreye kadar referansla karşılaştırılır.
+- Hizalama tam Levenshtein'dır; 25 milyon hücreyi (≈ 5 000 × 5 000 kelime, 35–40 dk konuşma) aşan metinler 5 dakikalık pencerelerde hizalanır ve rapor bunu yazar (sınırdaki birkaç kelime iki hata sayılabilir).
+- Bellek kullanımı veritabanında yok: Görev Yöneticisi'nden elle okunur ve `docs/asr-quality.md`'ye yazılır.
+- Rapor bir ölçümdür, ürün iddiası değil: başlığında makine ve "bu videolar ve bu makine içindir" notu vardır (AI-A07, INV-10). Arayüzde doğruluk yüzdesi gösterilmez.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-asr-quality/src/lib.rs` birim testleri: Türkçe/İngilizce küçük harf ve NFD `İ`, etiket ve kesme işareti, her hata türü, Türkçe harf hatası ayrımı, CER < WER ek hatasında, boş taraflar, uzun metinde pencereli hizalama, terim sayımı, noktalama.
+- `crates/vv-asr-quality/tests/report.rs`: gerçek kütüphane dosyasında (migration'larla açılan şema) gerçek TR altyazı fixture'ı referans; iki model, kısmi döküm, iki denemeli iş; tablo, terimler ve karışan kelimeler.
+- `crates/vv-asr-quality/tests/fuzz.rs`: normalleştirme ve hizalama Türkçe harf, birleşik işaret, emoji, kapanmamış parantez ve denetim karakterleriyle panic vermez; aynı metin 0 hata, hata sayısı simetrik.
+- Asıl ölçüm Cuma'nın bilgisayarında: sonuçlar `docs/asr-quality.md`'de.

@@ -21,6 +21,7 @@
     "fixtures:media": "node scripts/make-playback-media.mjs",
     "tools:fetch": "node scripts/fetch-tools.mjs",
     "coverage:write": "node scripts/coverage-matrix.mjs --write",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "asr:report": "node scripts/asr-report.mjs"
   }
 }

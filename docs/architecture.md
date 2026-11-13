@@ -24,6 +24,7 @@ apps/desktop/src-tauri      Tauri 2 kabuğu: komutlar, tek süreç, medya protok
         +-- crates/vv-tools        yönetilen araç manifesti, hash/imza, sürüm ve lisans kontrolü
 
 crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
+crates/vv-asr-quality       transkripsiyon kalite/hız raporu (uygulamaya girmez)
 ```
 
 | Bileşen | Sorumluluk | SPEC modülü (§10.3) | Durum | Karar |
@@ -39,6 +40,7 @@ crates/vv-benchdata         benchmark verisi ve ölçümler (uygulamaya girmez)
 | `vv-netguard` | yt-dlp bağlantılarını port, DNS sonrası IP ve jetonla denetleme | security | Gerçek yt-dlp ile test edildi | ADR-0007 |
 | `vv-tools` | `tools/manifest.json`: sürüm pin, SHA-256, GPG imzası, FFmpeg lisans kontrolü | diagnostics, security | Hazır | ADR-0005, ADR-0006 |
 | `vv-benchdata` | Sürümlü benchmark verisi (10.000 öğe, 100.000 segment) ve BM-01…03 | — (test aracı) | Hazır; uygulamaya girmez | ADR-0009 |
+| `vv-asr-quality` | Yerel dökümleri altyazıya/metne karşı ölçer (WER, CER, Türkçe harf, terimler, süre); `npm run asr:report` | — (ölçüm aracı) | Hazır; uygulamaya girmez, kütüphaneyi salt okur | ADR-0034 |
 | `vv-secrets` | Gizli değerler için işletim sistemi korumalı store (Windows DPAPI), opak `vvsec:` referansı; düz metin backend'i yok | auth | Hazır; `vv-persistence::auth` kullanır, uygulamaya F5.2'de bağlanır | ADR-0022 |
 | `vv-engine` | İş zamanlayıcı ve işçiler: araç kontrolü, metadata, önayarlar, indirme/doğrulama/yerleştirme, kota, `storage_move`; kuyruk `vv-persistence::jobs` | jobs, connectors, storage | Uygulamada çalışıyor | ADR-0019, ADR-0020, ADR-0021 |
 | Import/export, relink | JSON şema, kök eşleme | portability | Yok | F2.5 |

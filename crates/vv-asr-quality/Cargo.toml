@@ -1,0 +1,20 @@
+[package]
+name = "vv-asr-quality"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault transcription quality and speed report (STATE F6.7, SPEC AI-A07, AC-21; ADR-0034). Developer tool, never shipped."
+
+[dependencies]
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+serde_json = "1"
+vv-persistence = { path = "../vv-persistence" }
+
+[dev-dependencies]
+tempfile = "3"
+vv-fuzz = { path = "../vv-fuzz" }
+vv-ytdlp = { path = "../vv-ytdlp" }
+
+[lints]
+workspace = true
