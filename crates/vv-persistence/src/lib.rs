@@ -17,6 +17,7 @@ pub mod portable;
 pub mod restore;
 pub mod settings;
 pub mod transcripts;
+pub mod vectors;
 
 use migrations::{recorded_version, Migration, MigrationError, Migrator, MIGRATIONS};
 use rusqlite::{Connection, OpenFlags};

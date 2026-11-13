@@ -58,12 +58,13 @@ try {
   const rel = await getJson("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest", gh);
   log(`## llama.cpp ${rel.tag_name} (${rel.published_at})`);
   log(rel.html_url);
-  for (const a of rel.assets) {
-    if (/bin-(win-cpu-x64|ubuntu-x64)\.(zip|tar\.gz)$/.test(a.name)) {
-      log(`- ${a.name} size=${a.size} digest=${a.digest ?? "?"} url=${a.browser_download_url}`);
-    }
-  }
-  const want = rel.assets.find((a) => (isWin ? /bin-win-cpu-x64\.zip$/ : /bin-ubuntu-x64\.(zip|tar\.gz)$/).test(a.name));
+  for (const a of rel.assets) log(`- ${a.name} size=${a.size} digest=${a.digest ?? "?"}`);
+  const winRe = /win.*cpu.*x64.*\.zip$/i;
+  const linRe = /ubuntu.*x64.*\.(zip|tar\.gz)$/i;
+  const want = rel.assets
+    .filter((a) => (isWin ? winRe : linRe).test(a.name) && !/vulkan|cuda|rocm|sycl|hip|openvino|kleidi/i.test(a.name))
+    .sort((a, b) => a.size - b.size)[0];
+  log(`picked: ${want?.name} ${want?.browser_download_url}`);
   if (want) {
     const dest = await download(want.browser_download_url, join(work, want.name));
     log(`  downloaded ${want.name}: sha256=${sha256(dest)} size=${statSync(dest).size}`);
@@ -112,8 +113,8 @@ const candidates = [
   { repo: "ggml-org/Qwen3-Embedding-0.6B-GGUF", file: /Q8_0\.gguf$/, kind: "qwen3" },
   { repo: "ggml-org/embeddinggemma-300M-GGUF", file: /Q8_0\.gguf$/, kind: "gemma" },
   { repo: "ggml-org/bge-m3-Q8_0-GGUF", file: /\.gguf$/, kind: "plain" },
-  { repo: "ggml-org/multilingual-e5-small-Q8_0-GGUF", file: /\.gguf$/, kind: "e5" },
-  { repo: "ggml-org/multilingual-e5-base-Q8_0-GGUF", file: /\.gguf$/, kind: "e5" },
+  { repo: "ggml-org/embeddinggemma-2-GGUF", file: /Q8_0\.gguf$/, kind: "gemma" },
+  { repo: "cstr/multilingual-e5-small-GGUF", file: /q8_0\.gguf$/i, kind: "e5" },
 ];
 for (const q of ["multilingual-e5-small gguf", "multilingual-e5-base gguf", "bge-m3 gguf", "Qwen3-Embedding-0.6B gguf", "embeddinggemma gguf"]) {
   try {
