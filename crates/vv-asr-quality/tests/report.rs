@@ -173,3 +173,38 @@ fn report_scores_each_model_against_the_uploader_captions() {
     // `İstanbul'dayız`: the suffix still counts.
     assert!(md.contains("| İstanbul | 1 | 1 | 1 |"), "{md}");
 }
+
+#[test]
+fn one_model_and_no_captions_says_what_is_missing() {
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("library.sqlite");
+    let mut db = Database::open(&path, &OpenOptions::default()).unwrap();
+    let mut it = LibraryItem::new(ItemKind::Bookmark, SourcePlatform::Youtube, 1);
+    it.canonical_url = Some("https://www.youtube.com/watch?v=one".into());
+    it.title = Some("Tek model".into());
+    it.duration_ms = Some(30_000);
+    repo::insert_item(db.writer(), &it).unwrap();
+    save(
+        &mut db,
+        &origin(&it.id, Provenance::GeneratedLocal, Some("whisper-medium")),
+        Status::Ready,
+        None,
+        &tr_captions(),
+    );
+    job(&mut db, "j", &it.id, "whisper-medium", "tr", &[(0, 15_000)]);
+    drop(db);
+    let c = vv_persistence::open_reader(&path).unwrap();
+    let opts = Options {
+        reference_file: None,
+        reference_path: None,
+        terms: vec![],
+    };
+    let md = item_report(&c, &find_item(&c, &it.id).unwrap(), &opts).unwrap();
+    assert!(
+        md.contains("- Medium (referans) süresi: 0:15, gerçek zamanın 2.0 katı."),
+        "{md}"
+    );
+    assert!(md.contains("**Karşılaştırılacak döküm yok.**"), "{md}");
+    assert!(md.contains("Get site captions"), "{md}");
+    assert!(!md.contains("| Model |"), "{md}");
+}

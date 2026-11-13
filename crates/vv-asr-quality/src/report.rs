@@ -255,6 +255,8 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
                 && usable(t)
         })
     };
+    // The model transcript used as reference, if it came to that.
+    let mut ref_model: Option<Transcript> = None;
     let reference = if let Some((text, lang)) = &opts.reference_file {
         Reference {
             kind: RefKind::File(opts.reference_path.clone().unwrap_or_default()),
@@ -289,6 +291,7 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
             .ok_or("no local transcript")?;
         let (segs, raw) = segs_of(c, &best)?;
         local.retain(|t| t.id != best.id);
+        ref_model = Some(best.clone());
         Reference {
             kind: RefKind::Model(model_label(best.origin.model_id.as_deref().unwrap_or("?"))),
             language: best.origin.language.clone(),
@@ -358,6 +361,35 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
         punctuation_per_100_words(&reference.raw, reference.words.len())
             .map_or("—".into(), |p| format!("{p:.1}"))
     )?;
+    if let Some(t) = &ref_model {
+        let model = t.origin.model_id.as_deref().unwrap_or("");
+        let run = run_time(c, &item.id, model, &t.origin.language)?;
+        writeln!(
+            out,
+            "- {} (referans) süresi: {}",
+            model_label(model),
+            match (run, duration) {
+                (Some((ms, _)), Some(d)) if ms > 0 => format!(
+                    "{}, gerçek zamanın {:.1} katı.",
+                    clock(ms),
+                    d as f64 / ms as f64
+                ),
+                (Some((ms, _)), _) => format!("{}.", clock(ms)),
+                _ => "bilinmiyor (işi bulunamadı).".into(),
+            }
+        )?;
+    }
+    if rows.is_empty() {
+        writeln!(
+            out,
+            "\n**Karşılaştırılacak döküm yok.** Bu öğede site altyazısı yok ve yalnız bir model ({}) ile yazıya dökülmüş. \
+             Details → Transcript'te **Get site captions** ile altyazıyı al ve/veya videoyu başka modellerle (Tiny, Base, Small) de yazıya dök, sonra raporu yeniden çalıştır.\n",
+            ref_model
+                .as_ref()
+                .map_or("?".into(), |t| model_label(t.origin.model_id.as_deref().unwrap_or("?")))
+        )?;
+        return Ok(out);
+    }
     if rows.iter().any(|r| r.score.windowed) {
         writeln!(out, "- Uzun metin: 5 dakikalık pencerelerle hizalandı (pencere sınırındaki birkaç kelime iki hata sayılabilir).")?;
     }
