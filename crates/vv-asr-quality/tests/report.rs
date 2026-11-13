@@ -133,6 +133,7 @@ fn report_scores_each_model_against_the_uploader_captions() {
     assert_eq!(items_with_local(&c).unwrap().len(), 1);
     assert_eq!(find_item(&c, "VLOG").unwrap().id, it.id);
     assert!(find_item(&c, "nothing").is_err());
+    assert_eq!(find_item(&c, it.id.get(..8).unwrap()).unwrap().id, it.id);
     assert_eq!(
         run_time(&c, &it.id, "whisper-medium", "tr").unwrap(),
         Some((10_000, 2))

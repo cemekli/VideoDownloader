@@ -50,7 +50,8 @@ pub fn items_with_local(c: &Connection) -> Result<Vec<Item>, Error> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-/// The item `query` names: its id, or a piece of its address or title
+/// The item `query` names: its id (or its first 6+ characters), or a piece
+/// of its address or title
 /// (case-insensitive), among items with local transcripts.
 pub fn find_item(c: &Connection, query: &str) -> Result<Item, Error> {
     let all = items_with_local(c)?;
@@ -64,6 +65,7 @@ pub fn find_item(c: &Connection, query: &str) -> Result<Item, Error> {
             [&i.url, &i.title]
                 .iter()
                 .any(|f| f.as_deref().is_some_and(|s| s.to_lowercase().contains(&q)))
+                || (q.len() >= 6 && i.id.starts_with(&q))
         })
         .collect();
     match hits.as_slice() {
