@@ -66,6 +66,13 @@ jobs:
       # the health checks (ADR-0005, ADR-0006, ADR-0028).
       - name: Fetch and check managed tools
         run: node scripts/fetch-tools.mjs
+      # F7.1 probe (temporary): llama.cpp release and embedding model pins, and
+      # a TR/EN retrieval run with the real llama-embedding on Linux.
+      - name: Embedding probe (F7.1, temporary)
+        continue-on-error: true
+        run: node scripts/embedding-probe.mjs --bench
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       # Transcription model pins (F6.1, ADR-0026): the Hugging Face listing at the
       # pinned commit still gives the pinned SHA-256/size, and the Tiny model
       # downloaded end to end matches both that and whisper.cpp's published SHA-1.
