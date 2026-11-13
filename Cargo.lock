@@ -4406,6 +4406,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "tempfile",
+ "vv-engine",
  "vv-fuzz",
  "vv-persistence",
  "vv-ytdlp",
