@@ -488,3 +488,38 @@ pub fn item_report(c: &Connection, item: &Item, opts: &Options) -> Result<String
     writeln!(out)?;
     Ok(out)
 }
+
+/// A transcription job that ended in an error: what it said.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailedJob {
+    pub item: String,
+    pub model_id: String,
+    pub error_code: String,
+    pub message: Option<String>,
+    pub finished_at: i64,
+}
+
+/// The newest failed transcription jobs (at most `limit`): `asr:report list`
+/// shows them, so a run that failed in the app can be told apart without
+/// opening the database.
+pub fn failed_jobs(c: &Connection, limit: usize) -> Result<Vec<FailedJob>, Error> {
+    let mut st = c.prepare(
+        "SELECT ifnull(i.title, ifnull(i.canonical_url, j.item_id)), j.payload, \
+             ifnull(j.error_code, '?'), j.redacted_error_message, ifnull(j.finished_at, j.updated_at) \
+         FROM job j LEFT JOIN library_item i ON i.id = j.item_id \
+         WHERE j.type = 'transcription' AND j.status = 'failed' \
+         ORDER BY ifnull(j.finished_at, j.updated_at) DESC, j.id LIMIT ?1",
+    )?;
+    let rows = st.query_map([limit as i64], |r| {
+        let payload: String = r.get(1)?;
+        let p: serde_json::Value = serde_json::from_str(&payload).unwrap_or_default();
+        Ok(FailedJob {
+            item: r.get(0)?,
+            model_id: p["model_id"].as_str().unwrap_or("?").to_owned(),
+            error_code: r.get(2)?,
+            message: r.get(3)?,
+            finished_at: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
