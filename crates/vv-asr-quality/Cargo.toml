@@ -13,6 +13,7 @@ vv-persistence = { path = "../vv-persistence" }
 
 [dev-dependencies]
 tempfile = "3"
+vv-engine = { path = "../vv-engine" }
 vv-fuzz = { path = "../vv-fuzz" }
 vv-ytdlp = { path = "../vv-ytdlp" }
 

@@ -10,6 +10,18 @@ use vv_persistence::library::{ItemKind, SourcePlatform};
 use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
 use vv_persistence::{Database, OpenOptions};
 
+/// The payload as the engine writes it (camelCase), so a rename there fails here.
+#[test]
+fn job_payload_matches_the_engine() {
+    let p = serde_json::to_value(vv_engine::transcribe::Payload {
+        model_id: "whisper-small".into(),
+        language: "tr".into(),
+        allow_low_memory: false,
+    })
+    .unwrap();
+    assert_eq!(p["modelId"], "whisper-small");
+}
+
 fn root() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -56,7 +68,7 @@ fn job(db: &mut Database, id: &str, item: &str, model: &str, lang: &str, attempt
     c.execute(
         "INSERT INTO job (id, type, item_id, status, payload, idempotency_key, created_at, updated_at, finished_at) \
          VALUES (?1, 'transcription', ?2, 'succeeded', ?3, ?1, 1, 1, ?4)",
-        params![id, item, format!(r#"{{"model_id":"{model}","language":"{lang}"}}"#), attempts.last().unwrap().1],
+        params![id, item, format!(r#"{{"modelId":"{model}","language":"{lang}","allowLowMemory":false}}"#), attempts.last().unwrap().1],
     )
     .unwrap();
     for (n, (s, e)) in attempts.iter().enumerate() {
@@ -225,7 +237,7 @@ fn failed_transcriptions_are_listed_with_their_message() {
     db.writer()
         .execute(
             "INSERT INTO job (id, type, item_id, status, payload, idempotency_key, error_code, redacted_error_message, created_at, updated_at, finished_at) \
-             VALUES ('jf', 'transcription', ?1, 'failed', '{\"model_id\":\"whisper-small\",\"language\":\"auto\"}', 'jf', 'INTERNAL_ERROR', 'segment 120: ends after the media ends', 1, 2, 3)",
+             VALUES ('jf', 'transcription', ?1, 'failed', '{\"modelId\":\"whisper-small\",\"language\":\"auto\"}', 'jf', 'INTERNAL_ERROR', 'segment 120: ends after the media ends', 1, 2, 3)",
             params![it.id],
         )
         .unwrap();

@@ -106,6 +106,12 @@ pub fn model_label(id: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The model a transcription job's payload names (`modelId`, the engine's
+/// camelCase form; `model_id` read too).
+fn payload_model(p: &serde_json::Value) -> Option<&str> {
+    p["modelId"].as_str().or_else(|| p["model_id"].as_str())
+}
+
 /// Run time of the newest finished transcription job for this model and
 /// language: the sum of its attempts (a job resumed after the app closed
 /// has several), and how many attempts.
@@ -125,7 +131,7 @@ pub fn run_time(
     for (id, payload) in jobs {
         let p: serde_json::Value = serde_json::from_str(&payload).unwrap_or_default();
         let lang = p["language"].as_str().unwrap_or("");
-        if p["model_id"].as_str() != Some(model_id) || (lang != language && lang != "auto") {
+        if payload_model(&p) != Some(model_id) || (lang != language && lang != "auto") {
             continue;
         }
         let row: Option<(i64, i64)> = c
@@ -515,7 +521,7 @@ pub fn failed_jobs(c: &Connection, limit: usize) -> Result<Vec<FailedJob>, Error
         let p: serde_json::Value = serde_json::from_str(&payload).unwrap_or_default();
         Ok(FailedJob {
             item: r.get(0)?,
-            model_id: p["model_id"].as_str().unwrap_or("?").to_owned(),
+            model_id: payload_model(&p).unwrap_or("?").to_owned(),
             error_code: r.get(2)?,
             message: r.get(3)?,
             finished_at: r.get(4)?,
