@@ -134,6 +134,7 @@ fn no_tools() -> Tools {
         media: None,
         ytdlp_version: String::new(),
         whisper: None,
+        embedder: None,
     }
 }
 

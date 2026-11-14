@@ -8,6 +8,7 @@
 //! - [`download`]: download, merge, verification, staging → final (F3.6).
 //! - [`captions`]: the site's own captions as a transcript (F6.2).
 //! - [`transcribe`]: local transcription with whisper.cpp (F6.2).
+//! - [`embed`]: search by meaning, the embedding index (F7.1).
 //! - [`resources`]: memory, disk and CPU limits for local AI work (F6.6).
 //! - [`storage`], [`storage_move`]: quota, usage and moving a root (F3.9).
 //! - [`runtime`]: the scheduler and its worker pools.
@@ -21,6 +22,7 @@ pub mod captions;
 pub mod context;
 pub mod cookiefile;
 pub mod download;
+pub mod embed;
 pub mod formats;
 pub mod metadata;
 pub mod models;

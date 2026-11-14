@@ -200,6 +200,7 @@ fn real_lib(paths: &ToolPaths, test_target: SocketAddr) -> Lib {
         media: media_tools(),
         policy,
         whisper: None,
+        embedder: None,
     })
 }
 

@@ -174,7 +174,10 @@ pub fn activate(c: &Connection, id: &str, now: i64) -> Result<Generation> {
     if g.status == GenerationStatus::Active {
         return Ok(g);
     }
-    c.execute("DELETE FROM embedding_generation WHERE status = 'active'", [])?;
+    c.execute(
+        "DELETE FROM embedding_generation WHERE status = 'active'",
+        [],
+    )?;
     c.execute(
         "UPDATE embedding_generation SET status = 'active', activated_at = ?2 WHERE id = ?1",
         params![id, now],
@@ -295,8 +298,9 @@ pub fn search(c: &Connection, g: &Generation, query: &[f32], k: usize) -> Result
     }
     let mut q = query.to_vec();
     normalize(&mut q)?;
-    let mut st =
-        c.prepare_cached("SELECT chunk_seq, vector FROM chunk_embedding WHERE generation_seq = ?1")?;
+    let mut st = c.prepare_cached(
+        "SELECT chunk_seq, vector FROM chunk_embedding WHERE generation_seq = ?1",
+    )?;
     let mut rows = st.query([g.seq])?;
     let mut top: Vec<Hit> = Vec::with_capacity(k + 1);
     while let Some(r) = rows.next()? {
@@ -315,7 +319,13 @@ pub fn search(c: &Connection, g: &Generation, query: &[f32], k: usize) -> Result
                 .iter()
                 .position(|h| score > h.score)
                 .unwrap_or(top.len());
-            top.insert(at, Hit { chunk_seq: seq, score });
+            top.insert(
+                at,
+                Hit {
+                    chunk_seq: seq,
+                    score,
+                },
+            );
             top.truncate(k);
         }
     }

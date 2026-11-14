@@ -78,6 +78,8 @@ pub struct Tools {
     pub ytdlp_version: String,
     /// whisper.cpp's `whisper-cli`, with its libraries checked (ADR-0028).
     pub whisper: Option<WhisperTool>,
+    /// llama.cpp's `llama-embedding` (F7.1, ADR-0035).
+    pub embedder: Option<crate::embed::EmbedTool>,
 }
 
 /// The local transcriber as a job sees it.
@@ -122,6 +124,7 @@ impl Tools {
             media,
             ytdlp_version: ytdlp_version.to_owned(),
             whisper,
+            embedder: None,
         }
     }
 }

@@ -38,7 +38,8 @@ use vv_persistence::rusqlite::Connection;
 pub const REPOSITORY: &str = "https://huggingface.co/ggerganov/whisper.cpp";
 /// The only repositories embedding model files may come from (F7.1,
 /// ADR-0035): the model authors' own GGUF releases.
-pub const EMBEDDING_REPOSITORIES: &[&str] = &["https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF"];
+pub const EMBEDDING_REPOSITORIES: &[&str] =
+    &["https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF"];
 /// Hosts a download may be redirected to (Hugging Face's CDN and storage).
 pub const REDIRECT_HOSTS: &[&str] = &["huggingface.co", "hf.co"];
 pub const PROVIDER: &str = "whisper_cpp";

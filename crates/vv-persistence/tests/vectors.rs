@@ -95,7 +95,10 @@ fn embedding_models_share_the_consent_table() {
         bad.id = id.into();
         bad.provider = provider.into();
         bad.file_name = file.into();
-        assert!(models::consent(c, &bad, 11).is_err(), "{id} {provider} {file}");
+        assert!(
+            models::consent(c, &bad, 11).is_err(),
+            "{id} {provider} {file}"
+        );
     }
 }
 
