@@ -69,6 +69,7 @@ jobs:
       # F7.1 probe (temporary): llama.cpp release and embedding model pins, and
       # a TR/EN retrieval run with the real llama-embedding on Linux.
       - name: Embedding probe (F7.1, temporary)
+        if: runner.os == 'Linux'
         continue-on-error: true
         run: node scripts/embedding-probe.mjs --bench
         env:

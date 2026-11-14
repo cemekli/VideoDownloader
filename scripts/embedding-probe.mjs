@@ -52,94 +52,94 @@ function sha256(path) {
 }
 
 // ---- 1. llama.cpp release -------------------------------------------------
+// Since the `llama` multi-command binary (b12387, Nov 2026) the release has
+// no `llama-embedding`. Find the newest release that still ships it, by
+// bisecting the releases that have both CPU builds (assumes it was removed
+// once and not brought back), and list both of its CPU archives.
 const gh = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
 let llamaBin = null;
-let llamaPrefix = [];
+const llamaPrefix = [];
+const linRe = /^llama-b\d+-bin-ubuntu-x64\.(zip|tar\.gz)$/;
+const winRe = /^llama-b\d+-bin-win-cpu-x64\.zip$/;
+function unpack(file, dir) {
+  mkdirSync(dir, { recursive: true });
+  if (file.endsWith(".zip")) execFileSync("unzip", ["-o", "-q", file, "-d", dir]);
+  else execFileSync("tar", ["-xzf", file, "-C", dir]);
+  const files = [];
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      const st = statSync(p);
+      if (st.isDirectory()) walk(p);
+      else files.push(p);
+    }
+  };
+  walk(dir);
+  return files;
+}
+const cache = new Map();
+async function hasEmbedding(rel) {
+  if (cache.has(rel.tag_name)) return cache.get(rel.tag_name);
+  const a = rel.assets.find((x) => linRe.test(x.name));
+  const dest = await download(a.browser_download_url, join(work, a.name));
+  const list = execFileSync(a.name.endsWith(".zip") ? "unzip" : "tar", a.name.endsWith(".zip") ? ["-Z1", dest] : ["-tzf", dest], { encoding: "utf8" });
+  const yes = /(^|\/)llama-embedding$/m.test(list);
+  log(`  ${rel.tag_name} (${rel.published_at}): llama-embedding ${yes ? "yes" : "no"}`);
+  cache.set(rel.tag_name, yes);
+  return yes;
+}
 try {
-  // "latest" can be a tag whose builds are not uploaded yet (13 Nov 2026:
-  // v1.0.0 held only nightly-tag.txt): take the newest release with CPU builds.
-  const rels = await getJson("https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15", gh);
-  for (const r of rels) log(`release ${r.tag_name} ${r.published_at} assets=${r.assets.length}`);
-  const rel = rels.find((r) => r.assets.some((a) => /ubuntu.*x64/i.test(a.name)) && r.assets.some((a) => /win.*cpu.*x64/i.test(a.name)));
-  if (!rel) throw new Error("no release with CPU builds");
-  log(`## llama.cpp ${rel.tag_name} (${rel.published_at})`);
+  const rels = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = await getJson(`https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=100&page=${page}`, gh);
+    rels.push(...r);
+    if (r.length < 100) break;
+  }
+  const cpu = rels.filter((r) => !r.draft && !r.prerelease && r.assets.some((a) => linRe.test(a.name)) && r.assets.some((a) => winRe.test(a.name)));
+  log(`## llama.cpp: ${rels.length} releases, ${cpu.length} with both CPU builds, newest ${cpu[0]?.tag_name}, oldest ${cpu.at(-1)?.tag_name}`);
+  // cpu[lo] has no llama-embedding, cpu[hi] has it.
+  let lo = 0;
+  let hi = cpu.length - 1;
+  if (await hasEmbedding(cpu[lo])) hi = lo;
+  else if (!(await hasEmbedding(cpu[hi]))) throw new Error("no listed release has llama-embedding");
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (await hasEmbedding(cpu[mid])) hi = mid;
+    else lo = mid;
+  }
+  const rel = cpu[hi];
+  log(`## llama.cpp ${rel.tag_name} (${rel.published_at}) is the newest with llama-embedding`);
   log(rel.html_url);
-  for (const a of rel.assets) log(`- ${a.name} size=${a.size} digest=${a.digest ?? "?"}`);
-  const winRe = /win.*cpu.*x64.*\.zip$/i;
-  const linRe = /ubuntu.*x64.*\.(zip|tar\.gz)$/i;
-  const want = rel.assets
-    .filter((a) => (isWin ? winRe : linRe).test(a.name) && !/vulkan|cuda|rocm|sycl|hip|openvino|kleidi/i.test(a.name))
-    .sort((a, b) => a.size - b.size)[0];
-  log(`picked: ${want?.name} ${want?.browser_download_url}`);
-  if (want) {
-    const dest = await download(want.browser_download_url, join(work, want.name));
-    log(`  downloaded ${want.name}: sha256=${sha256(dest)} size=${statSync(dest).size}`);
-    const dir = join(work, "llama");
-    mkdirSync(dir, { recursive: true });
-    if (want.name.endsWith(".zip")) {
-      if (isWin) execFileSync("tar", ["-xf", dest, "-C", dir]);
-      else execFileSync("unzip", ["-o", "-q", dest, "-d", dir]);
-    } else execFileSync("tar", ["-xzf", dest, "-C", dir]);
-    const files = [];
-    const walk = (d) => {
-      for (const n of readdirSync(d)) {
-        const p = join(d, n);
-        if (statSync(p).isDirectory()) walk(p);
-        else files.push(p);
-      }
-    };
-    walk(dir);
-    log(`  entries (${files.length}):`);
+  for (const pat of [linRe, winRe]) {
+    const a = rel.assets.find((x) => pat.test(x.name));
+    const dest = await download(a.browser_download_url, join(work, a.name));
+    log(`### ${a.name} ${a.browser_download_url} sha256=${sha256(dest)} size=${statSync(dest).size} digest=${a.digest ?? "?"}`);
+    const dir = join(work, pat === linRe ? "llama" : "llama-win");
+    const files = unpack(dest, dir);
     for (const f of files) {
       const rel2 = f.slice(dir.length + 1).replaceAll("\\", "/");
+      if (pat === winRe && !/\.(dll|exe)$/i.test(rel2) && !/LICENSE/i.test(rel2)) continue;
+      if (pat === winRe && /\.exe$/i.test(rel2) && !/llama-embedding\.exe$/i.test(rel2)) continue;
       log(`    ${rel2} size=${statSync(f).size} sha256=${sha256(f)}`);
     }
-    // Executables (no .so/.dll): their help, to see how embeddings are made now.
-    for (const f of files) {
-      const base = f.split(/[\\/]/).pop();
-      if (/\.(so[.0-9]*|dll|txt|md|json|h|a|lib)$|LICENSE/i.test(base)) continue;
-      if (!/^llama-(server|cli)$/.test(base)) continue;
-      if (!isWin) execFileSync("chmod", ["+x", f]);
+    if (pat === linRe) llamaBin = files.find((f) => /[\\/]llama-embedding$/.test(f)) ?? null;
+  }
+  if (llamaBin) {
+    execFileSync("chmod", ["+x", llamaBin]);
+    const env = { ...process.env, LD_LIBRARY_PATH: dirname(llamaBin) };
+    for (const args of [["--version"], ["--help"]]) {
       try {
-        const r = execFileSync(f, ["--help"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
-        log(`  --- ${base} --help:\n` + r.split("\n").filter((l) => /embd|embed|pool|usage|subcommand|^\s+[a-z-]+\s{2,}/i.test(l)).slice(0, 60).join("\n"));
+        const r = execFileSync(llamaBin, args, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
+        log(`  --- llama-embedding ${args[0]} (stdout):\n${r.split("\n").filter((l) => args[0] === "--version" || /embd|pool|usage|-m,|threads|ctx-size|batch|warmup/i.test(l)).slice(0, 60).join("\n")}`);
       } catch (e) {
-        const t = ((e.stdout ?? "") + (e.stderr ?? "")).toString();
-        log(`  --- ${base} --help (exit):\n` + t.split("\n").filter((l) => /embd|embed|pool|usage|subcommand|^\s+[a-z-]+\s{2,}/i.test(l)).slice(0, 60).join("\n"));
+        const t = ((e.stdout ?? "") + "\n[stderr]\n" + (e.stderr ?? "")).toString();
+        log(`  --- llama-embedding ${args[0]} (exit ${e.status}):\n${t.split("\n").filter((l) => args[0] === "--version" || /embd|pool|usage|-m,|threads|ctx-size|batch|warmup|version|built/i.test(l)).slice(0, 60).join("\n")}`);
       }
     }
-    llamaBin = files.find((f) => /llama-embedding(\.exe)?$/.test(f)) ?? null;
-    // b12387 has no llama-embedding: look for an `embedding` command of `llama`.
-    const main = files.find((f) => /[\\/]llama(\.exe)?$/.test(f));
-    if (!llamaBin && main) {
-      if (!isWin) execFileSync("chmod", ["+x", main]);
-      for (const a of [["help", "all"], ["embedding", "--help"], ["embd", "--help"]]) {
-        try {
-          const r = execFileSync(main, a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
-          log(`  --- llama ${a.join(" ")}:\n${r.split("\n").slice(0, 80).join("\n")}`);
-        } catch (e) {
-          log(`  --- llama ${a.join(" ")} (exit): ${((e.stdout ?? "") + (e.stderr ?? "")).toString().split("\n").slice(0, 40).join("\n")}`);
-        }
-      }
-      try {
-        execFileSync(main, ["embedding", "--help"], { stdio: "ignore", timeout: 20000 });
-        llamaBin = main;
-        llamaPrefix = ["embedding"];
-      } catch {}
-    }
-    if (llamaBin) {
-      if (!isWin) execFileSync("chmod", ["+x", llamaBin]);
-      try {
-        log("  " + execFileSync(llamaBin, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim());
-      } catch (e) {
-        log(`  --version: ${(e.stderr ?? e.message).toString().trim().split("\n").slice(-3).join(" | ")}`);
-      }
-      if (!isWin) {
-        try {
-          log("  ldd:\n" + execFileSync("ldd", [llamaBin], { encoding: "utf8" }));
-        } catch {}
-      }
-    }
+    try {
+      log("  ldd:\n" + execFileSync("ldd", [llamaBin], { encoding: "utf8", env }));
+    } catch {}
+    process.env.LD_LIBRARY_PATH = dirname(llamaBin);
   }
 } catch (e) {
   log(`llama.cpp: ${e.message}`);
