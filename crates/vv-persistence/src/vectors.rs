@@ -257,8 +257,10 @@ pub fn encode(v: &[f32]) -> Vec<u8> {
 }
 
 pub fn decode(b: &[u8]) -> Vec<f32> {
-    b.chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+    b.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| f32::from_le_bytes(*c))
         .collect()
 }
 
@@ -310,9 +312,11 @@ pub fn search(c: &Connection, g: &Generation, query: &[f32], k: usize) -> Result
             continue;
         }
         let score: f32 = blob
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .zip(&q)
-            .map(|(b, y)| f32::from_le_bytes([b[0], b[1], b[2], b[3]]) * y)
+            .map(|(b, y)| f32::from_le_bytes(*b) * y)
             .sum();
         if top.len() < k || score > top.last().map_or(f32::MIN, |h| h.score) {
             let at = top

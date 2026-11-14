@@ -52,13 +52,11 @@ function sha256(path) {
 }
 
 // ---- 1. llama.cpp release -------------------------------------------------
-// Since the `llama` multi-command binary (b12387, Nov 2026) the release has
-// no `llama-embedding`. Find the newest release that still ships it, by
-// bisecting the releases that have both CPU builds (assumes it was removed
-// once and not brought back), and list both of its CPU archives.
+// Since b10878 (Sep 2026) or earlier no release ships `llama-embedding`;
+// embeddings come from `llama-server --embedding`. Pin the newest release:
+// both CPU archives, the server and every library with its SHA-256.
 const gh = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
 let llamaBin = null;
-const llamaPrefix = [];
 const linRe = /^llama-b\d+-bin-ubuntu-x64\.(zip|tar\.gz)$/;
 const winRe = /^llama-b\d+-bin-win-cpu-x64\.zip$/;
 function unpack(file, dir) {
@@ -69,47 +67,17 @@ function unpack(file, dir) {
   const walk = (d) => {
     for (const n of readdirSync(d)) {
       const p = join(d, n);
-      const st = statSync(p);
-      if (st.isDirectory()) walk(p);
+      if (statSync(p).isDirectory()) walk(p);
       else files.push(p);
     }
   };
   walk(dir);
   return files;
 }
-const cache = new Map();
-async function hasEmbedding(rel) {
-  if (cache.has(rel.tag_name)) return cache.get(rel.tag_name);
-  const a = rel.assets.find((x) => linRe.test(x.name));
-  const dest = await download(a.browser_download_url, join(work, a.name));
-  const list = execFileSync(a.name.endsWith(".zip") ? "unzip" : "tar", a.name.endsWith(".zip") ? ["-Z1", dest] : ["-tzf", dest], { encoding: "utf8" });
-  const yes = /(^|\/)llama-embedding$/m.test(list);
-  log(`  ${rel.tag_name} (${rel.published_at}): llama-embedding ${yes ? "yes" : "no"}`);
-  cache.set(rel.tag_name, yes);
-  return yes;
-}
 try {
-  const rels = [];
-  for (let page = 1; page <= 10; page++) {
-    const r = await getJson(`https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=100&page=${page}`, gh);
-    rels.push(...r);
-    if (r.length < 100) break;
-  }
-  const cpu = rels.filter((r) => !r.draft && r.assets.some((a) => linRe.test(a.name)) && r.assets.some((a) => winRe.test(a.name)));
-  log(`## llama.cpp: prerelease flags ${[...new Set(rels.map((r) => r.prerelease))]}; sample assets of ${rels[0]?.tag_name}: ${rels[0]?.assets.map((a) => a.name).slice(0, 5)}`);
-  log(`## llama.cpp: ${rels.length} releases, ${cpu.length} with both CPU builds, newest ${cpu[0]?.tag_name}, oldest ${cpu.at(-1)?.tag_name}`);
-  // cpu[lo] has no llama-embedding, cpu[hi] has it.
-  let lo = 0;
-  let hi = cpu.length - 1;
-  if (await hasEmbedding(cpu[lo])) hi = lo;
-  else if (!(await hasEmbedding(cpu[hi]))) throw new Error("no listed release has llama-embedding");
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (await hasEmbedding(cpu[mid])) hi = mid;
-    else lo = mid;
-  }
-  const rel = cpu[hi];
-  log(`## llama.cpp ${rel.tag_name} (${rel.published_at}) is the newest with llama-embedding`);
+  const rels = await getJson("https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10", gh);
+  const rel = rels.find((r) => !r.draft && r.assets.some((a) => linRe.test(a.name)) && r.assets.some((a) => winRe.test(a.name)));
+  log(`## llama.cpp ${rel.tag_name} (${rel.published_at}) prerelease=${rel.prerelease}`);
   log(rel.html_url);
   for (const pat of [linRe, winRe]) {
     const a = rel.assets.find((x) => pat.test(x.name));
@@ -119,28 +87,29 @@ try {
     const files = unpack(dest, dir);
     for (const f of files) {
       const rel2 = f.slice(dir.length + 1).replaceAll("\\", "/");
-      if (pat === winRe && !/\.(dll|exe)$/i.test(rel2) && !/LICENSE/i.test(rel2)) continue;
-      if (pat === winRe && /\.exe$/i.test(rel2) && !/llama-embedding\.exe$/i.test(rel2)) continue;
+      if (pat === winRe && !/\.dll$|llama-server\.exe$|LICENSE/i.test(rel2)) continue;
+      if (pat === linRe && !/llama-server$|\.so|LICENSE/.test(rel2)) continue;
       log(`    ${rel2} size=${statSync(f).size} sha256=${sha256(f)}`);
     }
-    if (pat === linRe) llamaBin = files.find((f) => /[\\/]llama-embedding$/.test(f)) ?? null;
+    if (pat === linRe) llamaBin = files.find((f) => /[\\/]llama-server$/.test(f)) ?? null;
   }
   if (llamaBin) {
     execFileSync("chmod", ["+x", llamaBin]);
-    const env = { ...process.env, LD_LIBRARY_PATH: dirname(llamaBin) };
+    for (const f of readdirSync(dirname(llamaBin))) if (!f.includes(".")) execFileSync("chmod", ["+x", join(dirname(llamaBin), f)]);
     for (const args of [["--version"], ["--help"]]) {
+      let t;
       try {
-        const r = execFileSync(llamaBin, args, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
-        log(`  --- llama-embedding ${args[0]} (stdout):\n${r.split("\n").filter((l) => args[0] === "--version" || /embd|pool|usage|-m,|threads|ctx-size|batch|warmup/i.test(l)).slice(0, 60).join("\n")}`);
+        const r = execFileSync(llamaBin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
+        t = `(exit 0, stdout)\n${r}`;
       } catch (e) {
-        const t = ((e.stdout ?? "") + "\n[stderr]\n" + (e.stderr ?? "")).toString();
-        log(`  --- llama-embedding ${args[0]} (exit ${e.status}):\n${t.split("\n").filter((l) => args[0] === "--version" || /embd|pool|usage|-m,|threads|ctx-size|batch|warmup|version|built/i.test(l)).slice(0, 60).join("\n")}`);
+        t = `(exit ${e.status})\n${e.stdout ?? ""}\n[stderr]\n${e.stderr ?? ""}`;
       }
+      const keep = args[0] === "--version" ? () => true : (l) => /embd|embed|pool|api-key|--host|--port|webui|parallel|threads|ctx-size|batch|warmup|log-|offline|--path|metrics|slots|props|reuse/i.test(l);
+      log(`  --- llama-server ${args[0]} ${t.split("\n").filter(keep).slice(0, 90).join("\n")}`);
     }
     try {
-      log("  ldd:\n" + execFileSync("ldd", [llamaBin], { encoding: "utf8", env }));
+      log("  ldd:\n" + execFileSync("ldd", [llamaBin], { encoding: "utf8" }));
     } catch {}
-    process.env.LD_LIBRARY_PATH = dirname(llamaBin);
   }
 } catch (e) {
   log(`llama.cpp: ${e.message}`);
@@ -149,20 +118,11 @@ try {
 // ---- 2. candidate models ------------------------------------------------------
 const candidates = [
   { repo: "Qwen/Qwen3-Embedding-0.6B-GGUF", file: /Q8_0\.gguf$/, kind: "qwen3" },
-  { repo: "ggml-org/Qwen3-Embedding-0.6B-GGUF", file: /Q8_0\.gguf$/, kind: "qwen3" },
   { repo: "ggml-org/embeddinggemma-300M-GGUF", file: /Q8_0\.gguf$/, kind: "gemma" },
   { repo: "ggml-org/bge-m3-Q8_0-GGUF", file: /\.gguf$/, kind: "plain" },
   { repo: "ggml-org/embeddinggemma-2-GGUF", file: /Q8_0\.gguf$/, kind: "gemma" },
   { repo: "cstr/multilingual-e5-small-GGUF", file: /q8_0\.gguf$/i, kind: "e5" },
 ];
-for (const q of ["multilingual-e5-small gguf", "multilingual-e5-base gguf", "bge-m3 gguf", "Qwen3-Embedding-0.6B gguf", "embeddinggemma gguf"]) {
-  try {
-    const list = await getJson(`https://huggingface.co/api/models?search=${encodeURIComponent(q.replace(" gguf", ""))}&filter=gguf&sort=downloads&direction=-1&limit=6`);
-    log(`## search '${q}': ${list.map((m) => `${m.id} (${m.downloads ?? "?"})`).join(", ")}`);
-  } catch (e) {
-    log(`## search '${q}': ${e.message}`);
-  }
-}
 const ready = [];
 for (const c of candidates) {
   try {
@@ -188,19 +148,63 @@ const prefixes = {
   e5: { q: (t) => `query: ${t}`, p: (t) => `passage: ${t}` },
   plain: { q: (t) => t, p: (t) => t },
 };
-const SEP = "<#vv-sep#>";
-function embed(model, texts) {
-  const file = join(work, "prompts.txt");
-  writeFileSync(file, texts.join(SEP));
+// One server per model, as the app runs it: loopback, a random port and key.
+import { spawn } from "node:child_process";
+async function startServer(model) {
+  const port = 20000 + Math.floor(Math.random() * 20000);
+  const key = createHash("sha256").update(String(Math.random())).digest("hex");
+  const args = ["-m", model, "--embedding", "--embd-normalize", "2", "--host", "127.0.0.1", "--port", String(port), "--api-key", key, "-c", "1024", "-b", "1024", "-ub", "1024", "-t", "4", "--parallel", "1", "--no-webui"];
+  log(`  start: llama-server ${args.join(" ").replace(key, "<key>")}`);
+  const child = spawn(llamaBin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  let errText = "";
+  child.stdout.on("data", (d) => (errText += d));
+  child.stderr.on("data", (d) => (errText += d));
   const t0 = Date.now();
-  const stdout = execFileSync(
-    llamaBin,
-    [...llamaPrefix, "-m", model, "-f", file, "--embd-separator", SEP, "--embd-output-format", "json", "--embd-normalize", "2", "-c", "2048", "-b", "2048", "-ub", "2048", "-t", "4"],
-    { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] },
-  );
-  const ms = Date.now() - t0;
-  const json = JSON.parse(stdout.slice(stdout.indexOf("{")));
-  return { vecs: json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding), ms };
+  for (;;) {
+    if (child.exitCode !== null) throw new Error(`server exited ${child.exitCode}: ${errText.slice(-1500)}`);
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/health`);
+      const body = await r.text();
+      if (r.status === 200) {
+        log(`  ready in ${Date.now() - t0} ms; /health ${r.status} ${body.slice(0, 200)}; headers ${JSON.stringify([...r.headers])}`);
+        break;
+      }
+    } catch {}
+    if (Date.now() - t0 > 120000) throw new Error(`no health after 120 s: ${errText.slice(-1500)}`);
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  // Without the key, and an unknown route.
+  for (const [path, init] of [["/v1/embeddings", { method: "POST", body: "{}" }], ["/v1/models", {}], ["/props", {}], ["/slots", {}], ["/metrics", {}], ["/", {}]]) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}${path}`, init);
+      log(`  no key ${init.method ?? "GET"} ${path}: ${r.status} ${(await r.text()).slice(0, 160).replace(/\s+/g, " ")}`);
+    } catch (e) {
+      log(`  no key ${path}: ${e.message}`);
+    }
+  }
+  return {
+    child,
+    log: () => errText,
+    async embed(texts) {
+      const t1 = Date.now();
+      const r = await fetch(`http://127.0.0.1:${port}/v1/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ input: texts, encoding_format: "float" }),
+      });
+      const raw = await r.text();
+      if (r.status !== 200) throw new Error(`embeddings ${r.status}: ${raw.slice(0, 500)}`);
+      const j = JSON.parse(raw);
+      if (!this.shown) {
+        this.shown = true;
+        log(`  response headers ${JSON.stringify([...r.headers])}; keys ${Object.keys(j)}; data[0] keys ${Object.keys(j.data[0])}; usage ${JSON.stringify(j.usage)}; dims ${j.data[0].embedding.length}; first ${j.data[0].embedding.slice(0, 3)}`);
+      }
+      return { vecs: j.data.sort((a, b) => a.index - b.index).map((d) => d.embedding), ms: Date.now() - t1 };
+    },
+    stop() {
+      child.kill();
+    },
+  };
 }
 const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
 function norm(v, dims) {
@@ -212,12 +216,25 @@ function norm(v, dims) {
 if (bench && llamaBin && !isWin) {
   const fx = JSON.parse(readFileSync(join(root, "tests", "fixtures", "semantic-tr-en.json"), "utf8"));
   for (const c of ready) {
-    if (c.repo.startsWith("ggml-org/Qwen3") && ready.some((r) => r.repo.startsWith("Qwen/"))) continue;
-    try {
+        try {
       const dest = await download(`https://huggingface.co/${c.repo}/resolve/${c.sha}/${c.path}`, join(work, c.path.split("/").pop()));
       const p = prefixes[c.kind];
-      const P = embed(dest, fx.passages.map((x) => p.p(x.text)));
-      const Q = embed(dest, fx.queries.map((x) => p.q(x.text)));
+      const srv = await startServer(dest);
+      let P, Q;
+      try {
+        P = await srv.embed(fx.passages.map((x) => p.p(x.text)));
+        Q = await srv.embed(fx.queries.map((x) => p.q(x.text)));
+        // A long input: does the server cut it or refuse it?
+        try {
+          await srv.embed(["ş".repeat(5000)]);
+          log("  5000-char input: accepted");
+        } catch (e) {
+          log(`  5000-char input: ${e.message.slice(0, 300)}`);
+        }
+      } finally {
+        log(`  server log tail: ${srv.log().split("\n").filter((l) => /pooling|n_embd|ctx|error|warn|model type|threads/i.test(l)).slice(0, 25).join(" | ")}`);
+        srv.stop();
+      }
       for (const dims of [null, 512, 256]) {
         if (dims && dims >= P.vecs[0].length) continue;
         if (dims && c.kind !== "qwen3" && c.kind !== "gemma") continue; // only MRL-trained models truncate
