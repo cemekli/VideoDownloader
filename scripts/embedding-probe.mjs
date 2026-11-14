@@ -54,6 +54,7 @@ function sha256(path) {
 // ---- 1. llama.cpp release -------------------------------------------------
 const gh = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
 let llamaBin = null;
+let llamaPrefix = [];
 try {
   // "latest" can be a tag whose builds are not uploaded yet (13 Nov 2026:
   // v1.0.0 held only nightly-tag.txt): take the newest release with CPU builds.
@@ -97,7 +98,7 @@ try {
     for (const f of files) {
       const base = f.split(/[\\/]/).pop();
       if (/\.(so[.0-9]*|dll|txt|md|json|h|a|lib)$|LICENSE/i.test(base)) continue;
-      if (!/^llama/.test(base)) continue;
+      if (!/^llama-(server|cli)$/.test(base)) continue;
       if (!isWin) execFileSync("chmod", ["+x", f]);
       try {
         const r = execFileSync(f, ["--help"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
@@ -108,6 +109,24 @@ try {
       }
     }
     llamaBin = files.find((f) => /llama-embedding(\.exe)?$/.test(f)) ?? null;
+    // b12387 has no llama-embedding: look for an `embedding` command of `llama`.
+    const main = files.find((f) => /[\\/]llama(\.exe)?$/.test(f));
+    if (!llamaBin && main) {
+      if (!isWin) execFileSync("chmod", ["+x", main]);
+      for (const a of [["help", "all"], ["embedding", "--help"], ["embd", "--help"]]) {
+        try {
+          const r = execFileSync(main, a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
+          log(`  --- llama ${a.join(" ")}:\n${r.split("\n").slice(0, 80).join("\n")}`);
+        } catch (e) {
+          log(`  --- llama ${a.join(" ")} (exit): ${((e.stdout ?? "") + (e.stderr ?? "")).toString().split("\n").slice(0, 40).join("\n")}`);
+        }
+      }
+      try {
+        execFileSync(main, ["embedding", "--help"], { stdio: "ignore", timeout: 20000 });
+        llamaBin = main;
+        llamaPrefix = ["embedding"];
+      } catch {}
+    }
     if (llamaBin) {
       if (!isWin) execFileSync("chmod", ["+x", llamaBin]);
       try {
@@ -175,7 +194,7 @@ function embed(model, texts) {
   const t0 = Date.now();
   const stdout = execFileSync(
     llamaBin,
-    ["-m", model, "-f", file, "--embd-separator", SEP, "--embd-output-format", "json", "--embd-normalize", "2", "-c", "2048", "-b", "2048", "-ub", "2048", "-t", "4"],
+    [...llamaPrefix, "-m", model, "-f", file, "--embd-separator", SEP, "--embd-output-format", "json", "--embd-normalize", "2", "-c", "2048", "-b", "2048", "-ub", "2048", "-t", "4"],
     { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] },
   );
   const ms = Date.now() - t0;
