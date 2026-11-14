@@ -151,6 +151,7 @@ pub enum EmbedError {
 }
 
 /// Embeds `texts` with one run of the tool. `dir` holds the prompt file.
+#[allow(clippy::too_many_arguments)]
 pub fn embed(
     tool: &EmbedTool,
     model: &Path,

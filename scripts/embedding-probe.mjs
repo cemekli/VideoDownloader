@@ -91,7 +91,21 @@ try {
     log(`  entries (${files.length}):`);
     for (const f of files) {
       const rel2 = f.slice(dir.length + 1).replaceAll("\\", "/");
-      if (/llama-embedding|\.(dll|so[.0-9]*)$|LICENSE/i.test(rel2)) log(`    ${rel2} size=${statSync(f).size} sha256=${sha256(f)}`);
+      log(`    ${rel2} size=${statSync(f).size} sha256=${sha256(f)}`);
+    }
+    // Executables (no .so/.dll): their help, to see how embeddings are made now.
+    for (const f of files) {
+      const base = f.split(/[\\/]/).pop();
+      if (/\.(so[.0-9]*|dll|txt|md|json|h|a|lib)$|LICENSE/i.test(base)) continue;
+      if (!/^llama/.test(base)) continue;
+      if (!isWin) execFileSync("chmod", ["+x", f]);
+      try {
+        const r = execFileSync(f, ["--help"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000 });
+        log(`  --- ${base} --help:\n` + r.split("\n").filter((l) => /embd|embed|pool|usage|subcommand|^\s+[a-z-]+\s{2,}/i.test(l)).slice(0, 60).join("\n"));
+      } catch (e) {
+        const t = ((e.stdout ?? "") + (e.stderr ?? "")).toString();
+        log(`  --- ${base} --help (exit):\n` + t.split("\n").filter((l) => /embd|embed|pool|usage|subcommand|^\s+[a-z-]+\s{2,}/i.test(l)).slice(0, 60).join("\n"));
+      }
     }
     llamaBin = files.find((f) => /llama-embedding(\.exe)?$/.test(f)) ?? null;
     if (llamaBin) {
