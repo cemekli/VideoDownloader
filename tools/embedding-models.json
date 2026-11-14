@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "comment": "Embedding models the app may download for search by meaning, only after the user agrees (SPEC §16.3, §17.1, DEC-12; STATE.md F7.1; ADR-0035). The trust anchor (allowed repositories) is in crates/vv-engine/src/models.rs. sha256/size are pinned from the Hugging Face file listing at `revision` (scripts/model-pins.mjs). The model's authors publish no second hash, so the pinned SHA-256 is the only check.",
+  "provider": "llama_cpp",
+  "repository": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+  "revision": "370f27d7550e0def9b39c1f16d3fbaa13aa67728",
+  "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
+  "models": [
+    {
+      "id": "embed-qwen3-0.6b",
+      "label": "Qwen3 Embedding 0.6B",
+      "file": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "languages": "multilingual (100+ languages, Turkish and English included)",
+      "sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+      "size": 639150592,
+      "upstreamMemoryMb": 1024,
+      "embedding": {
+        "nativeDims": 1024,
+        "dims": 512,
+        "queryPrefix": "Instruct: Given a search query, retrieve relevant passages from video transcripts that answer the query\nQuery:",
+        "passagePrefix": "",
+        "context": 512
+      }
+    }
+  ]
+}

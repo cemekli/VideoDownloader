@@ -34,13 +34,18 @@ use vv_persistence::jobs::{self, Enqueued, JobError, JobKind, Lease, NewJob, Pro
 use vv_persistence::models::{self, Installation, ModelSpec, ModelStatus};
 use vv_persistence::rusqlite::Connection;
 
-/// The only repository model files may come from.
+/// The only repository transcription model files may come from.
 pub const REPOSITORY: &str = "https://huggingface.co/ggerganov/whisper.cpp";
+/// The only repositories embedding model files may come from (F7.1,
+/// ADR-0035): the model authors' own GGUF releases.
+pub const EMBEDDING_REPOSITORIES: &[&str] = &["https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF"];
 /// Hosts a download may be redirected to (Hugging Face's CDN and storage).
 pub const REDIRECT_HOSTS: &[&str] = &["huggingface.co", "hf.co"];
 pub const PROVIDER: &str = "whisper_cpp";
+pub const EMBEDDING_PROVIDER: &str = "llama_cpp";
 const MAX_REDIRECTS: usize = 5;
 const CATALOG_JSON: &str = include_str!("../../../tools/models.json");
+const EMBEDDING_CATALOG_JSON: &str = include_str!("../../../tools/embedding-models.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,12 +65,35 @@ pub struct CatalogModel {
     pub label: String,
     pub file: String,
     pub languages: String,
-    pub sha1: String,
+    /// A second, independent hash where the publisher gives one (whisper.cpp
+    /// lists SHA-1s in its README). Embedding models have none.
+    #[serde(default)]
+    pub sha1: Option<String>,
     pub sha256: Option<String>,
     pub size: Option<i64>,
     /// Memory whisper.cpp's README lists for the model; not our measurement
     /// (AI-A07). F6.6 replaces it with measured values.
     pub upstream_memory_mb: i64,
+    /// Embedding models only: how to use the vectors (F7.1).
+    #[serde(default)]
+    pub embedding: Option<EmbeddingUse>,
+}
+
+/// How an embedding model is run and its vectors kept (ADR-0035).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingUse {
+    /// Length of the model's own output vector.
+    pub native_dims: usize,
+    /// Length kept (Matryoshka-trained models keep their quality when cut;
+    /// equal to `native_dims` otherwise).
+    pub dims: usize,
+    /// Put before a search query (the model's documented instruction).
+    pub query_prefix: String,
+    /// Put before a passage of a transcript.
+    pub passage_prefix: String,
+    /// Tokens a passage may have; longer ones are cut by the tool.
+    pub context: usize,
 }
 
 fn hex(s: &str, len: usize) -> bool {
@@ -79,23 +107,43 @@ impl Catalog {
     /// bare `ggml-*.bin` file names and well-formed hashes.
     pub fn parse(json: &str) -> Result<Catalog, String> {
         let c: Catalog = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if c.schema_version != 1 || c.provider != PROVIDER {
+        let whisper = c.provider == PROVIDER;
+        if c.schema_version != 1 || !(whisper || c.provider == EMBEDDING_PROVIDER) {
             return Err("unsupported catalog".into());
         }
-        if c.repository != REPOSITORY {
+        let repo_ok = if whisper {
+            c.repository == REPOSITORY
+        } else {
+            EMBEDDING_REPOSITORIES.contains(&c.repository.as_str())
+        };
+        if !repo_ok {
             return Err("catalog points outside the allowed repository".into());
         }
         if c.revision.as_deref().is_some_and(|r| !hex(r, 40)) {
             return Err("revision is not a commit id".into());
         }
         for m in &c.models {
-            let name_ok = m.file.starts_with("ggml-")
-                && m.file.ends_with(".bin")
-                && m.file
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.' || b == b'_')
-                && !m.file.contains("..");
-            if !name_ok || !m.id.starts_with("whisper-") || !hex(&m.sha1, 40) {
+            let safe = m
+                .file
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.' || b == b'_')
+                && !m.file.contains("..")
+                && !m.file.starts_with('.');
+            let ok = if whisper {
+                m.file.starts_with("ggml-")
+                    && m.file.ends_with(".bin")
+                    && m.id.starts_with("whisper-")
+                    && m.sha1.as_deref().is_some_and(|h| hex(h, 40))
+                    && m.embedding.is_none()
+            } else {
+                m.file.ends_with(".gguf")
+                    && m.id.starts_with("embed-")
+                    && m.sha1.is_none()
+                    && m.embedding.as_ref().is_some_and(|e| {
+                        (8..=4096).contains(&e.dims) && e.dims <= e.native_dims && e.context >= 64
+                    })
+            };
+            if !safe || !ok {
                 return Err(format!("bad entry {}", m.id));
             }
             if m.sha256.as_deref().is_some_and(|h| !hex(h, 64)) || m.size.is_some_and(|s| s <= 0) {
@@ -125,20 +173,40 @@ impl Catalog {
     }
 }
 
-/// The compiled-in catalog. A broken catalog is a build error caught by the
-/// tests, so here it degrades to "no models".
+fn empty(provider: &str, repository: &str) -> Catalog {
+    Catalog {
+        schema_version: 1,
+        provider: provider.into(),
+        repository: repository.into(),
+        revision: None,
+        license: String::new(),
+        models: Vec::new(),
+    }
+}
+
+/// The compiled-in transcription catalog. A broken catalog is a build error
+/// caught by the tests, so here it degrades to "no models".
 pub fn catalog() -> &'static Catalog {
     static C: OnceLock<Catalog> = OnceLock::new();
+    C.get_or_init(|| Catalog::parse(CATALOG_JSON).unwrap_or_else(|_| empty(PROVIDER, REPOSITORY)))
+}
+
+/// The compiled-in embedding catalog (F7.1, `tools/embedding-models.json`).
+pub fn embedding_catalog() -> &'static Catalog {
+    static C: OnceLock<Catalog> = OnceLock::new();
     C.get_or_init(|| {
-        Catalog::parse(CATALOG_JSON).unwrap_or(Catalog {
-            schema_version: 1,
-            provider: PROVIDER.into(),
-            repository: REPOSITORY.into(),
-            revision: None,
-            license: String::new(),
-            models: Vec::new(),
-        })
+        Catalog::parse(EMBEDDING_CATALOG_JSON)
+            .unwrap_or_else(|_| empty(EMBEDDING_PROVIDER, EMBEDDING_REPOSITORIES[0]))
     })
+}
+
+/// The catalog a model id belongs to.
+pub fn catalog_for(model_id: &str) -> &'static Catalog {
+    if model_id.starts_with("embed-") {
+        embedding_catalog()
+    } else {
+        catalog()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -475,7 +543,10 @@ pub fn fetch_to_part(
 /// The `model_download` job.
 pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
     let fetch = Fetch::new(cx.run_policy());
-    run_with(cx, lease, &fetch, catalog(), &|s| s.source_url.clone())
+    let cat = serde_json::from_value::<DownloadPayload>(lease.job.payload.clone())
+        .map(|p| catalog_for(&p.model_id))
+        .unwrap_or_else(|_| catalog());
+    run_with(cx, lease, &fetch, cat, &|s| s.source_url.clone())
 }
 
 /// [`run`] with the catalog and the download URL given (tests serve the
@@ -569,12 +640,9 @@ pub fn run_with<S: Store>(
             },
             true,
         );
-        let sha1 = cat
-            .model(&spec.id)
-            .map(|m| m.sha1.clone())
-            .unwrap_or_default();
+        let sha1 = cat.model(&spec.id).and_then(|m| m.sha1.clone());
         match hash_file(&part) {
-            Ok((a, b)) if a == spec.sha256 && b == sha1 => {}
+            Ok((a, b)) if a == spec.sha256 && sha1.as_ref().is_none_or(|h| *h == b) => {}
             Ok(_) => {
                 let _ = fs::remove_file(&part);
                 w.end_error(ErrorCode::ChecksumMismatch, None);

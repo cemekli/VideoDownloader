@@ -55,7 +55,12 @@ function sha256(path) {
 const gh = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
 let llamaBin = null;
 try {
-  const rel = await getJson("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest", gh);
+  // "latest" can be a tag whose builds are not uploaded yet (13 Nov 2026:
+  // v1.0.0 held only nightly-tag.txt): take the newest release with CPU builds.
+  const rels = await getJson("https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15", gh);
+  for (const r of rels) log(`release ${r.tag_name} ${r.published_at} assets=${r.assets.length}`);
+  const rel = rels.find((r) => r.assets.some((a) => /ubuntu.*x64/i.test(a.name)) && r.assets.some((a) => /win.*cpu.*x64/i.test(a.name)));
+  if (!rel) throw new Error("no release with CPU builds");
   log(`## llama.cpp ${rel.tag_name} (${rel.published_at})`);
   log(rel.html_url);
   for (const a of rel.assets) log(`- ${a.name} size=${a.size} digest=${a.digest ?? "?"}`);
