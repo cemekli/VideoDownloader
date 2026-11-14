@@ -121,7 +121,7 @@ pub struct Setup {
     pub policy: Policy,
     /// `whisper-cli`; the fake one unless a test sets the real one.
     pub whisper: Option<PathBuf>,
-    /// `llama-embedding`; the fake one unless a test sets the real one.
+    /// `llama-server`; the fake one unless a test sets the real one.
     pub embedder: Option<PathBuf>,
 }
 

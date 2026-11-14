@@ -51,7 +51,7 @@ pub struct SearchIndexDto {
     pub building: Option<IndexDto>,
     /// The open or last index job.
     pub job: Option<JobDto>,
-    /// `llama-embedding` passed its check.
+    /// `llama-server` passed its check.
     pub tool_ready: bool,
     /// The active index was made with the installed model, so searches by
     /// meaning can run (the query needs the same model).

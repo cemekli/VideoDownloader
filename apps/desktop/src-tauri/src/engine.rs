@@ -199,7 +199,7 @@ pub fn recheck_tools(engine: &Engine<AppStore>) {
                 &ffmpeg_build(),
                 &version(vv_tools::ToolId::YtDlp),
                 &version(vv_tools::ToolId::WhisperCli),
-                &version(vv_tools::ToolId::LlamaEmbedding),
+                &version(vv_tools::ToolId::LlamaServer),
             )
         }
         (Some(m), None) => Tools {

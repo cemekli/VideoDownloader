@@ -64,7 +64,7 @@ pub fn parse_whisper_version(stdout: &str) -> Option<Version> {
     Version::parse(line.trim())
 }
 
-/// `llama-embedding --version` prints `version: 6123 (1a2b3c4d)` and a
+/// `llama-server --version` prints `version: 6123 (1a2b3c4d)` and a
 /// `built with ...` line on stderr (llama.cpp `common/arg.cpp`) and exits 0.
 /// llama.cpp numbers its builds; the build is returned as `6123.0.0` so it
 /// compares with [`llama_pinned`].

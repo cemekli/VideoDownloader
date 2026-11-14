@@ -78,7 +78,7 @@ pub struct Tools {
     pub ytdlp_version: String,
     /// whisper.cpp's `whisper-cli`, with its libraries checked (ADR-0028).
     pub whisper: Option<WhisperTool>,
-    /// llama.cpp's `llama-embedding` (F7.1, ADR-0035).
+    /// llama.cpp's `llama-server` (F7.1, ADR-0035).
     pub embedder: Option<crate::embed::EmbedTool>,
 }
 
@@ -120,7 +120,7 @@ impl Tools {
             chunk_ms: crate::transcribe::DEFAULT_CHUNK_MS,
         });
         let embedder = report
-            .is_ok(ToolId::LlamaEmbedding)
+            .is_ok(ToolId::LlamaServer)
             .then(|| crate::embed::EmbedTool {
                 exe: paths.embedder.clone(),
                 version: llama_version.to_owned(),

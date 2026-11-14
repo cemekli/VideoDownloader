@@ -865,7 +865,7 @@ export interface SearchIndexDto {
   building: IndexDto | null;
   /** The open or last index job (`embedding` or `reindex`). */
   job: JobDto | null;
-  /** llama-embedding passed its check. */
+  /** llama-server passed its check. */
   toolReady: boolean;
   /** The active index was made with the installed model, so meaning searches can run. */
   searchable: boolean;

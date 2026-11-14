@@ -1,10 +1,14 @@
 //! Search by meaning: the embedding provider and the index jobs (SPEC §16.3,
 //! DEC-12, AC-24; STATE.md F7.1; ADR-0035).
 //!
-//! - The provider is llama.cpp's `llama-embedding`, a managed tool like
-//!   whisper-cli, with a GGUF model from `tools/embedding-models.json`. One
-//!   run embeds a batch of texts: they go in a file, joined by a separator
-//!   that cannot occur in them, and come back as JSON on stdout.
+//! - The provider is llama.cpp's `llama-server` in embedding mode, a
+//!   managed tool like whisper-cli, with a GGUF model from
+//!   `tools/embedding-models.json`. llama.cpp no longer ships a one-shot
+//!   embedding command, so a job starts one server ([`Server`]): it listens
+//!   on 127.0.0.1 only, on a free port, and answers only requests that carry
+//!   a random key made for that run. The model is loaded once per job; each
+//!   batch is one request. The server is killed with its process tree when
+//!   the job ends, is canceled or the app exits (job object, ADR-0008).
 //! - Vectors are cut to the catalog's `dims` (the model is Matryoshka
 //!   trained) and normalized, then stored by `vv_persistence::vectors`.
 //! - [`request_index`] starts a build or fills the active index. A build
@@ -16,34 +20,40 @@
 
 use crate::context::{Context, Store};
 use crate::models::{self, CatalogModel, EmbeddingUse};
-use crate::proc::{run_streaming, spawn_error_code, StdoutMode};
+use crate::proc::spawn_error_code;
 use crate::resources;
 use crate::worker::{Stop, Work};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 use vv_domain::error::ErrorCode;
 use vv_persistence::jobs::{self, Enqueued, JobError, JobKind, Lease, NewJob, Progress};
 use vv_persistence::models::{self as rows, Installation, ModelStatus};
 use vv_persistence::rusqlite::Connection;
 use vv_persistence::vectors::{self, Generation, GenerationStatus, Producer};
-use vv_process::ManagedCommand;
-use vv_ytdlp::outcome::Exit;
+use vv_process::{Managed, ManagedCommand};
 
-/// Between texts in the prompt file. Removed from the texts first.
-pub const SEPARATOR: &str = "<#vv-sep#>";
-/// Texts per tool run: one model load per batch, and a cancel waits at most
-/// one batch.
+/// Texts per request: a cancel waits at most one batch.
 pub const BATCH: usize = 32;
-/// Largest stdout accepted from one run (32 vectors of 1024 floats as JSON
-/// are about 1 MB).
-const STDOUT_MAX: usize = 64 << 20;
+/// Largest response accepted (32 vectors of 1024 floats as JSON are about
+/// 1 MB).
+const RESPONSE_MAX: u64 = 64 << 20;
+/// Loading the model from disk; a slow disk or antivirus scan can take a while.
+pub const START_TIMEOUT: Duration = Duration::from_secs(180);
+/// One batch on a slow processor with a low limit.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+/// How often a waiting job looks at cancel and at the server process.
+const POLL: Duration = Duration::from_millis(50);
 
-/// `llama-embedding` as a job sees it.
+/// `llama-server` as a job sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmbedTool {
     pub exe: PathBuf,
-    /// The pinned llama.cpp version.
+    /// The pinned llama.cpp build.
     pub version: String,
 }
 
@@ -53,17 +63,16 @@ pub enum Role {
     Passage,
 }
 
-/// The text the model sees: the role's prefix, then the text with the
-/// separator and control characters removed. An empty text becomes one
-/// space (the tool would skip it and shift every vector after it).
+/// The text the model sees: the role's prefix, then the text with control
+/// characters removed and spaces collapsed. An empty text becomes one space
+/// (an empty input is refused by the server).
 /// A chunk is at most `CHUNK_MAX_CHARS` (400) long; a longer text (a single
 /// very long caption line) is cut so a prompt always fits the model context
-/// (`llama-embedding` refuses an input longer than its batch).
+/// (`llama-server` refuses an input longer than its batch).
 pub const PROMPT_MAX_CHARS: usize = 1000;
 
 pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
     let clean: String = text
-        .replace(SEPARATOR, " ")
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
@@ -80,17 +89,28 @@ pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
     }
 }
 
-/// Arguments of one `llama-embedding` run over `prompts` (a file).
-pub fn args(model: &Path, prompts: &Path, u: &EmbeddingUse, threads: usize) -> Vec<OsString> {
+/// Arguments of the embedding server for one job: loopback only, the
+/// given port and key, one slot, no web page, the model's own pooling and
+/// L2-normalized output.
+pub fn server_args(
+    model: &Path,
+    u: &EmbeddingUse,
+    threads: usize,
+    port: u16,
+    key: &str,
+) -> Vec<OsString> {
     let ctx = u.context.to_string();
-    let mut a: Vec<OsString> = vec!["-m".into(), model.into(), "-f".into(), prompts.into()];
+    let mut a: Vec<OsString> = vec!["-m".into(), model.into()];
     for s in [
-        "--embd-separator",
-        SEPARATOR,
-        "--embd-output-format",
-        "json",
+        "--embedding",
         "--embd-normalize",
         "2",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        &port.to_string(),
+        "--api-key",
+        key,
         "-c",
         &ctx,
         "-b",
@@ -99,7 +119,9 @@ pub fn args(model: &Path, prompts: &Path, u: &EmbeddingUse, threads: usize) -> V
         &ctx,
         "-t",
         &threads.to_string(),
-        "--no-warmup",
+        "--parallel",
+        "1",
+        "--no-webui",
     ] {
         a.push(s.into());
     }
@@ -117,17 +139,14 @@ struct OutItem {
     embedding: Vec<f32>,
 }
 
-/// Reads the tool's JSON: exactly `expected` vectors of `native_dims`, in
-/// prompt order, cut to `dims` and normalized.
+/// Reads the server's answer (`/v1/embeddings`): exactly `expected` vectors
+/// of `native_dims`, in input order, cut to `dims` and normalized.
 pub fn parse_output(
-    stdout: &[u8],
+    body: &[u8],
     expected: usize,
     u: &EmbeddingUse,
 ) -> Result<Vec<Vec<f32>>, String> {
-    let text = String::from_utf8_lossy(stdout);
-    let start = text.find('{').ok_or("no JSON on stdout")?;
-    let body = text.get(start..).ok_or("no JSON on stdout")?;
-    let mut out: Out = serde_json::from_str(body.trim_end()).map_err(|e| e.to_string())?;
+    let mut out: Out = serde_json::from_slice(body).map_err(|e| e.to_string())?;
     if out.data.len() != expected {
         return Err(format!("{} vectors for {expected} texts", out.data.len()));
     }
@@ -153,10 +172,222 @@ pub fn parse_output(
 pub enum EmbedError {
     /// Asked to stop (cancel, pause, lost lease).
     Stopped,
+    /// The server stopped before it was ready (tried again once).
+    Exited(String),
     Failed(ErrorCode, String),
 }
 
-/// Embeds `texts` with one run of the tool. `dir` holds the prompt file.
+/// A free port on 127.0.0.1. Another program could take it before the
+/// server binds it; the server then exits and [`Server::start`] tries again.
+fn free_port() -> std::io::Result<u16> {
+    Ok(std::net::TcpListener::bind(("127.0.0.1", 0))?
+        .local_addr()?
+        .port())
+}
+
+fn last_line(log: &Path) -> String {
+    std::fs::read_to_string(log)
+        .unwrap_or_default()
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.chars().take(300).collect())
+        .unwrap_or_default()
+}
+
+/// One embedding server, running until dropped.
+pub struct Server {
+    proc: Managed,
+    base: String,
+    key: String,
+    agent: ureq::Agent,
+    u: EmbeddingUse,
+    log: PathBuf,
+}
+
+impl Server {
+    /// Starts the server for `model` and waits until it has loaded it.
+    /// Its log goes to `dir/server.log`.
+    pub fn start(
+        tool: &EmbedTool,
+        model: &Path,
+        u: &EmbeddingUse,
+        threads: usize,
+        dir: &Path,
+        mut should_stop: impl FnMut() -> bool,
+    ) -> Result<Server, EmbedError> {
+        let mut last = EmbedError::Failed(ErrorCode::ExtractorFailed, String::new());
+        for _ in 0..2 {
+            match Self::start_once(tool, model, u, threads, dir, &mut should_stop) {
+                Ok(s) => return Ok(s),
+                // The port was taken meanwhile, or another start failure: once more.
+                Err(EmbedError::Exited(m)) => {
+                    last = EmbedError::Failed(ErrorCode::ExtractorFailed, m)
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last)
+    }
+
+    fn start_once(
+        tool: &EmbedTool,
+        model: &Path,
+        u: &EmbeddingUse,
+        threads: usize,
+        dir: &Path,
+        should_stop: &mut impl FnMut() -> bool,
+    ) -> Result<Server, EmbedError> {
+        let io = |e: std::io::Error| EmbedError::Failed(crate::storage::io_code(&e), e.to_string());
+        let port = free_port().map_err(io)?;
+        // Two random v4 UUIDs: 244 random bits, never written to disk.
+        let key = format!("{}{}", new_id(), new_id()).replace('-', "");
+        let log = dir.join("server.log");
+        let out = std::fs::File::create(&log).map_err(io)?;
+        let err = out.try_clone().map_err(io)?;
+        let mut cmd = ManagedCommand::new(&tool.exe);
+        cmd.args(server_args(model, u, threads, port, &key))
+            .current_dir(dir)
+            .stdout(Stdio::from(out))
+            .stderr(Stdio::from(err))
+            .low_priority();
+        let proc = cmd
+            .spawn()
+            .map_err(|e| EmbedError::Failed(spawn_error_code(&e), e.to_string()))?;
+        let mut s = Server {
+            proc,
+            base: format!("http://127.0.0.1:{port}"),
+            key,
+            // No proxy: ureq reads none unless asked, and this is loopback.
+            agent: ureq::AgentBuilder::new()
+                .timeout_connect(Duration::from_secs(2))
+                .timeout(REQUEST_TIMEOUT)
+                .redirects(0)
+                .build(),
+            u: u.clone(),
+            log,
+        };
+        let deadline = Instant::now() + START_TIMEOUT;
+        loop {
+            if should_stop() {
+                return Err(EmbedError::Stopped);
+            }
+            if let Some(code) = s.exited() {
+                return Err(EmbedError::Exited(format!(
+                    "exit {code}: {}",
+                    last_line(&s.log)
+                )));
+            }
+            let r = s
+                .agent
+                .get(&format!("{}/health", s.base))
+                .set("Authorization", &format!("Bearer {}", s.key))
+                .timeout(Duration::from_secs(2))
+                .call();
+            if matches!(&r, Ok(r) if r.status() == 200) {
+                return Ok(s);
+            }
+            if Instant::now() >= deadline {
+                return Err(EmbedError::Failed(
+                    ErrorCode::ExtractorFailed,
+                    "the embedding server did not start".into(),
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// The exit status once the server has stopped by itself.
+    fn exited(&mut self) -> Option<String> {
+        match self.proc.try_wait() {
+            Ok(Some(st)) => Some(st.to_string()),
+            Ok(None) => None,
+            Err(e) => Some(e.to_string()),
+        }
+    }
+
+    /// Embeds `texts` with one request. A stop request or the server dying
+    /// ends the wait at once (the request thread ends when the server is
+    /// killed).
+    pub fn embed(
+        &mut self,
+        role: Role,
+        texts: &[&str],
+        mut should_stop: impl FnMut() -> bool,
+    ) -> Result<Vec<Vec<f32>>, EmbedError> {
+        let input: Vec<String> = texts.iter().map(|t| prompt(&self.u, role, t)).collect();
+        let body = serde_json::json!({ "input": input, "encoding_format": "float" }).to_string();
+        let req = self
+            .agent
+            .post(&format!("{}/v1/embeddings", self.base))
+            .set("Authorization", &format!("Bearer {}", self.key))
+            .set("Content-Type", "application/json");
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let r = match req.send_string(&body) {
+                Ok(resp) => {
+                    let mut buf = Vec::new();
+                    resp.into_reader()
+                        .take(RESPONSE_MAX + 1)
+                        .read_to_end(&mut buf)
+                        .map(|_| buf)
+                        .map_err(|e| e.to_string())
+                }
+                Err(ureq::Error::Status(code, resp)) => {
+                    let t: String = resp
+                        .into_string()
+                        .unwrap_or_default()
+                        .chars()
+                        .take(300)
+                        .collect();
+                    Err(format!("HTTP {code}: {t}"))
+                }
+                Err(e) => Err(e.to_string()),
+            };
+            let _ = tx.send(r);
+        });
+        loop {
+            match rx.recv_timeout(POLL) {
+                Ok(Ok(buf)) if buf.len() as u64 > RESPONSE_MAX => {
+                    return Err(EmbedError::Failed(
+                        ErrorCode::ExtractorFailed,
+                        "answer too large".into(),
+                    ))
+                }
+                Ok(Ok(buf)) => {
+                    return parse_output(&buf, texts.len(), &self.u)
+                        .map_err(|m| EmbedError::Failed(ErrorCode::ExtractorFailed, m))
+                }
+                Ok(Err(m)) => {
+                    let m = match self.exited() {
+                        Some(code) => format!("server exit {code}: {}", last_line(&self.log)),
+                        None => m,
+                    };
+                    return Err(EmbedError::Failed(ErrorCode::ExtractorFailed, m));
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(EmbedError::Failed(
+                        ErrorCode::InternalError,
+                        "request thread".into(),
+                    ))
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if should_stop() {
+                        return Err(EmbedError::Stopped);
+                    }
+                    if let Some(code) = self.exited() {
+                        return Err(EmbedError::Failed(
+                            ErrorCode::ExtractorFailed,
+                            format!("server exit {code}: {}", last_line(&self.log)),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Starts a server, embeds `texts` and stops it (a search query; tests).
 #[allow(clippy::too_many_arguments)]
 pub fn embed(
     tool: &EmbedTool,
@@ -168,41 +399,8 @@ pub fn embed(
     dir: &Path,
     mut should_stop: impl FnMut() -> bool,
 ) -> Result<Vec<Vec<f32>>, EmbedError> {
-    let file = dir.join("prompts.txt");
-    let body = texts
-        .iter()
-        .map(|t| prompt(u, role, t))
-        .collect::<Vec<_>>()
-        .join(SEPARATOR);
-    std::fs::write(&file, body)
-        .map_err(|e| EmbedError::Failed(crate::storage::io_code(&e), "prompt file".into()))?;
-    let mut cmd = ManagedCommand::new(&tool.exe);
-    cmd.args(args(model, &file, u, threads))
-        .current_dir(dir)
-        .low_priority();
-    let mut last_err = String::new();
-    let r = run_streaming(
-        cmd,
-        StdoutMode::Raw(STDOUT_MAX),
-        None,
-        |_, l| {
-            if !l.trim().is_empty() {
-                last_err = l.chars().take(300).collect();
-            }
-        },
-        &mut should_stop,
-    );
-    let _ = std::fs::remove_file(&file);
-    let s = match r {
-        Err(e) => return Err(EmbedError::Failed(spawn_error_code(&e), e.to_string())),
-        Ok(s) if s.stopped => return Err(EmbedError::Stopped),
-        Ok(s) => s,
-    };
-    if s.exit != Exit::Code(0) || s.stdout_truncated {
-        return Err(EmbedError::Failed(ErrorCode::ExtractorFailed, last_err));
-    }
-    parse_output(&s.stdout, texts.len(), u)
-        .map_err(|m| EmbedError::Failed(ErrorCode::ExtractorFailed, m))
+    let mut s = Server::start(tool, model, u, threads, dir, &mut should_stop)?;
+    s.embed(role, texts, should_stop)
 }
 
 // ------------------------------------------------------------------ index
@@ -401,6 +599,8 @@ fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -
         .unwrap_or_default();
     let threads = resources::threads(cpu, resources::cores());
     let model_path = models::model_path(&cx.dirs.models, &inst);
+    // Started on the first batch: nothing to embed, no model load.
+    let mut server: Option<Server> = None;
     loop {
         let batch = cx
             .store
@@ -433,20 +633,41 @@ fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -
             return stop(cx, w, &g);
         }
         let texts: Vec<&str> = batch.iter().map(|b| b.text.as_str()).collect();
-        let vs = match embed(
-            &tool,
-            &model_path,
-            &u,
-            Role::Passage,
-            &texts,
-            threads,
-            dir,
-            || w.should_stop(),
-        ) {
+        if server.is_none() {
+            match Server::start(&tool, &model_path, &u, threads, dir, || w.should_stop()) {
+                Ok(s) => server = Some(s),
+                Err(EmbedError::Stopped) => return stop(cx, w, &g),
+                Err(EmbedError::Failed(code, _)) => {
+                    w.end_error(code, Some("the embedding server did not start"));
+                    return false;
+                }
+                Err(EmbedError::Exited(_)) => {
+                    w.end_error(
+                        ErrorCode::ExtractorFailed,
+                        Some("the embedding server did not start"),
+                    );
+                    return false;
+                }
+            }
+        }
+        let Some(srv) = server.as_mut() else {
+            return false;
+        };
+        let vs = match srv.embed(Role::Passage, &texts, || w.should_stop()) {
             Ok(v) => v,
-            Err(EmbedError::Stopped) => return stop(cx, w, &g),
+            Err(EmbedError::Stopped) => {
+                drop(server.take());
+                return stop(cx, w, &g);
+            }
             Err(EmbedError::Failed(code, _)) => {
                 w.end_error(code, Some("the embedding tool failed"));
+                return false;
+            }
+            Err(EmbedError::Exited(_)) => {
+                w.end_error(
+                    ErrorCode::ExtractorFailed,
+                    Some("the embedding tool failed"),
+                );
                 return false;
             }
         };
@@ -463,6 +684,7 @@ fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -
             return false;
         }
     }
+    drop(server);
     succeed(
         cx,
         w,
@@ -517,10 +739,10 @@ mod tests {
     }
 
     #[test]
-    fn prompts_cannot_break_the_batch() {
+    fn prompts_are_clean_and_bounded() {
         let u = use_();
         assert_eq!(prompt(&u, Role::Query, "a\nb"), "Q:a b");
-        assert_eq!(prompt(&u, Role::Passage, &format!("x{SEPARATOR}y")), "x y");
+        assert_eq!(prompt(&u, Role::Passage, "x\u{0}y"), "x y");
         assert_eq!(prompt(&u, Role::Passage, "\n\t"), " ");
         assert_eq!(
             prompt(&u, Role::Passage, "İstanbul'da  çay"),
@@ -536,8 +758,7 @@ mod tests {
     #[test]
     fn output_is_cut_normalized_and_in_order() {
         let u = use_();
-        let json = br#"llama log line
-{"object":"list","data":[
+        let json = br#"{"object":"list","data":[
  {"object":"embedding","index":1,"embedding":[0,2,9,9]},
  {"object":"embedding","index":0,"embedding":[3,4,1,1]}]}
 "#;
@@ -553,19 +774,19 @@ mod tests {
     }
 
     #[test]
-    fn argv_keeps_paths_whole() {
-        let a = args(
-            Path::new("/m dir/model.gguf"),
-            Path::new("/s dir/p.txt"),
-            &use_(),
-            3,
-        );
+    fn server_listens_on_loopback_with_a_key_and_no_web_page() {
+        let a = server_args(Path::new("/m dir/model.gguf"), &use_(), 3, 41234, "k3y");
         assert_eq!(a[1], OsString::from("/m dir/model.gguf"));
-        assert_eq!(a[3], OsString::from("/s dir/p.txt"));
         let s: Vec<String> = a.iter().map(|x| x.to_string_lossy().into_owned()).collect();
-        assert!(s.windows(2).any(|w| w[0] == "-t" && w[1] == "3"));
-        assert!(s
-            .windows(2)
-            .any(|w| w[0] == "--embd-separator" && w[1] == SEPARATOR));
+        let pair = |f: &str, v: &str| s.windows(2).any(|w| w[0] == f && w[1] == v);
+        assert!(pair("--host", "127.0.0.1"));
+        assert!(pair("--port", "41234"));
+        assert!(pair("--api-key", "k3y"));
+        assert!(pair("-t", "3"));
+        assert!(pair("--parallel", "1"));
+        assert!(s.contains(&"--embedding".to_owned()));
+        assert!(s.contains(&"--no-webui".to_owned()));
+        // Never a model download or a public address.
+        assert!(!s.iter().any(|x| x.starts_with("-hf") || x == "0.0.0.0"));
     }
 }

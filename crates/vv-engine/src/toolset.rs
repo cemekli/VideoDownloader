@@ -74,7 +74,7 @@ impl ToolPaths {
             ffmpeg: exe(ToolId::Ffmpeg),
             ffprobe: exe(ToolId::Ffprobe),
             whisper: exe(ToolId::WhisperCli),
-            embedder: exe(ToolId::LlamaEmbedding),
+            embedder: exe(ToolId::LlamaServer),
         }
     }
 
@@ -85,7 +85,7 @@ impl ToolPaths {
             ToolId::Ffmpeg => &self.ffmpeg,
             ToolId::Ffprobe => &self.ffprobe,
             ToolId::WhisperCli => &self.whisper,
-            ToolId::LlamaEmbedding => &self.embedder,
+            ToolId::LlamaServer => &self.embedder,
         }
     }
 }
@@ -297,7 +297,7 @@ fn check_one(
             *reported = v.map(|v| v.to_string());
             check_version(pinned, v)
         }
-        ToolId::LlamaEmbedding => {
+        ToolId::LlamaServer => {
             // llama.cpp prints its build on stderr.
             let all = format!("{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
             let v = parse_llama_version(&all);

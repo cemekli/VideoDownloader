@@ -1,9 +1,9 @@
 //! STATE.md F7.1, SPEC §16.3, AC-24: the embedding index jobs with the fake
-//! `llama-embedding` (src/bin/vv-fake-embed.rs): build, search by meaning,
+//! `llama-server` (src/bin/vv-fake-embed.rs): build, search by meaning,
 //! fill after new transcripts, reindex beside the active index, cancel and
 //! pause, a missing model or tool.
 //!
-//! The last test runs the real `llama-embedding` (Windows CI) with the real
+//! The last test runs the real `llama-server` (Windows CI) with the real
 //! model when `VV_EMBED_TEST_MODEL` names it: a Turkish query finds the
 //! passage that says the same thing in other words (DEC-12, ADR-0035).
 
@@ -57,6 +57,13 @@ fn calls(lib: &Lib) -> Vec<usize> {
         .lines()
         .map(|l| l.parse().unwrap())
         .collect()
+}
+
+fn starts(lib: &Lib) -> usize {
+    std::fs::read_to_string(lib.cx().dirs.models.join("fake-embed-starts"))
+        .unwrap_or_default()
+        .lines()
+        .count()
 }
 
 /// A bookmark with a caption transcript of `lines` (one chunk each, 40 s apart).
@@ -180,8 +187,9 @@ fn build_finds_a_topic_said_in_other_words() {
     assert_eq!(g.producer.model_id, MODEL);
     assert_eq!(g.producer.dims, 512);
     assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (3, 3));
-    // One tool run for the three chunks (a batch).
+    // One request for the three chunks (a batch), one server for the job.
     assert_eq!(calls(&lib), vec![3]);
+    assert_eq!(starts(&lib), 1);
     assert_eq!(
         best(&lib, "veritabanı yedekleme"),
         "bugün PostgreSQL replikasyonu anlatıyoruz"
@@ -241,6 +249,9 @@ fn reindex_runs_beside_the_active_index_and_cancel_keeps_it() {
         lib.write(|c| vectors::coverage(c, first.seq).unwrap()),
         (120, 120)
     );
+    // Four batches, one server: the model is loaded once per job.
+    assert_eq!(calls(&lib), vec![32, 32, 32, 24]);
+    assert_eq!(starts(&lib), 1);
 
     mode(&lib, "slow-after-1");
     std::fs::remove_file(lib.cx().dirs.models.join("fake-embed-calls")).unwrap();
@@ -356,7 +367,7 @@ fn real_llama_embedding_finds_the_topic() {
     };
     assert!(
         paths.embedder.is_file(),
-        "VV_EMBED_TEST_MODEL set but no llama-embedding in tools/bin"
+        "VV_EMBED_TEST_MODEL set but no llama-server in tools/bin"
     );
     let lib = library(Setup {
         embedder: Some(paths.embedder.clone()),

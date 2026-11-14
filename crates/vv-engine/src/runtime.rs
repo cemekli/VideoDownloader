@@ -33,7 +33,7 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     // Small text files; two runs of yt-dlp each (F6.2).
     (&[JobKind::FetchCaptions], 2),
     // One heavy local AI job at a time (§13.3): whisper.cpp and
-    // llama-embedding each use most cores and their model's memory (F6.2,
+    // llama-server each use most cores and their model's memory (F6.2,
     // F6.6, F7.1).
     (
         &[JobKind::Transcription, JobKind::Embedding, JobKind::Reindex],

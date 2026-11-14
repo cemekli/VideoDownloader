@@ -33,10 +33,10 @@ pub enum ToolId {
     /// without it only local transcription is unavailable.
     #[serde(rename = "whisper-cli")]
     WhisperCli,
-    /// llama.cpp's `llama-embedding` (F7.1, ADR-0035). Optional: without it
+    /// llama.cpp's `llama-server` (F7.1, ADR-0035). Optional: without it
     /// only search by meaning is unavailable.
-    #[serde(rename = "llama-embedding")]
-    LlamaEmbedding,
+    #[serde(rename = "llama-server")]
+    LlamaServer,
 }
 
 /// Every tool the app needs; a manifest without one of them is rejected.
@@ -45,7 +45,7 @@ pub const REQUIRED_TOOLS: &[ToolId] =
 
 /// Tools the manifest may name but need not, and that may have no build
 /// for some platforms (whisper.cpp publishes no Linux binary).
-pub const OPTIONAL_TOOLS: &[ToolId] = &[ToolId::WhisperCli, ToolId::LlamaEmbedding];
+pub const OPTIONAL_TOOLS: &[ToolId] = &[ToolId::WhisperCli, ToolId::LlamaServer];
 
 /// The whisper.cpp and llama.cpp Windows releases are built with MSVC and
 /// load their libraries from their own folder; only `.dll` companions exist.
@@ -64,7 +64,7 @@ impl ToolId {
             ToolId::Ffmpeg => "ffmpeg",
             ToolId::Ffprobe => "ffprobe",
             ToolId::WhisperCli => "whisper-cli",
-            ToolId::LlamaEmbedding => "llama-embedding",
+            ToolId::LlamaServer => "llama-server",
         }
     }
 
@@ -86,7 +86,7 @@ impl ToolId {
                 "https://github.com/BtbN/FFmpeg-Builds/releases/download/"
             }
             ToolId::WhisperCli => "https://github.com/ggml-org/whisper.cpp/releases/download/",
-            ToolId::LlamaEmbedding => "https://github.com/ggml-org/llama.cpp/releases/download/",
+            ToolId::LlamaServer => "https://github.com/ggml-org/llama.cpp/releases/download/",
         }
     }
 }
@@ -324,7 +324,7 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
             | ToolId::Ffmpeg
             | ToolId::Ffprobe
             | ToolId::WhisperCli
-            | ToolId::LlamaEmbedding,
+            | ToolId::LlamaServer,
             Provenance::PublishedSha256,
         ) => {}
         (_, _) => return Err(bad("unexpected provenance kind".into())),
@@ -352,7 +352,7 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
                 && (a.url.contains(&format!("/{}/", t.version))
                     || a.url.contains(&format!("/v{}/", t.version))
                     // llama.cpp tags its builds `b<number>`.
-                    || (t.id == ToolId::LlamaEmbedding
+                    || (t.id == ToolId::LlamaServer
                         && a.url.contains(&format!("/b{}/", t.version))))
         };
         if !pinned {

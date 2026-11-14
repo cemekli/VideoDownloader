@@ -1,7 +1,8 @@
-//! Test double for llama.cpp's `llama-embedding` (`vv-engine` tests only;
-//! never shipped or run by the app). It reads the argv the engine builds
-//! (`-m`, `-f`, `--embd-separator`, `--embd-output-format json`) and writes
-//! the JSON the real one writes: one 1024-value vector per prompt.
+//! Test double for llama.cpp's `llama-server --embedding` (`vv-engine`
+//! tests only; never shipped or run by the app). It reads the argv the
+//! engine builds, listens on `--host`/`--port`, answers `GET /health` and
+//! `POST /v1/embeddings` (only with `Authorization: Bearer <--api-key>`)
+//! with the JSON the real one sends: one 1024-value vector per input.
 //!
 //! A vector is a bag of words: each word adds 1 at a position given by its
 //! hash, and a few words of the same topic share a position, so tests can
@@ -10,12 +11,14 @@
 //! query instruction) is ignored.
 //!
 //! The scenario comes from a file `fake-embed-mode` next to the model:
-//! `ok` (default), `fail`, `slow` (2 s per run), `short` (one vector too
-//! few), `slow-after-1` (the first run is quick, later ones slow). Each run
-//! appends its prompt count to `fake-embed-calls` there.
+//! `ok` (default), `fail` (exits at start), `slow` (2 s per request),
+//! `short` (one vector too few), `slow-after-1` (the first request is quick,
+//! later ones slow). Each request appends its input count to
+//! `fake-embed-calls` there; each start appends a line to `fake-embed-starts`.
 
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const DIMS: usize = 1024;
@@ -91,6 +94,113 @@ fn vector(prompt: &str) -> Vec<f32> {
     v
 }
 
+fn append(path: &Path, line: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
+fn reply(s: &mut TcpStream, status: &str, body: &str) {
+    let _ = write!(
+        s,
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let _ = s.flush();
+}
+
+fn answer(inputs: &[String], n: usize) -> String {
+    let mut out = String::from("{\"object\":\"list\",\"data\":[");
+    for (i, p) in inputs.iter().take(n).enumerate() {
+        let v = vector(p);
+        let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let vals: Vec<String> = v.iter().map(|x| format!("{:.6}", x / norm)).collect();
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!(
+            "{{\"object\":\"embedding\",\"index\":{i},\"embedding\":[{}]}}",
+            vals.join(",")
+        ));
+    }
+    out.push_str("],\"model\":\"fake\"}");
+    out
+}
+
+fn serve(mut s: TcpStream, key: &str, dir: &Path, mode: &str) {
+    let mut r = BufReader::new(s.try_clone().expect("clone"));
+    let mut line = String::new();
+    if r.read_line(&mut line).is_err() {
+        return;
+    }
+    let mut len = 0usize;
+    let mut auth = String::new();
+    loop {
+        let mut h = String::new();
+        if r.read_line(&mut h).is_err() || h.trim().is_empty() {
+            break;
+        }
+        let (k, v) = h.split_once(':').unwrap_or((&h, ""));
+        match k.trim().to_ascii_lowercase().as_str() {
+            "content-length" => len = v.trim().parse().unwrap_or(0),
+            "authorization" => auth = v.trim().to_owned(),
+            _ => {}
+        }
+    }
+    let mut body = vec![0u8; len];
+    if r.read_exact(&mut body).is_err() {
+        return;
+    }
+    let mut parts = line.split_whitespace();
+    let (method, path) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+    match (method, path) {
+        ("GET", "/health") => reply(&mut s, "200 OK", "{\"status\":\"ok\"}"),
+        ("POST", "/v1/embeddings") => {
+            if auth != format!("Bearer {key}") {
+                return reply(
+                    &mut s,
+                    "401 Unauthorized",
+                    "{\"error\":{\"message\":\"Invalid API Key\"}}",
+                );
+            }
+            let v: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+            let inputs: Vec<String> = v["input"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let calls = dir.join("fake-embed-calls");
+            let before = std::fs::read_to_string(&calls)
+                .map(|s| s.lines().count())
+                .unwrap_or(0);
+            append(&calls, &inputs.len().to_string());
+            match mode {
+                "slow" => std::thread::sleep(Duration::from_secs(2)),
+                "slow-after-1" if before >= 1 => std::thread::sleep(Duration::from_secs(2)),
+                _ => {}
+            }
+            let n = if mode == "short" {
+                inputs.len().saturating_sub(1)
+            } else {
+                inputs.len()
+            };
+            reply(&mut s, "200 OK", &answer(&inputs, n));
+        }
+        _ => reply(
+            &mut s,
+            "404 Not Found",
+            "{\"error\":{\"message\":\"File Not Found\"}}",
+        ),
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--version") {
@@ -98,10 +208,14 @@ fn main() {
         return;
     }
     let model = PathBuf::from(arg_after(&args, "-m").unwrap_or_else(|| fail("no -m", 1)));
-    let file = arg_after(&args, "-f").unwrap_or_else(|| fail("no -f", 1));
-    let sep = arg_after(&args, "--embd-separator").unwrap_or_else(|| "\n".into());
-    if arg_after(&args, "--embd-output-format").as_deref() != Some("json") {
-        fail("expected --embd-output-format json", 1);
+    let host = arg_after(&args, "--host").unwrap_or_default();
+    let port = arg_after(&args, "--port").unwrap_or_else(|| fail("no --port", 1));
+    let key = arg_after(&args, "--api-key").unwrap_or_else(|| fail("no --api-key", 1));
+    if host != "127.0.0.1" {
+        fail("the fake only listens on 127.0.0.1", 2);
+    }
+    if !args.iter().any(|a| a == "--embedding") {
+        fail("expected --embedding", 1);
     }
     if !model.is_file() {
         fail("failed to load model", 1);
@@ -110,42 +224,17 @@ fn main() {
     let mode = std::fs::read_to_string(dir.join("fake-embed-mode"))
         .map(|s| s.trim().to_owned())
         .unwrap_or_else(|_| "ok".into());
-    let calls = dir.join("fake-embed-calls");
-    let before = std::fs::read_to_string(&calls)
-        .map(|s| s.lines().count())
-        .unwrap_or(0);
-    let body = std::fs::read_to_string(&file).unwrap_or_else(|_| fail("cannot read prompts", 1));
-    let prompts: Vec<&str> = body.split(sep.as_str()).collect();
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&calls)
-    {
-        let _ = writeln!(f, "{}", prompts.len());
+    append(
+        &dir.join("fake-embed-starts"),
+        &std::process::id().to_string(),
+    );
+    if mode == "fail" {
+        fail("llama_model_load: error loading model", 1);
     }
-    match mode.as_str() {
-        "fail" => fail("llama_model_load: error loading model", 1),
-        "slow" => std::thread::sleep(Duration::from_secs(2)),
-        "slow-after-1" if before >= 1 => std::thread::sleep(Duration::from_secs(2)),
-        _ => {}
+    let l = TcpListener::bind(format!("{host}:{port}"))
+        .unwrap_or_else(|e| fail(&format!("couldn't bind HTTP server socket: {e}"), 1));
+    eprintln!("main: server is listening on http://{host}:{port} (fake)");
+    for s in l.incoming().flatten() {
+        serve(s, &key, &dir, &mode);
     }
-    let n = if mode == "short" {
-        prompts.len().saturating_sub(1)
-    } else {
-        prompts.len()
-    };
-    eprintln!("llama_model_loader: loaded meta data (fake)");
-    let mut out = String::from("{\n  \"object\": \"list\",\n  \"data\": [\n");
-    for (i, p) in prompts.iter().take(n).enumerate() {
-        let v = vector(p);
-        let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let vals: Vec<String> = v.iter().map(|x| format!("{:.6}", x / norm)).collect();
-        out.push_str(&format!(
-            "    {{\n      \"object\": \"embedding\",\n      \"index\": {i},\n      \"embedding\": [{}]\n    }}{}\n",
-            vals.join(","),
-            if i + 1 < n { "," } else { "" }
-        ));
-    }
-    out.push_str("  ]\n}\n");
-    print!("{out}");
 }

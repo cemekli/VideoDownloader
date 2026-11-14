@@ -1,6 +1,6 @@
 //! Managed external tools (SPEC §10.2, §14.1, §23.1; STATE.md F0.8b/c,
 //! ADR-0005, ADR-0006, ADR-0028): yt-dlp, Deno, FFmpeg, ffprobe and the
-//! optional whisper.cpp `whisper-cli` and llama.cpp `llama-embedding`.
+//! optional whisper.cpp `whisper-cli` and llama.cpp `llama-server`.
 //!
 //! `tools/manifest.json` pins each tool's version, download URL, SHA-256,
 //! size and licence. This crate reads and validates that manifest, verifies

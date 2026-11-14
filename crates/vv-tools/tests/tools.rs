@@ -672,7 +672,7 @@ fn llama_version_line() {
         ),
         VersionCheck::Mismatch { .. }
     ));
-    for junk in ["", "usage: llama-embedding", "version: x (abc)", "version:"] {
+    for junk in ["", "usage: llama-server", "version: x (abc)", "version:"] {
         assert_eq!(parse_llama_version(junk), None, "{junk:?}");
     }
 }
