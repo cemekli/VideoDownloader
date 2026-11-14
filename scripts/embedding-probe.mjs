@@ -95,7 +95,8 @@ try {
     rels.push(...r);
     if (r.length < 100) break;
   }
-  const cpu = rels.filter((r) => !r.draft && !r.prerelease && r.assets.some((a) => linRe.test(a.name)) && r.assets.some((a) => winRe.test(a.name)));
+  const cpu = rels.filter((r) => !r.draft && r.assets.some((a) => linRe.test(a.name)) && r.assets.some((a) => winRe.test(a.name)));
+  log(`## llama.cpp: prerelease flags ${[...new Set(rels.map((r) => r.prerelease))]}; sample assets of ${rels[0]?.tag_name}: ${rels[0]?.assets.map((a) => a.name).slice(0, 5)}`);
   log(`## llama.cpp: ${rels.length} releases, ${cpu.length} with both CPU builds, newest ${cpu[0]?.tag_name}, oldest ${cpu.at(-1)?.tag_name}`);
   // cpu[lo] has no llama-embedding, cpu[hi] has it.
   let lo = 0;
