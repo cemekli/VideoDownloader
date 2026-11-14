@@ -68,8 +68,10 @@ pub enum Role {
 /// (an empty input is refused by the server).
 /// A chunk is at most `CHUNK_MAX_CHARS` (400) long; a longer text (a single
 /// very long caption line) is cut so a prompt always fits the model context
-/// (`llama-server` refuses an input longer than its batch).
-pub const PROMPT_MAX_CHARS: usize = 1000;
+/// (the catalog's `context` is 2048 tokens and a token is at least one
+/// UTF-8 byte, byte fallback included). 1800 bytes are 900 Turkish letters
+/// or more, over twice a chunk.
+pub const PROMPT_MAX_BYTES: usize = 1800;
 
 pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
     let clean: String = text
@@ -77,7 +79,11 @@ pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
     let clean = clean.split_whitespace().collect::<Vec<_>>().join(" ");
-    let clean: String = clean.chars().take(PROMPT_MAX_CHARS).collect();
+    let mut end = clean.len().min(PROMPT_MAX_BYTES);
+    while !clean.is_char_boundary(end) {
+        end -= 1;
+    }
+    let clean = clean.get(..end).unwrap_or_default().to_owned();
     let clean = if clean.is_empty() {
         " ".to_owned()
     } else {
@@ -90,8 +96,11 @@ pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
 }
 
 /// Arguments of the embedding server for one job: loopback only, the
-/// given port and key, one slot, no web page, the model's own pooling and
-/// L2-normalized output.
+/// given port and key (without it every route but `/health` answers 401,
+/// measured with b12387), one slot, no web page or slot page, offline, the
+/// model's own pooling and L2-normalized output. An input longer than the
+/// context is refused (HTTP 400/500), never cut: [`PROMPT_MAX_BYTES`] keeps
+/// every prompt below it.
 pub fn server_args(
     model: &Path,
     u: &EmbeddingUse,
@@ -122,6 +131,9 @@ pub fn server_args(
         "--parallel",
         "1",
         "--no-webui",
+        // No slot monitoring page, and never a download (only `-m`).
+        "--no-slots",
+        "--offline",
     ] {
         a.push(s.into());
     }
@@ -748,11 +760,11 @@ mod tests {
             prompt(&u, Role::Passage, "İstanbul'da  çay"),
             "İstanbul'da çay"
         );
-        let long = "ş".repeat(PROMPT_MAX_CHARS + 50);
-        assert_eq!(
-            prompt(&u, Role::Passage, &long).chars().count(),
-            PROMPT_MAX_CHARS
-        );
+        // Cut at a character boundary, never inside "ş" (2 bytes).
+        let long = format!("a{}", "ş".repeat(PROMPT_MAX_BYTES));
+        let p = prompt(&u, Role::Passage, &long);
+        assert_eq!(p.len(), PROMPT_MAX_BYTES - 1);
+        assert!(p.ends_with('ş'));
     }
 
     #[test]
@@ -785,7 +797,9 @@ mod tests {
         assert!(pair("-t", "3"));
         assert!(pair("--parallel", "1"));
         assert!(s.contains(&"--embedding".to_owned()));
-        assert!(s.contains(&"--no-webui".to_owned()));
+        for f in ["--no-webui", "--no-slots", "--offline"] {
+            assert!(s.contains(&f.to_owned()), "{f}");
+        }
         // Never a model download or a public address.
         assert!(!s.iter().any(|x| x.starts_with("-hf") || x == "0.0.0.0"));
     }

@@ -55,7 +55,7 @@ fn chunk_seqs(db: &mut Database, item: Option<&str>) -> Vec<i64> {
 fn producer(version: &str) -> Producer {
     Producer {
         provider: "llama_cpp".into(),
-        model_id: "embed-qwen3-0.6b".into(),
+        model_id: "embed-bge-m3".into(),
         model_version: version.into(),
         dims: 8,
     }
@@ -72,14 +72,14 @@ fn embedding_models_share_the_consent_table() {
     let (_d, mut db) = open();
     let c = db.writer();
     let spec = ModelSpec {
-        id: "embed-qwen3-0.6b".into(),
+        id: "embed-bge-m3".into(),
         provider: "llama_cpp".into(),
         version: "0123456789abcdef0123456789abcdef01234567".into(),
-        file_name: "Qwen3-Embedding-0.6B-Q8_0.gguf".into(),
+        file_name: "bge-m3-q8_0.gguf".into(),
         size_bytes: 639_150_592,
         sha256: "b".repeat(64),
         license: "Apache-2.0".into(),
-        source_url: "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/x/f.gguf".into(),
+        source_url: "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF/resolve/x/f.gguf".into(),
     };
     let m = models::consent(c, &spec, 10).unwrap();
     assert_eq!(m.status, ModelStatus::Pending);

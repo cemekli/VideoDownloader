@@ -29,8 +29,8 @@ describe("Search by meaning", () => {
     // AC-20: cancel in the dialog downloads nothing.
     await user.click(within(block).getByTestId("search-model-download"));
     const dialog = await screen.findByTestId("model-consent");
-    expect(within(dialog).getByTestId("consent-source")).toHaveTextContent("huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF");
-    expect(within(dialog).getByTestId("consent-license")).toHaveTextContent("Apache-2.0");
+    expect(within(dialog).getByTestId("consent-source")).toHaveTextContent("huggingface.co/ggml-org/bge-m3-Q8_0-GGUF");
+    expect(within(dialog).getByTestId("consent-license")).toHaveTextContent("MIT");
     expect(dialog).toHaveTextContent("Memory while indexing");
     await user.click(within(dialog).getByTestId("consent-cancel"));
     expect((await client.getSearchIndex()).models[0]!.status).toBe("not_installed");
@@ -41,14 +41,14 @@ describe("Search by meaning", () => {
 
     await user.click(await within(block).findByTestId("search-index-build"));
     await waitFor(() => expect(within(block).getByTestId("search-index-state")).toHaveAttribute("data-active", "yes"), { timeout: 5000 });
-    expect(within(block).getByTestId("search-index-active")).toHaveTextContent("Index of 12 of 12 transcript passages, made with Qwen3 Embedding 0.6B.");
+    expect(within(block).getByTestId("search-index-active")).toHaveTextContent("Index of 12 of 12 transcript passages, made with BGE-M3.");
     expect(within(block).getByTestId("search-index-rebuild")).toBeInTheDocument();
   });
 
   it("cancels a rebuild and keeps the current index (AC-24)", async () => {
     const user = userEvent.setup();
     const client = createFixtureClient();
-    await client.downloadModel("embed-qwen3-0.6b", true);
+    await client.downloadModel("embed-bge-m3", true);
     await waitFor(async () => expect((await client.getSearchIndex()).models[0]!.status).toBe("ready"), { timeout: 5000 });
     await client.buildSearchIndex(false);
     await waitFor(async () => expect((await client.getSearchIndex()).active).not.toBeNull(), { timeout: 5000 });

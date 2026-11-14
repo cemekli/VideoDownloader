@@ -61,19 +61,11 @@ jobs:
         run: npm --prefix apps/desktop ci
       - name: Install Playwright Chromium
         run: npx --prefix apps/desktop playwright install --with-deps chromium
-      # Downloads the pinned yt-dlp, Deno, FFmpeg and ffprobe (and whisper-cli with
-      # its DLLs on Windows), checks hashes and yt-dlp's GPG signature, and runs
-      # the health checks (ADR-0005, ADR-0006, ADR-0028).
+      # Downloads the pinned yt-dlp, Deno, FFmpeg and ffprobe (and whisper-cli and
+      # llama-server with their DLLs on Windows), checks hashes and yt-dlp's GPG
+      # signature, and runs the health checks (ADR-0005, ADR-0006, ADR-0028, ADR-0035).
       - name: Fetch and check managed tools
         run: node scripts/fetch-tools.mjs
-      # F7.1 probe (temporary): llama.cpp release and embedding model pins, and
-      # a TR/EN retrieval run with the real llama-server on Linux.
-      - name: Embedding probe (F7.1, temporary)
-        if: runner.os == 'Linux'
-        continue-on-error: true
-        run: node scripts/embedding-probe.mjs --bench
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
       # Transcription model pins (F6.1, ADR-0026): the Hugging Face listing at the
       # pinned commit still gives the pinned SHA-256/size, and the Tiny model
       # downloaded end to end matches both that and whisper.cpp's published SHA-1.
@@ -94,7 +86,7 @@ jobs:
       # kept for the real llama-server test in crates/vv-engine/tests/embed.rs.
       - name: Embedding model for the real llama-server test
         continue-on-error: true
-        run: node scripts/model-pins.mjs --catalog tools/embedding-models.json ${{ runner.os == 'Windows' && '--download embed-qwen3-0.6b --save test-models' || '' }}
+        run: node scripts/model-pins.mjs --catalog tools/embedding-models.json ${{ runner.os == 'Windows' && '--download embed-bge-m3 --save test-models' || '' }}
       # Real yt-dlp through the network guard: redirects, manifests and
       # segments aimed at a canary server must never reach it (ADR-0007, AC-29).
       - name: Network guard probe (real yt-dlp)
@@ -119,7 +111,7 @@ jobs:
           # On Windows the real-app E2E must run; a missing build is a failure, not a skip.
           VV_REQUIRE_DESKTOP_E2E: ${{ runner.os == 'Windows' && '1' || '0' }}
           VV_WHISPER_TEST_MODEL: ${{ runner.os == 'Windows' && hashFiles('test-models/ggml-tiny.bin') != '' && format('{0}/test-models/ggml-tiny.bin', github.workspace) || '' }}
-          VV_EMBED_TEST_MODEL: ${{ runner.os == 'Windows' && hashFiles('test-models/Qwen3-Embedding-0.6B-Q8_0.gguf') != '' && format('{0}/test-models/Qwen3-Embedding-0.6B-Q8_0.gguf', github.workspace) || '' }}
+          VV_EMBED_TEST_MODEL: ${{ runner.os == 'Windows' && hashFiles('test-models/bge-m3-q8_0.gguf') != '' && format('{0}/test-models/bge-m3-q8_0.gguf', github.workspace) || '' }}
       - name: Upload desktop app (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7

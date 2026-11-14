@@ -1920,12 +1920,12 @@
         "searchIndex": {
           "models": [
             {
-              "id": "embed-qwen3-0.6b",
-              "label": "Qwen3 Embedding 0.6B",
+              "id": "embed-bge-m3",
+              "label": "BGE-M3",
               "languages": "multilingual (100+ languages, Turkish and English included)",
-              "sizeBytes": 639150592,
-              "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
-              "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+              "sizeBytes": 634553760,
+              "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
+              "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
               "upstreamMemoryMb": 1024,
               "needMemoryMb": 1408,
               "fit": "ok",
@@ -1936,9 +1936,9 @@
             }
           ],
           "active": {
-            "modelId": "embed-qwen3-0.6b",
-            "modelLabel": "Qwen3 Embedding 0.6B",
-            "dims": 512,
+            "modelId": "embed-bge-m3",
+            "modelLabel": "BGE-M3",
+            "dims": 1024,
             "done": 3,
             "total": 3,
             "createdAt": 1762700400000,
@@ -2392,12 +2392,12 @@
       "response": {
         "models": [
           {
-            "id": "embed-qwen3-0.6b",
-            "label": "Qwen3 Embedding 0.6B",
+            "id": "embed-bge-m3",
+            "label": "BGE-M3",
             "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 639150592,
-            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
-            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "sizeBytes": 634553760,
+            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
+            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
             "upstreamMemoryMb": 1024,
             "needMemoryMb": 1408,
             "fit": "ok",
@@ -2408,9 +2408,9 @@
           }
         ],
         "active": {
-          "modelId": "embed-qwen3-0.6b",
-          "modelLabel": "Qwen3 Embedding 0.6B",
-          "dims": 512,
+          "modelId": "embed-bge-m3",
+          "modelLabel": "BGE-M3",
+          "dims": 1024,
           "done": 3,
           "total": 3,
           "createdAt": 1762700400000,
@@ -2455,12 +2455,12 @@
       "response": {
         "models": [
           {
-            "id": "embed-qwen3-0.6b",
-            "label": "Qwen3 Embedding 0.6B",
+            "id": "embed-bge-m3",
+            "label": "BGE-M3",
             "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 639150592,
-            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
-            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "sizeBytes": 634553760,
+            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
+            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
             "upstreamMemoryMb": 1024,
             "needMemoryMb": 1408,
             "fit": "ok",
@@ -2471,9 +2471,9 @@
           }
         ],
         "active": {
-          "modelId": "embed-qwen3-0.6b",
-          "modelLabel": "Qwen3 Embedding 0.6B",
-          "dims": 512,
+          "modelId": "embed-bge-m3",
+          "modelLabel": "BGE-M3",
+          "dims": 1024,
           "done": 3,
           "total": 3,
           "createdAt": 1762700400000,
@@ -2516,12 +2516,12 @@
       "response": {
         "models": [
           {
-            "id": "embed-qwen3-0.6b",
-            "label": "Qwen3 Embedding 0.6B",
+            "id": "embed-bge-m3",
+            "label": "BGE-M3",
             "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 639150592,
-            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
-            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "sizeBytes": 634553760,
+            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
+            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
             "upstreamMemoryMb": 1024,
             "needMemoryMb": 1408,
             "fit": "ok",
@@ -2532,9 +2532,9 @@
           }
         ],
         "active": {
-          "modelId": "embed-qwen3-0.6b",
-          "modelLabel": "Qwen3 Embedding 0.6B",
-          "dims": 512,
+          "modelId": "embed-bge-m3",
+          "modelLabel": "BGE-M3",
+          "dims": 1024,
           "done": 3,
           "total": 3,
           "createdAt": 1762700400000,

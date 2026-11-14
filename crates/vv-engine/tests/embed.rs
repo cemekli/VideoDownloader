@@ -18,7 +18,7 @@ use vv_persistence::models as model_rows;
 use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
 use vv_persistence::vectors::{self, GenerationStatus};
 
-const MODEL: &str = "embed-qwen3-0.6b";
+const MODEL: &str = "embed-bge-m3";
 
 fn install_model(lib: &Lib) {
     install_model_from(lib, None);
@@ -185,7 +185,7 @@ fn build_finds_a_topic_said_in_other_words() {
     assert_eq!(j.progress.units_total, Some(3));
     let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
     assert_eq!(g.producer.model_id, MODEL);
-    assert_eq!(g.producer.dims, 512);
+    assert_eq!(g.producer.dims, 1024);
     assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (3, 3));
     // One request for the three chunks (a batch), one server for the job.
     assert_eq!(calls(&lib), vec![3]);
@@ -401,7 +401,7 @@ fn real_llama_embedding_finds_the_topic() {
         j.redacted_error_message
     );
     let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
-    assert_eq!(g.producer.dims, 512);
+    assert_eq!(g.producer.dims, 1024);
     assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (4, 4));
     assert!(best(&lib, "veritabanı yedekleme").contains("PostgreSQL"));
     assert!(best(&lib, "how to bake sourdough bread").contains("Ekşi maya"));

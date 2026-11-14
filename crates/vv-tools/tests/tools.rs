@@ -676,3 +676,45 @@ fn llama_version_line() {
         assert_eq!(parse_llama_version(junk), None, "{junk:?}");
     }
 }
+
+#[test]
+fn llama_server_is_optional_pinned_by_build_and_brings_checked_libraries() {
+    let m = Manifest::parse(&manifest_text()).unwrap();
+    let t = m.tool(ToolId::LlamaServer).expect("llama-server entry");
+    assert!(ToolId::LlamaServer.is_optional() && !REQUIRED_TOOLS.contains(&ToolId::LlamaServer));
+    assert_eq!(t.provenance, Provenance::PublishedSha256);
+    // Pinned like whisper-cli: Windows only, the CPU build.
+    assert!(m.artifact(ToolId::LlamaServer, "linux-x86_64").is_none());
+    let a = m.artifact(ToolId::LlamaServer, "windows-x86_64").unwrap();
+    assert_eq!(a.executable, "llama-server.exe");
+    assert!(a.url.contains(&format!("/b{}/", t.version)));
+    assert!(a.url.ends_with("-bin-win-cpu-x64.zip"));
+    let names: Vec<&str> = a.companions.iter().map(|c| c.file.as_str()).collect();
+    for needed in ["llama.dll", "ggml.dll", "ggml-base.dll"] {
+        assert!(names.contains(&needed), "{needed}");
+    }
+    assert!(names.iter().all(|n| n.ends_with(".dll")));
+
+    let at = m
+        .tools
+        .iter()
+        .position(|x| x.id == ToolId::LlamaServer)
+        .unwrap();
+    for (what, url) in [
+        (
+            "another repository",
+            "https://github.com/evil/llama.cpp/releases/download/b1/llama-b1-bin-win-cpu-x64.zip",
+        ),
+        (
+            "not the pinned build",
+            "https://github.com/ggml-org/llama.cpp/releases/download/b1/llama-b1-bin-win-cpu-x64.zip",
+        ),
+    ] {
+        let r = tampered(|v| v["tools"][at]["artifacts"][0]["url"] = url.into());
+        assert!(r.is_err(), "{what}");
+    }
+    assert!(tampered(|v| {
+        v["tools"].as_array_mut().unwrap().remove(at);
+    })
+    .is_ok());
+}

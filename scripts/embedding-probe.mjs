@@ -1,26 +1,31 @@
 #!/usr/bin/env node
-// One-off probe for F7.1 (DEC-12), run in CI because the development
-// container cannot reach GitHub release assets or Hugging Face:
+// Embedding benchmark for DEC-12 / ADR-0035 (F7.1). Not part of CI: it
+// downloads the newest llama.cpp CPU build and about 2 GB of candidate GGUF
+// models. Run it on Linux with network access (the cloud container cannot
+// reach GitHub release assets or Hugging Face; it ran once in CI on
+// 14 Nov 2026, results in docs/decisions.md ADR-0035):
 //
-// 1. the latest llama.cpp release: tag, assets and SHA-256 of the CPU builds
-//    (to pin `llama-embedding` in tools/manifest.json like whisper-cli);
-// 2. candidate multilingual embedding models in GGUF: commit, files, sizes,
-//    SHA-256 (to pin them like tools/models.json);
-// 3. on Linux, the real `llama-embedding` with each candidate over the TR/EN
-//    fixture tests/fixtures/semantic-tr-en.json: hit@1, recall@k, MRR, time.
+// 1. the newest llama.cpp release: both CPU archives, llama-server and its
+//    libraries with SHA-256 (to pin tools/manifest.json);
+// 2. candidate multilingual embedding models: commit, files, sizes, SHA-256;
+// 3. with --bench, each model in a loopback llama-server as the app runs it
+//    (random port and key; the routes without the key) over the TR/EN fixture
+//    tests/fixtures/semantic-tr-en.json: hit@1, recall@k, MRR, time.
 //
-//   node scripts/embedding-probe.mjs [--bench]
+//   node scripts/embedding-probe.mjs [--bench]   (report: test-artifacts/embedding-probe.md)
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const work = join(root, "test-artifacts", "embedding-probe");
+// Downloads stay out of test-artifacts (CI uploads that folder).
+const work = join(tmpdir(), "vv-embedding-probe");
 mkdirSync(work, { recursive: true });
 const bench = process.argv.includes("--bench");
 const isWin = process.platform === "win32";
@@ -262,4 +267,5 @@ if (bench && llamaBin && !isWin) {
     }
   }
 }
-writeFileSync(join(work, "report.md"), out.join("\n") + "\n");
+mkdirSync(join(root, "test-artifacts"), { recursive: true });
+writeFileSync(join(root, "test-artifacts", "embedding-probe.md"), out.join("\n") + "\n");

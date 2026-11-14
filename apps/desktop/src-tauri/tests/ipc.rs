@@ -1501,7 +1501,7 @@ fn model_commands_match_contract_and_need_consent() {
         &with_nulls_of(&g["models"][0], &sg["models"][0]),
         "get_search_index.models[0]",
     );
-    assert_eq!(g["models"][0]["id"], "embed-qwen3-0.6b");
+    assert_eq!(g["models"][0]["id"], "embed-bge-m3");
     assert_eq!(g["models"][0]["status"], "not_installed");
     assert!(g["active"].is_null() && g["building"].is_null() && g["job"].is_null());
     assert_eq!(g["searchable"], false);
@@ -1521,7 +1521,7 @@ fn model_commands_match_contract_and_need_consent() {
     let e = invoke(
         &w,
         "download_model",
-        json!({ "modelId": "embed-qwen3-0.6b", "agreed": false }),
+        json!({ "modelId": "embed-bge-m3", "agreed": false }),
         app_origin(),
     )
     .unwrap_err();
@@ -1529,12 +1529,12 @@ fn model_commands_match_contract_and_need_consent() {
     let _ = ok(
         &w,
         "download_model",
-        json!({ "modelId": "embed-qwen3-0.6b", "agreed": true }),
+        json!({ "modelId": "embed-bge-m3", "agreed": true }),
     );
     let g = ok(&w, "get_search_index", json!({}));
     assert_eq!(g["models"][0]["status"], "pending");
     assert_eq!(g["models"][0]["job"]["kind"], "model_download");
-    let _ = ok(&w, "remove_model", json!({ "modelId": "embed-qwen3-0.6b" }));
+    let _ = ok(&w, "remove_model", json!({ "modelId": "embed-bge-m3" }));
     let g = ok(&w, "get_search_index", json!({}));
     assert_eq!(g["models"][0]["status"], "not_installed");
 }
