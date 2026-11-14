@@ -2,10 +2,10 @@
 
 | Bilgi | Değer |
 |---|---|
-| Son güncelleme | 9 Kasım 2026 |
+| Son güncelleme | 14 Kasım 2026 |
 | Referans belge | [SPEC.md](./SPEC.md) v1.9 |
-| Aktif faz | **F5 — Yetkili oturum** (F0–F3 ✅, F4 ertelendi) |
-| Genel ilerleme | 45 / 74 alt görev doğrulandı |
+| Aktif faz | **F7 — Anlamsal ve görsel arama** (F0–F3, F6 ✅; F4 ertelendi; F5'te elle testler bekliyor) |
+| Genel ilerleme | 52 / 74 alt görev doğrulandı |
 | Tek komutla doğrulama | `npm run verify` → `test-artifacts/verify/report.md` |
 | Son doğrulama | 9 Kasım 2026: GitHub Actions (windows-latest + ubuntu-latest) tüm kapılar geçti, [CI #42674665024](https://github.com/cemekli/VideoDownloader/actions/runs/42674665024) (PR #35). |
 
@@ -42,7 +42,7 @@ Bu dosya projenin tek durum kaynağıdır. Her faz bir **çıktı** üretir ve b
 | F4 | Windows dağıtımı ve MVP sürümü | M2 (2/2) | İmzalı installer ile Windows MVP | ⏸ F5'ten sonraya ertelendi |
 | F5 | Yetkili oturum | M3 | VK araştırma raporu ve varsa desteklenen yöntem | 🟨 başladı (F5.1) |
 | F6 | Transkript ve zaman kodlu arama | M4 | AI V2 sürümü | ✅ |
-| F7 | Anlamsal ve görsel arama | M5 | Hibrit ve görsel arama | ⬜ |
+| F7 | Anlamsal ve görsel arama | M5 | Hibrit ve görsel arama | 🟨 başladı (F7.1) |
 | F8 | Android | M6 | Android uygulaması | ⬜ |
 
 ## Test altyapısı
@@ -254,7 +254,7 @@ Her faz bu altyapının üzerine test ekler. Komutlar depo kökünden çalışı
 
 | ID | Alt görev | SPEC bağı | Doğrulama | Durum |
 |---|---|---|---|---|
-| F7.1 | Embedding sağlayıcısı, vector repository, reindex generation | §16.3, DEC-12 | AC-24 | ⬜ |
+| F7.1 | Embedding sağlayıcısı, vector repository, reindex generation | §16.3, DEC-12 | AC-24 | 🟨 Yazıldı (14 Kas 2026), ADR-0035: llama.cpp `llama-server` b12387 (Windows; iş başına yalnız 127.0.0.1, rastgele port ve anahtar) ve onayla indirilen BGE-M3 Q8_0 (MIT, 1024 boyut); SQLite vektör deposu (migration 0014), `building`/`active` nesilleri, `reindex`/`embedding` işleri; AI Processing → "Search by meaning". DEC-12 ölçümü: TR/EN fixture'da BGE-M3 hit@1 13/13, MRR 1,000 (beş aday, tablo ADR-0035'te). AC-24: `crates/vv-persistence/tests/vectors.rs`, `crates/vv-engine/tests/embed.rs`, `src/SearchIndex.test.tsx`; gerçek araç ve model Windows CI'da (`real_llama_server_finds_the_topic`). ✅ için Cuma'nın Windows denemesi (HANDOFF). Anlamla arama kutusu F7.2. |
 | F7.2 | Hibrit sıralama | SEA-07 | AC-40 | ⬜ |
 | F7.3 | AI etiket önerileri (`AIProposal`) | AI-B01…06 | birim + E2E | ⬜ |
 | F7.4 | Sahne değişimi ve kare örnekleme bütçesi, OCR | AI-C01…03, DEC-13 | AC-41 | ⬜ |

@@ -354,7 +354,7 @@ fn a_failing_tool_or_a_missing_tool_fails_the_job_and_keeps_no_half_index_active
 /// the pinned model together: the index is built and a query in other words
 /// (and in the other language) finds the right passage.
 #[test]
-fn real_llama_embedding_finds_the_topic() {
+fn real_llama_server_finds_the_topic() {
     let Some(model) = std::env::var_os("VV_EMBED_TEST_MODEL")
         .filter(|v| !v.is_empty())
         .map(std::path::PathBuf::from)

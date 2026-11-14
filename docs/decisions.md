@@ -1274,3 +1274,42 @@ STATE.md F6.7. SPEC AI-A07 (kalite ve hız gerçek fixture ile ölçülür, sabi
 - `crates/vv-asr-quality/tests/report.rs`: gerçek kütüphane dosyasında (migration'larla açılan şema) gerçek TR altyazı fixture'ı referans; iki model, kısmi döküm, iki denemeli iş; tablo, terimler ve karışan kelimeler.
 - `crates/vv-asr-quality/tests/fuzz.rs`: normalleştirme ve hizalama Türkçe harf, birleşik işaret, emoji, kapanmamış parantez ve denetim karakterleriyle panic vermez; aynı metin 0 hata, hata sayısı simetrik.
 - Asıl ölçüm Cuma'nın bilgisayarında: sonuçlar `docs/asr-quality.md`'de.
+
+## ADR-0035: Anlamsal arama için embedding sağlayıcısı, vektör deposu ve indeks nesilleri
+
+STATE.md F7.1. SPEC §16.3 (vektörler sağlayıcı/model/sürüm/boyut ile saklanır, farklı modelin vektörleri karşılaştırılmaz; reindex eski indeksin yanında kurulur, iptal yarım indeksi aramaya sokmaz; model kaldırılınca kelime araması çalışır), §17.1 (model indirme açık onaya bağlı), DEC-12 (embedding/vektör depolama: bakım, lisans, uyumluluk ve retrieval ölçümü), AC-24 (model değişip reindex yapılınca eski/yeni indeks karışmaz; iptal eski indeksi bozmaz).
+
+**Bağlam.** F6 dökümleri zaman kodlu parçalara (`search_chunk`, en çok 400 karakter / 30 s) böler ve FTS5 ile kelime araması yapar. "veritabanı yedekleme" diye arayan kişi "PostgreSQL replikasyonu" geçen yeri de bulmalı; bunun için her parçanın anlam vektörü gerekir. Uygulama çevrimdışı ve yerel çalışır, Windows hedeflidir; whisper.cpp ile aynı yol (sabitlenmiş yönetilen araç + onayla indirilen GGUF model) bakımı en kolay olanıdır. Bulut ortamı Hugging Face'e ve GitHub release dosyalarına erişemediği için araç, modeller ve ölçüm CI'da yapıldı (`scripts/embedding-probe.mjs`, 14 Kas 2026).
+
+**Karar.**
+
+- **Motor: llama.cpp `llama-server`, embedding kipinde (b12387).** llama.cpp en az Eylül 2026'dan (b10878) beri tek seferlik `llama-embedding` ikilisi yayımlamıyor; b12387'de embedding yalnız sunucudan alınabiliyor (GitHub'ın listelediği 1000 sürümden CPU derlemesi olan en yenisi b12387'de ve en eskisi b10878'de bu ikili yok). Bu yüzden her indeks işi bir sunucu başlatır:
+  - Yalnız `127.0.0.1`, boş bir portta; her çalıştırma için iki rastgele UUID'den 244 bitlik bir anahtar (`--api-key`, diske yazılmaz). Anahtarsız istek `/health` dışında her yerde 401 alır (b12387'de ölçüldü: `/v1/embeddings`, `/v1/models`, `/props`, `/slots`, `/metrics`).
+  - `--embedding --parallel 1 --no-webui --no-slots --offline`, `-c/-b/-ub 2048`, kullanıcının işlemci sınırı kadar iş parçacığı (F6.6), düşük öncelik; ortam değişkenleri temizlenmiş, Windows'ta Job Object içinde (ADR-0008): iş bitince, iptal edilince ya da uygulama kapanınca sunucu ağacıyla birlikte öldürülür.
+  - Model iş başına bir kez yüklenir (b12387'de 0,6–1,2 s); her 32 parçalık grup bir HTTP isteğidir (ureq, proxy yok, yönlendirme yok). İstek ayrı bir iş parçacığında bekler; iptal ve sunucunun düşmesi 50 ms içinde görülür.
+  - Port arada başka bir programa geçerse sunucu çıkar ve bir kez daha denenir. Model 180 s içinde yüklenmezse iş `EXTRACTOR_FAILED` ile biter.
+  - Windows'ta `llama-b12387-bin-win-cpu-x64.zip` (25 124 944 bayt, SHA-256 `ced8482e…`): `llama-server.exe` ve yüklediği 21 DLL (`llama-server-impl`, `llama-common`, `llama`, `mtmd`, `ggml`, `ggml-base`, `libomp` ve 14 `ggml-cpu-*`) `tools/manifest.json`'da hash'li; diğer araçların DLL'leri alınmaz. whisper-cli gibi isteğe bağlıdır ve Linux'ta "Not available on this system"dır (Linux CI sahte sunucuyla test eder). Sürüm `llama-server --version`'ın `version: 12387` satırından kontrol edilir.
+- **Model: BGE-M3 Q8_0** (`ggml-org/bge-m3-Q8_0-GGUF@9eba04c5…`, `bge-m3-q8_0.gguf`, 634 553 760 bayt, SHA-256 `aa473d51…`, MIT). 1024 boyut, kendi CLS havuzlaması, önek yok. `tools/embedding-models.json`'da; güven çapası (izinli depo) `crates/vv-engine/src/models.rs`'de. İndirme transkripsiyon modelleriyle aynı onay penceresinden geçer (boyut, disk, lisans, kaynak, bellek); dosya sabit SHA-256 ile kontrol edilir (yazarı ikinci bir hash yayımlamıyor).
+- **TR/EN ölçümü** (`tests/fixtures/semantic-tr-en.json`: 15 TR/EN parça, 13 sorgu, ortak kelime olmadan aynı konu; GitHub ubuntu-latest, 4 iş parçacığı):
+
+  | Model | Lisans | Boyut | hit@1 | MRR | 15 parça |
+  |---|---|---|---|---|---|
+  | BGE-M3 Q8_0 | MIT | 635 MB | 13/13 | 1,000 | 2,3 s |
+  | EmbeddingGemma-300M Q8_0 | Gemma kullanım şartları | 334 MB | 13/13 | 1,000 | 1,0 s |
+  | EmbeddingGemma-2 Q8_0 (768) | Apache-2.0 | 310 MB | 12/13 | 0,962 | 1,4 s |
+  | Qwen3-Embedding-0.6B Q8_0 (512'ye kesilmiş) | Apache-2.0 | 639 MB | 12/13 | 0,962 | 3,3 s |
+  | multilingual-e5-small q8_0 | MIT | 132 MB | yüklenmedi (b12387: "bert model needs to define token type count") | | |
+
+  BGE-M3, açık lisanslı olanlar arasında en iyisi; EmbeddingGemma-300M aynı sonucu daha hızlı veriyor ama Gemma şartları kullanım kısıtı içeriyor. Fixture küçük: bu bir eleme, kalite iddiası değil (AI-A07, INV-10). F7.2'de (AC-40) hibrit sıralama gerçek kütüphaneyle ölçülecek; katalog başka bir modeli yeni bir nesille ekleyebilir.
+- **Vektör deposu: SQLite** (migration 0014). `embedding_generation` (sağlayıcı, model, model dosyasının SHA-256'sı, boyut, `building`/`active`; her durumdan en çok bir satır) ve `chunk_embedding` (nesil + parça, metnin hash'i, L2-normalize `f32` LE BLOB). Parça silinince vektörü de silinir (cascade). Arama tam (her vektör puanlanır): birkaç yüz video on binlerce parça eder, bu milisaniyeler sürer; yaklaşık indeks ölçüm gerektirince gelir. Ayrı bir vektör veritabanı (sqlite-vec, LanceDB…) yedek/taşınabilirlik ve Windows dağıtımına bir parça daha eklerdi.
+- **Nesiller (AC-24).** Yeni bir model (ya da model dosyası) için indeks, etkin olanın yanında `building` olarak kurulur ve tamamlanınca tek işlemde etkin olur; eski nesil ve vektörleri silinir. İptal yalnız `building` nesli siler, etkin olana dokunmaz. Duraklatma yapılan vektörleri tutar, sonraki çalıştırma kaldığı yerden sürer. Aramalar yalnız etkin nesli, yalnız onun vektörleriyle okur; sorgu da aynı model ve dosyayla gömülmelidir (`searchable`). Model kaldırılınca kelime araması etkilenmez ve ekran indeksin bu modelle sorgulanamayacağını söyler.
+- **İşler.** `reindex` (nesil kurma) ve `embedding` (etkin indekse yeni parçalar) işleri transkripsiyonla aynı tek ağır-AI yuvasını paylaşır. Yeni döküm yazılınca etkin indeks bu modele aitse eksik parçalar için iş kuyruğa girer; kendiliğinden yeni bir nesil kurulmaz. İstem metni denetim karakterlerinden arındırılır ve 1800 bayta (karakter sınırında) kesilir: bir token en az bir bayt olduğu için 2048'lik bağlamı aşamaz (b12387 bağlamı aşan girdiyi 400/500 ile reddediyor, kesmiyor).
+- **Arayüz.** AI Processing → "Search by meaning": model satırı (indir, iptal, kaldır), indeksin durumu ("Index of N of N transcript passages, made with BGE-M3"), "Build index", "Add new passages", "Rebuild index" ve kurulurken "Cancel build" ("Searches use the current index until it is complete"). Anlamla arama kutusu F7.2'de gelir.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/vectors.rs`: onay tablosu genişledi ve yol/yanlış sağlayıcı reddediliyor; kurma → etkinleştirme → yanında yeniden kurma → iptal (etkin indeks ve vektör sayısı aynı) → tamamlanan yeniden kurma eskisinin yerini alıyor; aynı model kaldığı yerden sürüyor, başka model yarım kurulumu siliyor; şema ikinci bir `building` satırını reddediyor; yanlış boyutlu/sıfır/NaN vektör reddediliyor, parçası silinen vektör gidiyor; kosinüs sırası ve `k`.
+- `crates/vv-engine/tests/embed.rs` (sahte sunucu `src/bin/vv-fake-embed.rs`, anahtarsız isteğe 401): model yokken indeks yok; kurma sonrası "veritabanı yedekleme" PostgreSQL parçasını buluyor; yeni dökümler etkin indekse ekleniyor; 120 parça = 4 istek, tek sunucu; yeniden kurma sürerken aramalar eski indekste, iptalden sonra eski indeks tam ve yarım vektörler silinmiş (AC-24); iş başlamadan iptal; sunucu açılmazsa ya da eksik vektör dönerse iş düşüyor ve geçici klasör temizleniyor. Son test Windows CI'da gerçek `llama-server` ve gerçek BGE-M3 ile çalışır.
+- `crates/vv-tools/tests/tools.rs`: `llama-server` girdisi isteğe bağlı, yalnız Windows, URL'si sabit `b12387` sürümü ve izinli depo; sürüm satırı ayrıştırma.
+- `apps/desktop/src-tauri/tests/ipc.rs` ve `src/SearchIndex.test.tsx`: komutlar, onay penceresi (iptal hiçbir şey indirmez, AC-20), kurma, yeniden kurmayı iptal edince eski indeks kalıyor.
+- Ölçüm tablosu `scripts/embedding-probe.mjs --bench` ile yeniden üretilebilir (ağ erişimli Linux).
