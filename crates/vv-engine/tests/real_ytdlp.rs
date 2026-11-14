@@ -47,8 +47,9 @@ fn health_check_passes_the_pinned_tools_and_names_each_failure() {
     let m = manifest();
     let report = check_tools(&m, &paths, 1);
     for t in &report.tools {
-        // whisper.cpp publishes no Linux build (ADR-0028).
-        if t.id == "whisper-cli" && cfg!(not(windows)) {
+        // whisper.cpp (ADR-0028) and llama.cpp's llama-server (ADR-0035)
+        // are pinned for Windows only.
+        if (t.id == "whisper-cli" || t.id == "llama-server") && cfg!(not(windows)) {
             assert_eq!(t.state, ToolState::Unavailable, "{t:?}");
             assert!(t.optional);
             continue;
