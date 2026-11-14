@@ -22,14 +22,15 @@ const phaseLabel = (p: string | null) => (p ? t((PHASES.has(p) ? `downloads.phas
 /** Real progress when the total is known; an indeterminate bar otherwise (AC-09). */
 export function ProgressBar({ job }: { job: JobDto }) {
   if (job.status !== "running") return null;
-  const units = job.kind === "storage_move" && job.unitsTotal;
+  const indexing = job.kind === "embedding" || job.kind === "reindex";
+  const units = (job.kind === "storage_move" || indexing) && job.unitsTotal;
   const estimated = !units && job.bytesTotal === null && job.bytesEstimate !== null && job.bytesEstimate > 0;
   const total = units ? job.unitsTotal : (job.bytesTotal ?? (estimated ? job.bytesEstimate : null));
   const done = units ? job.unitsDone : job.bytesDone;
   const known = total !== null && total > 0 && done !== null;
   const pct = known ? Math.min(100, Math.round((done! / total!) * 100)) : null;
   const text = units
-    ? t("downloads.move.units", { done: done ?? 0, total: total ?? 0 })
+    ? t(indexing ? "search_index.units" : "downloads.move.units", { done: done ?? 0, total: total ?? 0 })
     : estimated && known
       ? t("downloads.progress_about", { done: formatBytes(done), total: formatBytes(total) })
       : known
@@ -40,7 +41,7 @@ export function ProgressBar({ job }: { job: JobDto }) {
       <div
         className={`bar${known ? "" : " bar-indeterminate"}`}
         role="progressbar"
-        aria-label={job.itemTitle ?? t(job.kind === "model_download" ? "models.job" : "downloads.move")}
+        aria-label={job.itemTitle ?? t(job.kind === "model_download" ? "models.job" : indexing ? "search_index.title" : "downloads.move")}
         aria-valuemin={known ? 0 : undefined}
         aria-valuemax={known ? 100 : undefined}
         aria-valuenow={pct ?? undefined}

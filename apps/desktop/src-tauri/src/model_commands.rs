@@ -70,36 +70,44 @@ fn last_job(c: &Connection, staging: &std::path::Path, id: &str) -> Option<JobDt
         .map(|j| job_dto(c, staging, &j))
 }
 
+pub fn model_dto(
+    c: &Connection,
+    dirs: &Dirs,
+    cat: &models::Catalog,
+    m: &models::CatalogModel,
+    mem: Option<Memory>,
+) -> ModelDto {
+    let inst = rows::get(c, &m.id).ok().flatten();
+    ModelDto {
+        id: m.id.clone(),
+        label: m.label.clone(),
+        languages: m.languages.clone(),
+        size_bytes: cat.spec(m).map(|s| s.size_bytes),
+        license: cat.license.clone(),
+        source: cat.repository.clone(),
+        upstream_memory_mb: m.upstream_memory_mb,
+        need_memory_mb: resources::need_mb(m.upstream_memory_mb),
+        fit: resources::fit(resources::need_mb(m.upstream_memory_mb), mem),
+        status: inst
+            .as_ref()
+            .map_or("not_installed", |i| i.status.as_str())
+            .to_owned(),
+        consent_at: inst.as_ref().map(|i| i.consent_at),
+        verified_at: inst.as_ref().and_then(|i| i.verified_at),
+        job: last_job(c, &dirs.staging, &m.id),
+    }
+}
+
+/// The transcription models (Settings → Transcription, AI Processing).
 pub fn overview(c: &Connection, dirs: &Dirs) -> ModelOverview {
     let cat = models::catalog();
     let mem = resources::memory();
-    let models = cat
-        .models
-        .iter()
-        .map(|m| {
-            let inst = rows::get(c, &m.id).ok().flatten();
-            ModelDto {
-                id: m.id.clone(),
-                label: m.label.clone(),
-                languages: m.languages.clone(),
-                size_bytes: cat.spec(m).map(|s| s.size_bytes),
-                license: cat.license.clone(),
-                source: cat.repository.clone(),
-                upstream_memory_mb: m.upstream_memory_mb,
-                need_memory_mb: resources::need_mb(m.upstream_memory_mb),
-                fit: resources::fit(resources::need_mb(m.upstream_memory_mb), mem),
-                status: inst
-                    .as_ref()
-                    .map_or("not_installed", |i| i.status.as_str())
-                    .to_owned(),
-                consent_at: inst.as_ref().map(|i| i.consent_at),
-                verified_at: inst.as_ref().and_then(|i| i.verified_at),
-                job: last_job(c, &dirs.staging, &m.id),
-            }
-        })
-        .collect();
     ModelOverview {
-        models,
+        models: cat
+            .models
+            .iter()
+            .map(|m| model_dto(c, dirs, cat, m, mem))
+            .collect(),
         free_bytes: storage::free_bytes(&dirs.models),
     }
 }
@@ -141,7 +149,7 @@ pub async fn download_model<R: Runtime>(
     let r = blocking(app, move |st| {
         let d = dirs(st)?;
         st.get()?.write(|c| {
-            models::agree_and_queue(c, models::catalog(), &model_id, now()).map_err(
+            models::agree_and_queue(c, models::catalog_for(&model_id), &model_id, now()).map_err(
                 |e| match e {
                     RequestError::UnknownModel | RequestError::NotPinned => {
                         DomainError::new(ErrorCode::InputRejected, "model-not-available")
@@ -246,6 +254,8 @@ pub struct AiProcessing {
     /// Open transcriptions first (oldest first, as they run), then the
     /// last finished ones, newest first.
     pub jobs: Vec<AiJobDto>,
+    /// Search by meaning: model, index and its job (F7.1).
+    pub search_index: crate::search_index_commands::SearchIndexDto,
 }
 
 /// Finished jobs AI Processing lists below the open ones.
@@ -303,6 +313,7 @@ fn transcriber_state<R: Runtime>(app: &AppHandle<R>) -> ToolState {
 #[tauri::command]
 pub async fn get_ai_processing<R: Runtime>(app: AppHandle<R>) -> Result<AiProcessing, DomainError> {
     let tool = transcriber_state(&app);
+    let embedder = crate::search_index_commands::tool_ready(&app);
     blocking(app, move |st| {
         let d = dirs(st)?;
         let c = st.get()?.reader()?;
@@ -310,6 +321,7 @@ pub async fn get_ai_processing<R: Runtime>(app: AppHandle<R>) -> Result<AiProces
             machine: machine(&c, &d, tool),
             models: overview(&c, &d),
             jobs: ai_jobs(&c, &d.staging, now()),
+            search_index: crate::search_index_commands::search_index(&c, &d, embedder),
         })
     })
     .await

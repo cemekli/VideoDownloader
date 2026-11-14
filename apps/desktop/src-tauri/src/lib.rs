@@ -17,6 +17,7 @@ pub mod media_protocol;
 mod model_commands;
 pub mod organize_commands;
 pub mod player_commands;
+mod search_index_commands;
 mod session_commands;
 pub mod thumb_protocol;
 pub mod transcript_commands;
@@ -116,6 +117,9 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             model_commands::verify_model,
             model_commands::remove_model,
             model_commands::get_ai_processing,
+            search_index_commands::get_search_index,
+            search_index_commands::build_search_index,
+            search_index_commands::cancel_search_index,
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,

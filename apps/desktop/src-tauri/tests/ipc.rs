@@ -281,6 +281,9 @@ fn main_capability_grants_only_app_commands() {
         "allow-verify-model",
         "allow-remove-model",
         "allow-get-ai-processing",
+        "allow-get-search-index",
+        "allow-build-search-index",
+        "allow-cancel-search-index",
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
@@ -1481,6 +1484,59 @@ fn model_commands_match_contract_and_need_consent() {
     let a = ok(&w, "get_ai_processing", json!({}));
     assert_eq!(a["machine"]["cpuUse"], "light");
     assert!(a["machine"]["threads"].as_u64().unwrap() <= 2);
+
+    // F7.1: search by meaning is off until the embedding model is there;
+    // building without it is refused, cancel with nothing running is a no-op.
+    let si = &a["searchIndex"];
+    assert_same_shape(
+        si,
+        &with_nulls_of(si, &s["searchIndex"]),
+        "get_ai_processing.searchIndex",
+    );
+    let g = ok(&w, "get_search_index", json!({}));
+    let sg = spec("get_search_index");
+    assert_same_shape(&g, &with_nulls_of(&g, &sg), "get_search_index");
+    assert_same_shape(
+        &g["models"][0],
+        &with_nulls_of(&g["models"][0], &sg["models"][0]),
+        "get_search_index.models[0]",
+    );
+    assert_eq!(g["models"][0]["id"], "embed-qwen3-0.6b");
+    assert_eq!(g["models"][0]["status"], "not_installed");
+    assert!(g["active"].is_null() && g["building"].is_null() && g["job"].is_null());
+    assert_eq!(g["searchable"], false);
+    let e = invoke(
+        &w,
+        "build_search_index",
+        json!({ "rebuild": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "MODEL_MISSING");
+    let c2 = ok(&w, "cancel_search_index", json!({}));
+    assert!(c2["active"].is_null());
+    let text = g.to_string();
+    assert!(!text.contains(&*d.path().to_string_lossy()), "{text}");
+    // The embedding model is agreed to like a transcription model (AC-20).
+    let e = invoke(
+        &w,
+        "download_model",
+        json!({ "modelId": "embed-qwen3-0.6b", "agreed": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "INPUT_REJECTED");
+    let _ = ok(
+        &w,
+        "download_model",
+        json!({ "modelId": "embed-qwen3-0.6b", "agreed": true }),
+    );
+    let g = ok(&w, "get_search_index", json!({}));
+    assert_eq!(g["models"][0]["status"], "pending");
+    assert_eq!(g["models"][0]["job"]["kind"], "model_download");
+    let _ = ok(&w, "remove_model", json!({ "modelId": "embed-qwen3-0.6b" }));
+    let g = ok(&w, "get_search_index", json!({}));
+    assert_eq!(g["models"][0]["status"], "not_installed");
 }
 
 #[test]

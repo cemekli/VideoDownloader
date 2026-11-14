@@ -616,7 +616,7 @@ export interface ToolStatus {
   checkedAt: number | null;
 }
 
-export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions" | "transcription";
+export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions" | "transcription" | "embedding" | "reindex";
 export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
 
 export interface JobDto {
@@ -846,12 +846,38 @@ export interface AiJobDto {
   elapsedMs: number | null;
 }
 
+/** One index generation (SPEC §16.3): which model made its vectors and how far it got. */
+export interface IndexDto {
+  modelId: string;
+  modelLabel: string | null;
+  dims: number;
+  /** Transcript chunks with a vector / all transcript chunks in the library. */
+  done: number;
+  total: number;
+  createdAt: number;
+  activatedAt: number | null;
+}
+
+/** Search by meaning (F7.1): the embedding model, the index searches use, a build beside it (AC-24). */
+export interface SearchIndexDto {
+  models: ModelDto[];
+  active: IndexDto | null;
+  building: IndexDto | null;
+  /** The open or last index job (`embedding` or `reindex`). */
+  job: JobDto | null;
+  /** llama-embedding passed its check. */
+  toolReady: boolean;
+  /** The active index was made with the installed model, so meaning searches can run. */
+  searchable: boolean;
+}
+
 /** The AI Processing screen: this PC, the models and the transcription queue. */
 export interface AiProcessing {
   machine: MachineDto;
   models: ModelOverview;
   /** Open jobs first (in run order), then the last finished ones. */
   jobs: AiJobDto[];
+  searchIndex: SearchIndexDto;
 }
 
 /** Transcription models (F6.1, AC-20): nothing is downloaded until the user agrees in the consent dialog. */
@@ -863,6 +889,11 @@ export interface ModelClient {
   /** Cancels an open download and removes the file and the consent. */
   removeModel(modelId: string): Promise<ModelOverview>;
   getAiProcessing(): Promise<AiProcessing>;
+  getSearchIndex(): Promise<SearchIndexDto>;
+  /** Builds the index for the installed embedding model or adds what it misses; `rebuild` starts over beside the active one. */
+  buildSearchIndex(rebuild: boolean): Promise<SearchIndexDto>;
+  /** Cancels a build; the active index stays (AC-24). */
+  cancelSearchIndex(): Promise<SearchIndexDto>;
 }
 
 /** Where a transcript came from (SPEC §11.5). */

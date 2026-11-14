@@ -4,7 +4,7 @@
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import type { FixtureScenario } from "./fixture";
-import type { CpuUse, JobDto, MachineDto, MemoryFit, MemoryInfo, ModelClient, ModelDto, ModelOverview } from "./types";
+import type { CpuUse, IndexDto, JobDto, MachineDto, MemoryFit, MemoryInfo, ModelClient, ModelDto, ModelOverview, SearchIndexDto } from "./types";
 
 const MB = 1024 * 1024;
 
@@ -46,11 +46,42 @@ export function createFixtureModels(scenario: FixtureScenario, stepMs = 300): Om
     models[1] = { ...b, ...ready };
     models.push({ ...b, ...ready, ...MEDIUM, needMemoryMb: needMb(MEDIUM.upstreamMemoryMb), fit: fitOf(needMb(MEDIUM.upstreamMemoryMb), mem) });
   }
+  // Search by meaning (F7.1): the embedding model starts not installed.
+  const si = contract.commands.get_search_index.response as SearchIndexDto;
+  const embedModels: ModelDto[] = si.models.map((m) => ({ ...m, fit: fitOf(m.needMemoryMb, mem), status: "not_installed", consentAt: null, verifiedAt: null, job: null }));
+  let active: IndexDto | null = null;
+  let building: IndexDto | null = null;
+  let indexJob: JobDto | null = null;
+  /** Transcript chunks in the fixture library. */
+  const CHUNKS = 12;
   let clock = 1_793_600_000_000;
   const now = () => (clock += 1_000);
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const view = (): ModelOverview => structuredClone({ models, freeBytes: base.freeBytes });
-  const find = (id: string, cmd: string) => models.find((m) => m.id === id) ?? (() => { throw err("INPUT_REJECTED", cmd); })();
+  const find = (id: string, cmd: string) => models.find((m) => m.id === id) ?? embedModels.find((m) => m.id === id) ?? (() => { throw err("INPUT_REJECTED", cmd); })();
+  const indexView = (): SearchIndexDto => {
+    const ready = embedModels.some((m) => m.status === "ready");
+    return structuredClone({ models: embedModels, active, building, job: indexJob, toolReady: true, searchable: ready && active !== null });
+  };
+  const indexStep = () => {
+    const j = indexJob;
+    const g = building ?? active;
+    if (!j || j.status !== "running" || !g) return;
+    g.done = Math.min(g.total, g.done + 4);
+    j.unitsDone = g.done;
+    j.updatedAt = now();
+    if (g.done >= g.total) {
+      j.status = "succeeded";
+      j.finishedAt = j.updatedAt;
+      j.canCancel = false;
+      if (building) {
+        active = { ...building, activatedAt: j.updatedAt };
+        building = null;
+      }
+      return;
+    }
+    timers.set("index", setTimeout(indexStep, stepMs));
+  };
 
   const step = (m: ModelDto) => {
     const j = m.job;
@@ -128,6 +159,43 @@ export function createFixtureModels(scenario: FixtureScenario, stepMs = 300): Om
       m.consentAt = null;
       m.verifiedAt = null;
       return view();
+    },
+    async getSearchIndex() {
+      return indexView();
+    },
+    async buildSearchIndex(rebuild) {
+      const m = embedModels.find((x) => x.status === "ready");
+      if (!m) throw err("MODEL_MISSING", "build_search_index");
+      if (indexJob && !["succeeded", "failed", "canceled"].includes(indexJob.status)) return indexView();
+      if (active && !rebuild && active.done >= active.total) return indexView();
+      const t = now();
+      const reindex = rebuild || active === null;
+      if (reindex) building = { modelId: m.id, modelLabel: m.label, dims: 512, done: 0, total: CHUNKS, createdAt: t, activatedAt: null };
+      indexJob = {
+        ...(si.job as JobDto),
+        id: `00000000-0000-4000-8000-${String(0xe000 + (clock % 1000)).padStart(12, "0")}`,
+        kind: reindex ? "reindex" : "embedding",
+        status: "running",
+        phase: reindex ? "build" : "update",
+        unitsDone: 0,
+        unitsTotal: CHUNKS,
+        createdAt: t,
+        updatedAt: t,
+        finishedAt: null,
+        canCancel: true,
+      };
+      timers.set("index", setTimeout(indexStep, stepMs));
+      return indexView();
+    },
+    async cancelSearchIndex() {
+      clearTimeout(timers.get("index"));
+      if (indexJob && !["succeeded", "failed", "canceled"].includes(indexJob.status)) {
+        indexJob.status = "canceled";
+        indexJob.canCancel = false;
+        indexJob.finishedAt = now();
+      }
+      building = null;
+      return indexView();
     },
   };
 }

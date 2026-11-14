@@ -1916,7 +1916,65 @@
             "language": "auto",
             "elapsedMs": 65000
           }
-        ]
+        ],
+        "searchIndex": {
+          "models": [
+            {
+              "id": "embed-qwen3-0.6b",
+              "label": "Qwen3 Embedding 0.6B",
+              "languages": "multilingual (100+ languages, Turkish and English included)",
+              "sizeBytes": 639150592,
+              "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
+              "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+              "upstreamMemoryMb": 1024,
+              "needMemoryMb": 1408,
+              "fit": "ok",
+              "status": "ready",
+              "consentAt": 1762700000000,
+              "verifiedAt": 1762700300000,
+              "job": null
+            }
+          ],
+          "active": {
+            "modelId": "embed-qwen3-0.6b",
+            "modelLabel": "Qwen3 Embedding 0.6B",
+            "dims": 512,
+            "done": 3,
+            "total": 3,
+            "createdAt": 1762700400000,
+            "activatedAt": 1762700460000
+          },
+          "building": null,
+          "job": {
+            "id": "00000000-0000-4000-8000-00000000e001",
+            "kind": "reindex",
+            "itemId": null,
+            "itemTitle": null,
+            "itemPlatform": null,
+            "status": "succeeded",
+            "phase": "build",
+            "bytesDone": null,
+            "bytesTotal": null,
+            "bytesEstimate": null,
+            "unitsDone": 3,
+            "unitsTotal": 3,
+            "preset": null,
+            "attempts": 1,
+            "maxAttempts": 1,
+            "errorCode": null,
+            "blockedReason": null,
+            "nextRetryAt": null,
+            "partialBytes": 0,
+            "createdAt": 1794000080000,
+            "updatedAt": 1794000090000,
+            "finishedAt": 1762700460000,
+            "canRetry": false,
+            "canCancel": false,
+            "canRemovePartial": false
+          },
+          "toolReady": true,
+          "searchable": true
+        }
       }
     },
     "list_transcripts": {
@@ -2327,6 +2385,191 @@
         "saved": true,
         "fileName": "Deniz kenarında sabah - note.md",
         "moments": 1
+      }
+    },
+    "get_search_index": {
+      "args": {},
+      "response": {
+        "models": [
+          {
+            "id": "embed-qwen3-0.6b",
+            "label": "Qwen3 Embedding 0.6B",
+            "languages": "multilingual (100+ languages, Turkish and English included)",
+            "sizeBytes": 639150592,
+            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
+            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "upstreamMemoryMb": 1024,
+            "needMemoryMb": 1408,
+            "fit": "ok",
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "active": {
+          "modelId": "embed-qwen3-0.6b",
+          "modelLabel": "Qwen3 Embedding 0.6B",
+          "dims": 512,
+          "done": 3,
+          "total": 3,
+          "createdAt": 1762700400000,
+          "activatedAt": 1762700460000
+        },
+        "building": null,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000e001",
+          "kind": "reindex",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "build",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 3,
+          "unitsTotal": 3,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "toolReady": true,
+        "searchable": true
+      }
+    },
+    "build_search_index": {
+      "args": {
+        "rebuild": false
+      },
+      "response": {
+        "models": [
+          {
+            "id": "embed-qwen3-0.6b",
+            "label": "Qwen3 Embedding 0.6B",
+            "languages": "multilingual (100+ languages, Turkish and English included)",
+            "sizeBytes": 639150592,
+            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
+            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "upstreamMemoryMb": 1024,
+            "needMemoryMb": 1408,
+            "fit": "ok",
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "active": {
+          "modelId": "embed-qwen3-0.6b",
+          "modelLabel": "Qwen3 Embedding 0.6B",
+          "dims": 512,
+          "done": 3,
+          "total": 3,
+          "createdAt": 1762700400000,
+          "activatedAt": 1762700460000
+        },
+        "building": null,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000e001",
+          "kind": "reindex",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "build",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 3,
+          "unitsTotal": 3,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "toolReady": true,
+        "searchable": true
+      }
+    },
+    "cancel_search_index": {
+      "args": {},
+      "response": {
+        "models": [
+          {
+            "id": "embed-qwen3-0.6b",
+            "label": "Qwen3 Embedding 0.6B",
+            "languages": "multilingual (100+ languages, Turkish and English included)",
+            "sizeBytes": 639150592,
+            "license": "Apache-2.0 (Qwen3-Embedding-0.6B, GGUF published by the Qwen team)",
+            "source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "upstreamMemoryMb": 1024,
+            "needMemoryMb": 1408,
+            "fit": "ok",
+            "status": "ready",
+            "consentAt": 1762700000000,
+            "verifiedAt": 1762700300000,
+            "job": null
+          }
+        ],
+        "active": {
+          "modelId": "embed-qwen3-0.6b",
+          "modelLabel": "Qwen3 Embedding 0.6B",
+          "dims": 512,
+          "done": 3,
+          "total": 3,
+          "createdAt": 1762700400000,
+          "activatedAt": 1762700460000
+        },
+        "building": null,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000e001",
+          "kind": "reindex",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "build",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 3,
+          "unitsTotal": 3,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "toolReady": true,
+        "searchable": true
       }
     }
   },
