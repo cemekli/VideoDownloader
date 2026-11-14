@@ -272,10 +272,13 @@ if (whisper) {
   ok(line.trim());
 }
 if (llama) {
-  // Same rule as vv-tools parse_llama_version: `version: <build> (<commit>)` on stderr.
+  // Same rule as vv-tools parse_llama_version: `version: 1.0.0-dev (build <N>, commit <C>)`,
+  // or the older `version: <N> (<commit>)`.
   const r = spawnSync(llama, ["--version"], { encoding: "utf8", timeout: 60_000 });
   const line = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.split(/\r?\n/).find((l) => l.trim().startsWith("version:")) ?? "";
-  if (r.status !== 0 || line.trim().split(/\s+/)[1] !== llamaTool.version) {
+  const rest = line.trim().slice("version:".length);
+  const build = rest.includes("(build ") ? rest.split("(build ")[1].split(/[,)]/)[0].trim() : rest.trim().split(/\s+/)[0];
+  if (r.status !== 0 || build !== llamaTool.version) {
     const hint = r.status === 3221225781 || r.status === -1073741515 ? " (a DLL is missing: the Microsoft Visual C++ runtime?)" : "";
     fail(`llama-server --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
   }

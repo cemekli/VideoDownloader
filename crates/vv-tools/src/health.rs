@@ -72,7 +72,12 @@ pub fn parse_llama_version(output: &str) -> Option<Version> {
     let rest = output
         .lines()
         .find_map(|l| l.trim().strip_prefix("version:"))?;
-    let n = rest.split_whitespace().next()?;
+    // Newer builds: `version: 1.0.0-dev (build 12387, commit a956a852c)`.
+    // Older builds: `version: 6123 (1a2b3c4d)`.
+    let n = match rest.split_once("(build ") {
+        Some((_, after)) => after.split([',', ')']).next()?.trim(),
+        None => rest.split_whitespace().next()?,
+    };
     if n.is_empty() || n.len() > 9 || !n.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }

@@ -672,7 +672,20 @@ fn llama_version_line() {
         ),
         VersionCheck::Mismatch { .. }
     ));
-    for junk in ["", "usage: llama-server", "version: x (abc)", "version:"] {
+    // b12387 on Windows prints this (seen in CI).
+    let real = "version: 1.0.0-dev (build 12387, commit a956a852c)\r\nbuilt with Clang 20.1.8 for Windows x86_64\r\n";
+    assert_eq!(
+        check_version(&llama_pinned("12387"), parse_llama_version(real)),
+        VersionCheck::Ok
+    );
+    for junk in [
+        "",
+        "usage: llama-server",
+        "version: x (abc)",
+        "version:",
+        "version: 1.0.0-dev (build x, commit a)",
+        "version: 1.0.0-dev (build , commit a)",
+    ] {
         assert_eq!(parse_llama_version(junk), None, "{junk:?}");
     }
 }
