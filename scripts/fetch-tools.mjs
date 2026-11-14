@@ -217,6 +217,11 @@ const ffprobe = await fetchTool("ffprobe");
 const whisperTool = tool("whisper-cli");
 const whisper = whisperTool.artifacts.some((a) => a.platform === platform) ? await fetchTool("whisper-cli") : null;
 if (!whisper) console.log(`… whisper-cli has no build for ${platform}; local transcription is tested with the fake one here`);
+// Optional (ADR-0035): llama.cpp's llama-embedding for search by meaning,
+// pinned for Windows like whisper-cli.
+const llamaTool = manifest.tools.find((t) => t.id === "llama-embedding");
+const llama = llamaTool && llamaTool.artifacts.some((a) => a.platform === platform) ? await fetchTool("llama-embedding") : null;
+if (!llama) console.log(`… llama-embedding has no build for ${platform}; search by meaning is tested with the fake one here`);
 
 const denoV = run(deno, ["--version"]).split("\n")[0].trim();
 if (!denoV.startsWith(`deno ${tool("deno").version} `)) fail(`deno --version printed ${JSON.stringify(denoV)}`);
@@ -265,6 +270,16 @@ if (whisper) {
     fail(`whisper-cli --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
   }
   ok(line.trim());
+}
+if (llama) {
+  // Same rule as vv-tools parse_llama_version: `version: <build> (<commit>)` on stderr.
+  const r = spawnSync(llama, ["--version"], { encoding: "utf8", timeout: 60_000 });
+  const line = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.split(/\r?\n/).find((l) => l.trim().startsWith("version:")) ?? "";
+  if (r.status !== 0 || line.trim().split(/\s+/)[1] !== llamaTool.version) {
+    const hint = r.status === 3221225781 || r.status === -1073741515 ? " (a DLL is missing: the Microsoft Visual C++ runtime?)" : "";
+    fail(`llama-embedding --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
+  }
+  ok(`llama-embedding ${line.trim()}`);
 }
 const ffFailures = await checkFfmpeg({ ffmpeg, ffprobe });
 if (ffFailures.length) fail(`${ffFailures.length} FFmpeg check(s) failed`);

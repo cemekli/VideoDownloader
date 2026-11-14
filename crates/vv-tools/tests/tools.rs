@@ -658,3 +658,21 @@ fn whisper_version_line() {
         assert_eq!(parse_whisper_version(junk), None, "{junk:?}");
     }
 }
+
+#[test]
+fn llama_version_line() {
+    // llama.cpp prints its build number and commit on stderr.
+    let out = "load_backend: loaded CPU backend\nversion: 6123 (1a2b3c4d)\nbuilt with MSVC 19.44 for x64\n";
+    let v = parse_llama_version(out);
+    assert_eq!(check_version(&llama_pinned("6123"), v), VersionCheck::Ok);
+    assert!(matches!(
+        check_version(
+            &llama_pinned("6123"),
+            parse_llama_version("version: 6100 (abc)")
+        ),
+        VersionCheck::Mismatch { .. }
+    ));
+    for junk in ["", "usage: llama-embedding", "version: x (abc)", "version:"] {
+        assert_eq!(parse_llama_version(junk), None, "{junk:?}");
+    }
+}

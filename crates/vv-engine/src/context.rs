@@ -103,6 +103,7 @@ impl Tools {
         ffmpeg_build: &str,
         ytdlp_version: &str,
         whisper_version: &str,
+        llama_version: &str,
     ) -> Tools {
         use vv_tools::ToolId;
         let media = (report.is_ok(ToolId::Ffmpeg) && report.is_ok(ToolId::Ffprobe))
@@ -118,13 +119,19 @@ impl Tools {
             version: whisper_version.to_owned(),
             chunk_ms: crate::transcribe::DEFAULT_CHUNK_MS,
         });
+        let embedder = report
+            .is_ok(ToolId::LlamaEmbedding)
+            .then(|| crate::embed::EmbedTool {
+                exe: paths.embedder.clone(),
+                version: llama_version.to_owned(),
+            });
         Tools {
             report,
             ytdlp,
             media,
             ytdlp_version: ytdlp_version.to_owned(),
             whisper,
-            embedder: None,
+            embedder,
         }
     }
 }

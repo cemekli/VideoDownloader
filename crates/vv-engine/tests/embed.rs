@@ -2,6 +2,10 @@
 //! `llama-embedding` (src/bin/vv-fake-embed.rs): build, search by meaning,
 //! fill after new transcripts, reindex beside the active index, cancel and
 //! pause, a missing model or tool.
+//!
+//! The last test runs the real `llama-embedding` (Windows CI) with the real
+//! model when `VV_EMBED_TEST_MODEL` names it: a Turkish query finds the
+//! passage that says the same thing in other words (DEC-12, ADR-0035).
 
 mod common;
 
@@ -17,12 +21,25 @@ use vv_persistence::vectors::{self, GenerationStatus};
 const MODEL: &str = "embed-qwen3-0.6b";
 
 fn install_model(lib: &Lib) {
+    install_model_from(lib, None);
+}
+
+/// The model as if the user agreed and it was downloaded and checked:
+/// `real` (the pinned file), or a sparse file of the pinned size.
+fn install_model_from(lib: &Lib, real: Option<&std::path::Path>) {
     let cat = models::embedding_catalog();
     let spec = cat.spec(cat.model(MODEL).unwrap()).unwrap();
     let dir = &lib.cx().dirs.models;
     std::fs::create_dir_all(dir).unwrap();
-    let f = std::fs::File::create(dir.join(&spec.file_name)).unwrap();
-    f.set_len(spec.size_bytes as u64).unwrap();
+    match real {
+        Some(src) => {
+            std::fs::copy(src, dir.join(&spec.file_name)).unwrap();
+        }
+        None => {
+            let f = std::fs::File::create(dir.join(&spec.file_name)).unwrap();
+            f.set_len(spec.size_bytes as u64).unwrap();
+        }
+    }
     let now = lib.clock.now_ms();
     lib.write(|c| {
         model_rows::consent(c, &spec, now).unwrap();
@@ -320,4 +337,63 @@ fn a_failing_tool_or_a_missing_tool_fails_the_job_and_keeps_no_half_index_active
     assert_ne!(j.status, JobStatus::Succeeded);
     assert_eq!(j.error_code.as_deref(), Some("TOOL_MISSING"), "{j:?}");
     assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
+}
+
+/// The pinned llama.cpp build, its libraries, our flags and JSON reader and
+/// the pinned model together: the index is built and a query in other words
+/// (and in the other language) finds the right passage.
+#[test]
+fn real_llama_embedding_finds_the_topic() {
+    let Some(model) = std::env::var_os("VV_EMBED_TEST_MODEL")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+    else {
+        eprintln!("skipped: VV_EMBED_TEST_MODEL not set");
+        return;
+    };
+    let Some(paths) = real_tool_paths() else {
+        return;
+    };
+    assert!(
+        paths.embedder.is_file(),
+        "VV_EMBED_TEST_MODEL set but no llama-embedding in tools/bin"
+    );
+    let lib = library(Setup {
+        embedder: Some(paths.embedder.clone()),
+        ..Setup::fake()
+    });
+    install_model_from(&lib, Some(&model));
+    with_transcript(
+        &lib,
+        "https://fake.test/a",
+        &[
+            "Bugün PostgreSQL'de akış replikasyonunu kuruyoruz; birincil sunucu WAL kayıtlarını yedek sunucuya gönderiyor.",
+            "Ekşi maya ile ev ekmeği: hamuru bir gece mayalandırıp sabah taş fırında pişiriyoruz.",
+        ],
+    );
+    with_transcript(
+        &lib,
+        "https://fake.test/b",
+        &[
+            "For your first marathon, build up the weekly long run slowly and rest one day a week.",
+            "We compare index fund fees and why a low expense ratio matters over thirty years.",
+        ],
+    );
+    let job = request(&lib, false).unwrap();
+    lib.run();
+    let j = lib.job(&job);
+    assert_eq!(
+        j.status,
+        JobStatus::Succeeded,
+        "{:?} {:?}",
+        j.error_code,
+        j.redacted_error_message
+    );
+    let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
+    assert_eq!(g.producer.dims, 512);
+    assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (4, 4));
+    assert!(best(&lib, "veritabanı yedekleme").contains("PostgreSQL"));
+    assert!(best(&lib, "how to bake sourdough bread").contains("Ekşi maya"));
+    assert!(best(&lib, "koşu antrenmanı").contains("marathon"));
+    assert!(staging_is_clean(&lib));
 }

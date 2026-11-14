@@ -56,6 +56,11 @@ pub enum Role {
 /// The text the model sees: the role's prefix, then the text with the
 /// separator and control characters removed. An empty text becomes one
 /// space (the tool would skip it and shift every vector after it).
+/// A chunk is at most `CHUNK_MAX_CHARS` (400) long; a longer text (a single
+/// very long caption line) is cut so a prompt always fits the model context
+/// (`llama-embedding` refuses an input longer than its batch).
+pub const PROMPT_MAX_CHARS: usize = 1000;
+
 pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
     let clean: String = text
         .replace(SEPARATOR, " ")
@@ -63,6 +68,7 @@ pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
     let clean = clean.split_whitespace().collect::<Vec<_>>().join(" ");
+    let clean: String = clean.chars().take(PROMPT_MAX_CHARS).collect();
     let clean = if clean.is_empty() {
         " ".to_owned()
     } else {
@@ -519,6 +525,11 @@ mod tests {
         assert_eq!(
             prompt(&u, Role::Passage, "İstanbul'da  çay"),
             "İstanbul'da çay"
+        );
+        let long = "ş".repeat(PROMPT_MAX_CHARS + 50);
+        assert_eq!(
+            prompt(&u, Role::Passage, &long).chars().count(),
+            PROMPT_MAX_CHARS
         );
     }
 

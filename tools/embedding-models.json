@@ -19,7 +19,7 @@
         "dims": 512,
         "queryPrefix": "Instruct: Given a search query, retrieve relevant passages from video transcripts that answer the query\nQuery:",
         "passagePrefix": "",
-        "context": 512
+        "context": 1024
       }
     }
   ]
