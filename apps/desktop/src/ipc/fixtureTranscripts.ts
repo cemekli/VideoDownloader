@@ -25,6 +25,8 @@ import { fitOf, fixtureMemory, needMb } from "./fixtureModels";
 /** Transcripts plus the cancel the fixture client routes here for transcription jobs. */
 export type FixtureTranscripts = TranscriptClient & {
   cancelOwnJob(jobId: string): JobDto | null;
+  /** "Clear finished" on AI Processing. */
+  clearOwnJobs(): { cleared: number; freedBytes: number };
   /** Where the search terms were said in an item (F6.4). */
   spokenMatches(itemId: string, ts: string[]): TranscriptMatchesDto | null;
   /** Transcription jobs as AI Processing lists them (F6.6). */
@@ -60,6 +62,8 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
   const segments = new Map<string, TranscriptDetail["segments"]>();
   const jobs = new Map<string, JobDto>();
   const asr = new Map<string, JobDto>();
+  /** Finished jobs taken off AI Processing; a retried job shows again. */
+  const cleared = new Set<string>();
   const asrModel = new Map<string, string>();
   const FIXTURE_MODELS = fixtureModels(scenario);
   const asrLanguage = new Map<string, string>();
@@ -279,10 +283,19 @@ export function createFixtureTranscripts(records: FixtureRecord[], stepMs = 400,
       return view(itemId);
     },
     aiJobs() {
-      const all = [...asr.entries()].map(([itemId, job]): AiJobDto => ({ job: structuredClone(job), model: asrModel.get(itemId) ?? null, language: asrLanguage.get(itemId) ?? null, elapsedMs: elapsed(job) }));
+      const all = [...asr.entries()].filter(([, j]) => isOpen(j) || !cleared.has(j.id)).map(([itemId, job]): AiJobDto => ({ job: structuredClone(job), model: asrModel.get(itemId) ?? null, language: asrLanguage.get(itemId) ?? null, elapsedMs: elapsed(job) }));
       const open = all.filter((a) => isOpen(a.job)).sort((a, b) => a.job.createdAt - b.job.createdAt);
       const done = all.filter((a) => !isOpen(a.job)).sort((a, b) => (b.job.finishedAt ?? 0) - (a.job.finishedAt ?? 0));
       return [...open, ...done.slice(0, 10)];
+    },
+    clearOwnJobs() {
+      let n = 0;
+      for (const j of asr.values()) {
+        if (isOpen(j) || cleared.has(j.id)) continue;
+        cleared.add(j.id);
+        n += 1;
+      }
+      return { cleared: n, freedBytes: 0 };
     },
     cancelOwnJob(jobId) {
       for (const j of asr.values()) {

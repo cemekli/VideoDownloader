@@ -167,6 +167,12 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       run(j);
       return { ...j };
     },
+    async clearFinishedDownloads() {
+      const done = jobs.filter((j) => j.kind !== "metadata" && ["succeeded", "failed", "canceled"].includes(j.status));
+      const freedBytes = done.filter((j) => j.status !== "succeeded").reduce((n, j) => n + j.partialBytes, 0);
+      for (const j of done) jobs.splice(jobs.indexOf(j), 1);
+      return { cleared: done.length, freedBytes };
+    },
     async removePartial(jobId) {
       const j = find(jobId, "remove_partial");
       if (j.status !== "failed" && j.status !== "canceled") throw err("INPUT_REJECTED", "remove_partial");

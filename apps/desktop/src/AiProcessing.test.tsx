@@ -64,4 +64,18 @@ describe("AI Processing", () => {
     await waitFor(() => expect(screen.getByTestId("ai-job")).toHaveAttribute("data-status", "canceled"));
     expect(screen.getByTestId("ai-job")).toHaveTextContent("Stopped (Base)");
   });
+
+  it("Clear finished takes finished transcriptions off the list; open ones stay", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient();
+    await client.transcribeLocally(LOCAL, "whisper-base", "tr");
+    const notify = vi.fn();
+    render(<AiProcessingView client={client} notify={notify} onSettings={vi.fn()} />);
+    expect(await screen.findByTestId("ai-job")).toHaveAttribute("data-status", "running");
+    expect(screen.queryByTestId("ai-jobs-clear")).toBeNull();
+    await user.click(within(screen.getByTestId("ai-job")).getByTestId("ai-job-cancel"));
+    await user.click(await screen.findByTestId("ai-jobs-clear"));
+    await waitFor(() => expect(screen.queryByTestId("ai-job")).toBeNull());
+    expect(notify).toHaveBeenCalledWith("Cleared 1 transcription from the list. The transcript stays with its item.");
+  });
 });

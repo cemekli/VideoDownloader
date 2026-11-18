@@ -254,11 +254,8 @@ pub struct AiProcessing {
 pub const RECENT_AI_JOBS: usize = 10;
 
 pub fn ai_jobs(c: &Connection, staging: &std::path::Path, now: i64) -> Vec<AiJobDto> {
-    let all: Vec<jobs::Job> = jobs::list(c, &[], 500)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|j| j.kind == JobKind::Transcription)
-        .collect();
+    let all: Vec<jobs::Job> =
+        jobs::list_shown(c, &[JobKind::Transcription], 500).unwrap_or_default();
     let (mut open, mut done): (Vec<_>, Vec<_>) =
         all.into_iter().partition(|j| !j.status.is_terminal());
     open.sort_by_key(|j| (j.created_at, j.id.clone()));
@@ -277,6 +274,25 @@ pub fn ai_jobs(c: &Connection, staging: &std::path::Path, now: i64) -> Vec<AiJob
             }
         })
         .collect()
+}
+
+/// "Clear finished" on AI Processing: finished transcription jobs leave the
+/// list (the transcripts and Details' "Last run" line stay).
+#[tauri::command]
+pub async fn clear_finished_ai_jobs<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<crate::download_commands::Cleared, DomainError> {
+    blocking(app, move |st| {
+        let n = st.get()?.write(|c| {
+            jobs::clear_finished(c, &[JobKind::Transcription], now())
+                .map_err(|_| crate::library::internal("jobs-clear"))
+        })?;
+        Ok(crate::download_commands::Cleared {
+            cleared: n.len(),
+            freed_bytes: 0,
+        })
+    })
+    .await
 }
 
 pub fn machine(c: &Connection, dirs: &Dirs, transcriber: ToolState) -> Machine {

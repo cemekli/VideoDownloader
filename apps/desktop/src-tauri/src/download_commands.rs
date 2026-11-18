@@ -193,13 +193,50 @@ pub(crate) fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
 /// Jobs shown on the Downloads screen: downloads and media-folder moves,
 /// newest first.
 pub fn list(c: &Connection, staging: &Path, limit: i64) -> Result<Vec<JobDto>, DomainError> {
-    let all = jobs::list(c, &[], limit.saturating_mul(4)).map_err(job_err)?;
-    Ok(all
-        .iter()
-        .filter(|j| matches!(j.kind, JobKind::Download | JobKind::StorageMove))
-        .take(limit as usize)
-        .map(|j| job_dto(c, staging, j))
-        .collect())
+    let all = jobs::list_shown(c, DOWNLOAD_KINDS, limit).map_err(job_err)?;
+    Ok(all.iter().map(|j| job_dto(c, staging, j)).collect())
+}
+
+/// What the Downloads screen lists.
+pub const DOWNLOAD_KINDS: &[JobKind] = &[JobKind::Download, JobKind::StorageMove];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cleared {
+    /// Jobs taken off the list.
+    pub cleared: usize,
+    /// Partial files of failed or canceled downloads that were deleted.
+    pub freed_bytes: u64,
+}
+
+/// "Clear finished" on the Downloads screen: completed, failed and
+/// canceled jobs leave the list; open ones stay. A failed or canceled
+/// download's partial file is deleted with it, since nothing would offer to
+/// resume it any more. Downloaded videos stay in the library.
+#[tauri::command]
+pub async fn clear_finished_downloads<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Cleared, DomainError> {
+    blocking(app, move |st| {
+        let d = dirs(st)?;
+        let done = st.get()?.write(|c| {
+            jobs::clear_finished(c, DOWNLOAD_KINDS, now())
+                .map_err(|_| crate::library::internal("jobs-clear"))
+        })?;
+        let freed_bytes = done
+            .iter()
+            .filter(|j| {
+                j.kind == JobKind::Download
+                    && matches!(j.status, JobStatus::Failed | JobStatus::Canceled)
+            })
+            .map(|j| download::remove_partial(&d.staging, j).unwrap_or(0))
+            .sum();
+        Ok(Cleared {
+            cleared: done.len(),
+            freed_bytes,
+        })
+    })
+    .await
 }
 
 fn one(c: &Connection, staging: &Path, id: &str) -> Result<JobDto, DomainError> {

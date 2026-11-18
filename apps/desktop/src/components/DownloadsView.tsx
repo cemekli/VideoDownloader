@@ -4,9 +4,11 @@ import type { DownloadClient, JobDto, Platform, SessionClient } from "../ipc/typ
 import { ConnectSessionDialog } from "./Sessions";
 import { formatBytes } from "../format";
 import { errorMessage } from "../labels";
-import { formatDateTime, t, type MessageKey } from "../i18n";
+import { formatDateTime, t, tn, type MessageKey } from "../i18n";
+import { ConfirmDialog } from "./Dialogs";
 
 const ACTIVE = new Set(["queued", "blocked", "running", "retry_wait", "pausing", "paused", "canceling"]);
+const FINISHED = new Set(["succeeded", "failed", "canceled"]);
 const PHASES = new Set(["prepare", "download", "download_video", "download_audio", "merge", "postprocess", "verify", "copy", "move"]);
 const BLOCKED = new Set(["offline", "disk", "auth", "tool", "path", "storage_root", "model"]);
 
@@ -157,6 +159,7 @@ export function DownloadsView({ client, notify }: { client: DownloadClient & Ses
   const [connecting, setConnecting] = useState<{ provider: Platform | null } | null>(null);
   const [state, setState] = useState<{ status: "loading" } | { status: "error"; code: string } | { status: "ready"; jobs: JobDto[] }>({ status: "loading" });
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const load = useCallback(
     () =>
       client.listJobs().then(
@@ -197,6 +200,19 @@ export function DownloadsView({ client, notify }: { client: DownloadClient & Ses
     }
   };
 
+  const clear = async () => {
+    setBusy(true);
+    try {
+      const r = await client.clearFinishedDownloads();
+      notify(tn("downloads.cleared", r.cleared));
+      await load();
+    } catch (e) {
+      notify(errorMessage(errorCode(e)), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (state.status === "loading") return <p role="status">Loading…</p>;
   if (state.status === "error") return <p role="alert">{errorMessage(state.code)}</p>;
   if (state.jobs.length === 0)
@@ -211,8 +227,41 @@ export function DownloadsView({ client, notify }: { client: DownloadClient & Ses
     ["failed", t("downloads.failed"), state.jobs.filter((j) => j.status === "failed" || j.status === "canceled")],
     ["done", t("downloads.done"), state.jobs.filter((j) => j.status === "succeeded")],
   ];
+  const finished = state.jobs.filter((j) => FINISHED.has(j.status));
+  const partialBytes = finished.filter((j) => j.status !== "succeeded").reduce((n, j) => n + j.partialBytes, 0);
   return (
     <div className="downloads" data-testid="downloads">
+      {finished.length > 0 && (
+        <div className="downloads-toolbar">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={() => (partialBytes > 0 ? setAsking(true) : void clear())}
+            data-testid="downloads-clear"
+          >
+            {t("downloads.clear")}
+          </button>
+        </div>
+      )}
+      {asking && (
+        <ConfirmDialog
+          title={t("downloads.clear_title")}
+          body={
+            <>
+              <p>{t("downloads.clear_body")}</p>
+              <p data-testid="downloads-clear-partial">{t("downloads.clear_partial", { size: formatBytes(partialBytes) })}</p>
+            </>
+          }
+          confirm={t("downloads.clear")}
+          danger
+          onClose={() => setAsking(false)}
+          onSubmit={async () => {
+            setAsking(false);
+            await clear();
+          }}
+        />
+      )}
       {connecting && (
         <ConnectSessionDialog
           client={client}
