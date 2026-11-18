@@ -217,11 +217,6 @@ const ffprobe = await fetchTool("ffprobe");
 const whisperTool = tool("whisper-cli");
 const whisper = whisperTool.artifacts.some((a) => a.platform === platform) ? await fetchTool("whisper-cli") : null;
 if (!whisper) console.log(`… whisper-cli has no build for ${platform}; local transcription is tested with the fake one here`);
-// Optional (ADR-0035): llama.cpp's llama-server for search by meaning,
-// pinned for Windows like whisper-cli.
-const llamaTool = manifest.tools.find((t) => t.id === "llama-server");
-const llama = llamaTool && llamaTool.artifacts.some((a) => a.platform === platform) ? await fetchTool("llama-server") : null;
-if (!llama) console.log(`… llama-server has no build for ${platform}; search by meaning is tested with the fake one here`);
 
 const denoV = run(deno, ["--version"]).split("\n")[0].trim();
 if (!denoV.startsWith(`deno ${tool("deno").version} `)) fail(`deno --version printed ${JSON.stringify(denoV)}`);
@@ -270,19 +265,6 @@ if (whisper) {
     fail(`whisper-cli --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
   }
   ok(line.trim());
-}
-if (llama) {
-  // Same rule as vv-tools parse_llama_version: `version: 1.0.0-dev (build <N>, commit <C>)`,
-  // or the older `version: <N> (<commit>)`.
-  const r = spawnSync(llama, ["--version"], { encoding: "utf8", timeout: 60_000 });
-  const line = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.split(/\r?\n/).find((l) => l.trim().startsWith("version:")) ?? "";
-  const rest = line.trim().slice("version:".length);
-  const build = rest.includes("(build ") ? rest.split("(build ")[1].split(/[,)]/)[0].trim() : rest.trim().split(/\s+/)[0];
-  if (r.status !== 0 || build !== llamaTool.version) {
-    const hint = r.status === 3221225781 || r.status === -1073741515 ? " (a DLL is missing: the Microsoft Visual C++ runtime?)" : "";
-    fail(`llama-server --version exited ${r.status}${hint} and printed ${JSON.stringify(`${r.stdout ?? ""}${r.stderr ?? ""}`.slice(0, 300))}`);
-  }
-  ok(`llama-server ${line.trim()}`);
 }
 const ffFailures = await checkFfmpeg({ ffmpeg, ffprobe });
 if (ffFailures.length) fail(`${ffFailures.length} FFmpeg check(s) failed`);

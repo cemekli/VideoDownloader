@@ -92,6 +92,8 @@
     "allow-remove-model",
     "allow-get-ai-processing",
     "allow-get-search-index",
+    "allow-set-embedding-api",
+    "allow-clear-embedding-api",
     "allow-build-search-index",
     "allow-cancel-search-index",
     "allow-list-transcripts",

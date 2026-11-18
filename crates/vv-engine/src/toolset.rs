@@ -11,8 +11,7 @@
 //!    quarantine, policy) the state is `TOOL_BLOCKED`.
 //! 4. The version it prints is the pinned one (`TOOL_MISSING` otherwise).
 //!
-//! A tool with companion libraries (whisper.cpp's and llama.cpp's DLLs,
-//! ADR-0028, ADR-0035) is not
+//! A tool with companion libraries (whisper.cpp's DLLs, ADR-0028) is not
 //! started unless each of them is there with its pinned hash too: Windows
 //! loads a DLL from the executable's folder first, so an unchecked one there
 //! would run inside a checked executable. An optional tool with no build for
@@ -27,9 +26,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use vv_domain::error::ErrorCode;
 use vv_tools::{
-    check_version, llama_pinned, parse_deno_version, parse_ffmpeg_banner, parse_llama_version,
-    parse_whisper_version, parse_ytdlp_version, verify_file, Companion, Manifest, Provenance,
-    ToolId, VerifyError, Version, VersionCheck, DENO_MIN_FOR_YTDLP,
+    check_version, parse_deno_version, parse_ffmpeg_banner, parse_whisper_version,
+    parse_ytdlp_version, verify_file, Companion, Manifest, Provenance, ToolId, VerifyError,
+    Version, VersionCheck, DENO_MIN_FOR_YTDLP,
 };
 
 /// How long a version query may take before the tool counts as broken.
@@ -53,7 +52,6 @@ pub struct ToolPaths {
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
     pub whisper: PathBuf,
-    pub embedder: PathBuf,
 }
 
 impl ToolPaths {
@@ -74,7 +72,6 @@ impl ToolPaths {
             ffmpeg: exe(ToolId::Ffmpeg),
             ffprobe: exe(ToolId::Ffprobe),
             whisper: exe(ToolId::WhisperCli),
-            embedder: exe(ToolId::LlamaServer),
         }
     }
 
@@ -85,7 +82,6 @@ impl ToolPaths {
             ToolId::Ffmpeg => &self.ffmpeg,
             ToolId::Ffprobe => &self.ffprobe,
             ToolId::WhisperCli => &self.whisper,
-            ToolId::LlamaServer => &self.embedder,
         }
     }
 }
@@ -296,13 +292,6 @@ fn check_one(
             let v = parse_whisper_version(&stdout);
             *reported = v.map(|v| v.to_string());
             check_version(pinned, v)
-        }
-        ToolId::LlamaServer => {
-            // llama.cpp prints its build on stderr.
-            let all = format!("{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
-            let v = parse_llama_version(&all);
-            *reported = v.map(|v| v.0[0].to_string());
-            check_version(&llama_pinned(pinned), v)
         }
         ToolId::Ffmpeg | ToolId::Ffprobe => match parse_ffmpeg_banner(&stdout) {
             None => VersionCheck::Unrecognised,

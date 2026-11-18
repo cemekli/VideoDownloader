@@ -1,9 +1,8 @@
-//! STATE.md F7.1, SPEC §16.3, AC-24: migration 0014 (embedding models,
-//! index generations, chunk vectors) and the vector repository.
+//! STATE.md F7.1, SPEC §16.3, AC-24: migration 0014 (index generations,
+//! chunk vectors) and the vector repository.
 
 use vv_persistence::library::repo::{self, LibraryItem};
 use vv_persistence::library::{ItemKind, SourcePlatform};
-use vv_persistence::models::{self, ModelSpec, ModelStatus};
 use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
 use vv_persistence::vectors::{self, GenerationStatus, Producer};
 use vv_persistence::{Database, OpenOptions};
@@ -54,8 +53,8 @@ fn chunk_seqs(db: &mut Database, item: Option<&str>) -> Vec<i64> {
 
 fn producer(version: &str) -> Producer {
     Producer {
-        provider: "llama_cpp".into(),
-        model_id: "embed-bge-m3".into(),
+        provider: "openai_compatible".into(),
+        model_id: "bge-m3".into(),
         model_version: version.into(),
         dims: 8,
     }
@@ -65,41 +64,6 @@ fn unit(i: usize) -> Vec<f32> {
     let mut v = vec![0.0; 8];
     v[i] = 1.0;
     v
-}
-
-#[test]
-fn embedding_models_share_the_consent_table() {
-    let (_d, mut db) = open();
-    let c = db.writer();
-    let spec = ModelSpec {
-        id: "embed-bge-m3".into(),
-        provider: "llama_cpp".into(),
-        version: "0123456789abcdef0123456789abcdef01234567".into(),
-        file_name: "bge-m3-q8_0.gguf".into(),
-        size_bytes: 639_150_592,
-        sha256: "b".repeat(64),
-        license: "Apache-2.0".into(),
-        source_url: "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF/resolve/x/f.gguf".into(),
-    };
-    let m = models::consent(c, &spec, 10).unwrap();
-    assert_eq!(m.status, ModelStatus::Pending);
-    // The schema still refuses a path, a whisper id under llama_cpp and the reverse.
-    for (id, provider, file) in [
-        ("embed-x", "llama_cpp", "../x.gguf"),
-        ("embed-x", "llama_cpp", "sub/x.gguf"),
-        ("whisper-x", "llama_cpp", "x.gguf"),
-        ("embed-x", "whisper_cpp", "ggml-x.bin"),
-        ("embed-x", "llama_cpp", "x.exe"),
-    ] {
-        let mut bad = spec.clone();
-        bad.id = id.into();
-        bad.provider = provider.into();
-        bad.file_name = file.into();
-        assert!(
-            models::consent(c, &bad, 11).is_err(),
-            "{id} {provider} {file}"
-        );
-    }
 }
 
 #[test]
@@ -176,7 +140,7 @@ fn same_producer_resumes_the_build_and_another_one_replaces_it() {
     assert!(c
         .execute(
             "INSERT INTO embedding_generation (id, provider, model_id, model_version, dims, \
-                 status, created_at) VALUES ('x', 'llama_cpp', 'embed-a', 'v', 8, 'building', 1)",
+                 status, created_at) VALUES ('x', 'openai_compatible', 'embed-a', 'v', 8, 'building', 1)",
             [],
         )
         .is_err());

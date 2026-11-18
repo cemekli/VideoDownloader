@@ -87,7 +87,7 @@ export function TranscriptionBlock({ client, notify, onChanged }: { client: Omit
   );
 }
 
-export function statusText(m: ModelDto): string {
+function statusText(m: ModelDto): string {
   if (m.job && openJob(m.job)) {
     if (m.job.status === "blocked") return blockedText(m.job);
     if (m.job.status === "retry_wait") return t("models.status.retry_wait");
@@ -168,8 +168,7 @@ function ModelRow({
 }
 
 /** §17.1: size, disk need, source and licence, CPU expectation; nothing starts before "Download". */
-export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree, purpose = "transcription" }: { model: ModelDto; freeBytes: number | null; onCancel: () => void; onAgree: () => void; purpose?: "transcription" | "search" }) {
-  const search = purpose === "search";
+export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree }: { model: ModelDto; freeBytes: number | null; onCancel: () => void; onAgree: () => void }) {
   const size = m.sizeBytes ?? 0;
   const tooBig = freeBytes !== null && freeBytes < size + HEADROOM;
   return (
@@ -186,8 +185,8 @@ export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree, pur
             <td>{freeBytes === null ? t("models.consent.free_unknown") : formatBytes(freeBytes)}</td>
           </tr>
           <tr>
-            <th scope="row">{t(search ? "search_index.consent.memory" : "models.consent.memory")}</th>
-            <td>{t(search ? "search_index.consent.memory_value" : "models.consent.memory_value", { size: formatBytes(m.needMemoryMb * 1024 * 1024) })}</td>
+            <th scope="row">{t("models.consent.memory")}</th>
+            <td>{t("models.consent.memory_value", { size: formatBytes(m.needMemoryMb * 1024 * 1024) })}</td>
           </tr>
           <tr>
             <th scope="row">{t("models.consent.source")}</th>
@@ -199,7 +198,7 @@ export function ModelConsentDialog({ model: m, freeBytes, onCancel, onAgree, pur
           </tr>
         </tbody>
       </table>
-      <p className="muted small">{t(search ? "search_index.consent.cpu" : "models.consent.cpu")}</p>
+      <p className="muted small">{t("models.consent.cpu")}</p>
       <p className="muted small">{t("models.consent.check")}</p>
       {m.fit === "too_big" && (
         <p className="warning small" data-testid="consent-memory-warning">

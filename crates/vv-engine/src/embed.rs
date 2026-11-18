@@ -1,79 +1,63 @@
-//! Search by meaning: the embedding provider and the index jobs (SPEC §16.3,
-//! DEC-12, AC-24; STATE.md F7.1; ADR-0035).
+//! Search by meaning: the user's embedding API and the index jobs (SPEC
+//! §16.3, DEC-12, AI-C07, AC-24; STATE.md F7.1; ADR-0035).
 //!
-//! - The provider is llama.cpp's `llama-server` in embedding mode, a
-//!   managed tool like whisper-cli, with a GGUF model from
-//!   `tools/embedding-models.json`. llama.cpp no longer ships a one-shot
-//!   embedding command, so a job starts one server ([`Server`]): it listens
-//!   on 127.0.0.1 only, on a free port, and answers only requests that carry
-//!   a random key made for that run. The model is loaded once per job; each
-//!   batch is one request. The server is killed with its process tree when
-//!   the job ends, is canceled or the app exits (job object, ADR-0008).
-//! - Vectors are cut to the catalog's `dims` (the model is Matryoshka
-//!   trained) and normalized, then stored by `vv_persistence::vectors`.
+//! - VideoVault hosts no embedding model. The user gives the address of an
+//!   OpenAI-compatible `/v1/embeddings` API (Ollama, LM Studio, llama.cpp's
+//!   server, a cloud service), a model name and, when the API wants one,
+//!   a key (kept in the OS credential store). [`check`] asks it for one
+//!   vector before anything is saved, and the vector length is recorded.
+//! - A host other than this PC receives transcript text, so it needs the
+//!   user's explicit agreement (`remote_allowed`, AI-C07) and is blocked
+//!   in Offline Mode (DATA-05). Loopback addresses (`localhost`, `127.*`,
+//!   `::1`; WSL2 forwards Ollama there) never leave the PC and work offline.
+//! - An index generation records the provider, the address, the model and
+//!   the length (§16.3): another server or model is another generation and
+//!   vectors are never mixed. The API cannot prove which weights answer, so
+//!   a model changed behind the same name is not detected; the screen says
+//!   to rebuild after changing the model.
 //! - [`request_index`] starts a build or fills the active index. A build
-//!   for a new model runs beside the active index and replaces it only when
-//!   complete; cancel drops the build and leaves the active index as it was
-//!   (AC-24). Pause keeps the vectors made so far; the next run goes on.
-//! - The jobs share the one heavy-AI slot with transcription (§13.3) and run
-//!   below normal priority with the user's processor limit (F6.6).
+//!   for a new API or model runs beside the active index and replaces it
+//!   only when complete; cancel drops the build and leaves the active
+//!   index as it was (AC-24). Pause keeps the vectors made so far.
+//! - Requests carry [`BATCH`] passages; each prompt is cleaned and cut to
+//!   [`PROMPT_MAX_BYTES`] (some servers refuse, rather than cut, an input
+//!   longer than their context). A cancel is seen within 50 ms.
 
 use crate::context::{Context, Store};
-use crate::models::{self, CatalogModel, EmbeddingUse};
-use crate::proc::spawn_error_code;
-use crate::resources;
 use crate::worker::{Stop, Work};
 use serde::{Deserialize, Serialize};
-use std::ffi::OsString;
 use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use vv_domain::error::ErrorCode;
 use vv_persistence::jobs::{self, Enqueued, JobError, JobKind, Lease, NewJob, Progress};
-use vv_persistence::models::{self as rows, Installation, ModelStatus};
 use vv_persistence::rusqlite::Connection;
+use vv_persistence::settings::{self, EmbeddingApi};
 use vv_persistence::vectors::{self, Generation, GenerationStatus, Producer};
-use vv_process::{Managed, ManagedCommand};
+use vv_secrets::{SecretRef, SecretStore};
 
+/// Provider name stored with every generation.
+pub const PROVIDER: &str = "openai_compatible";
 /// Texts per request: a cancel waits at most one batch.
 pub const BATCH: usize = 32;
-/// Largest response accepted (32 vectors of 1024 floats as JSON are about
-/// 1 MB).
+/// Largest response accepted (32 vectors of 4096 floats as JSON are about
+/// 3 MB).
 const RESPONSE_MAX: u64 = 64 << 20;
-/// Loading the model from disk; a slow disk or antivirus scan can take a while.
-pub const START_TIMEOUT: Duration = Duration::from_secs(180);
-/// One batch on a slow processor with a low limit.
+/// One batch on a slow processor (a CPU-only Ollama).
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-/// How often a waiting job looks at cancel and at the server process.
+/// A server that does not answer at all.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// How often a waiting job looks at cancel.
 const POLL: Duration = Duration::from_millis(50);
-
-/// `llama-server` as a job sees it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmbedTool {
-    pub exe: PathBuf,
-    /// The pinned llama.cpp build.
-    pub version: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Role {
-    Query,
-    Passage,
-}
-
-/// The text the model sees: the role's prefix, then the text with control
-/// characters removed and spaces collapsed. An empty text becomes one space
-/// (an empty input is refused by the server).
-/// A chunk is at most `CHUNK_MAX_CHARS` (400) long; a longer text (a single
-/// very long caption line) is cut so a prompt always fits the model context
-/// (the catalog's `context` is 2048 tokens and a token is at least one
-/// UTF-8 byte, byte fallback included). 1800 bytes are 900 Turkish letters
-/// or more, over twice a chunk.
+/// Longest prompt sent. A chunk is at most 400 characters; a longer text
+/// (one very long caption line) is cut so it fits a 512-token context
+/// (a token is at least one UTF-8 byte).
 pub const PROMPT_MAX_BYTES: usize = 1800;
 
-pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
+/// The text sent: control characters removed, spaces collapsed, cut at a
+/// character boundary. An empty text becomes one space (some servers
+/// refuse an empty input).
+pub fn prompt(text: &str) -> String {
     let clean: String = text
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
@@ -84,60 +68,53 @@ pub fn prompt(u: &EmbeddingUse, role: Role, text: &str) -> String {
         end -= 1;
     }
     let clean = clean.get(..end).unwrap_or_default().to_owned();
-    let clean = if clean.is_empty() {
+    if clean.is_empty() {
         " ".to_owned()
     } else {
         clean
-    };
-    match role {
-        Role::Query => format!("{}{clean}", u.query_prefix),
-        Role::Passage => format!("{}{clean}", u.passage_prefix),
     }
 }
 
-/// Arguments of the embedding server for one job: loopback only, the
-/// given port and key (without it every route but `/health` answers 401,
-/// measured with b12387), one slot, no web page or slot page, offline, the
-/// model's own pooling and L2-normalized output. An input longer than the
-/// context is refused (HTTP 400/500), never cut: [`PROMPT_MAX_BYTES`] keeps
-/// every prompt below it.
-pub fn server_args(
-    model: &Path,
-    u: &EmbeddingUse,
-    threads: usize,
-    port: u16,
-    key: &str,
-) -> Vec<OsString> {
-    let ctx = u.context.to_string();
-    let mut a: Vec<OsString> = vec!["-m".into(), model.into()];
-    for s in [
-        "--embedding",
-        "--embd-normalize",
-        "2",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        &port.to_string(),
-        "--api-key",
-        key,
-        "-c",
-        &ctx,
-        "-b",
-        &ctx,
-        "-ub",
-        &ctx,
-        "-t",
-        &threads.to_string(),
-        "--parallel",
-        "1",
-        "--no-webui",
-        // No slot monitoring page, and never a download (only `-m`).
-        "--no-slots",
-        "--offline",
-    ] {
-        a.push(s.into());
+/// Why an address cannot be used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UrlError {
+    /// Not an http(s) address.
+    Invalid,
+    /// A user name or password in the address (keys go in the key field).
+    Credentials,
+}
+
+/// The base address as stored: http or https, no credentials, query or
+/// fragment, no trailing slash. `/embeddings` is put after it.
+pub fn normalize_url(s: &str) -> Result<String, UrlError> {
+    let u = url::Url::parse(s.trim()).map_err(|_| UrlError::Invalid)?;
+    if !matches!(u.scheme(), "http" | "https") || u.host_str().is_none_or(str::is_empty) {
+        return Err(UrlError::Invalid);
     }
-    a
+    if !u.username().is_empty() || u.password().is_some() {
+        return Err(UrlError::Credentials);
+    }
+    if u.query().is_some() || u.fragment().is_some() {
+        return Err(UrlError::Invalid);
+    }
+    let mut out = u.to_string();
+    while out.ends_with('/') {
+        out.pop();
+    }
+    Ok(out)
+}
+
+/// The address is this PC (text sent there does not leave it).
+pub fn is_loopback(url: &str) -> bool {
+    let Ok(u) = url::Url::parse(url) else {
+        return false;
+    };
+    match u.host() {
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    }
 }
 
 #[derive(Deserialize)]
@@ -147,193 +124,180 @@ struct Out {
 
 #[derive(Deserialize)]
 struct OutItem {
-    index: usize,
+    #[serde(default)]
+    index: Option<usize>,
     embedding: Vec<f32>,
 }
 
-/// Reads the server's answer (`/v1/embeddings`): exactly `expected` vectors
-/// of `native_dims`, in input order, cut to `dims` and normalized.
+/// Reads an `/embeddings` answer: exactly `expected` vectors in input
+/// order, each `dims` long (any length from 8 to 4096 when `dims` is
+/// `None`, the first check), normalized.
 pub fn parse_output(
     body: &[u8],
     expected: usize,
-    u: &EmbeddingUse,
+    dims: Option<usize>,
 ) -> Result<Vec<Vec<f32>>, String> {
-    let mut out: Out = serde_json::from_slice(body).map_err(|e| e.to_string())?;
+    let out: Out = serde_json::from_slice(body).map_err(|_| "not an embeddings answer")?;
     if out.data.len() != expected {
         return Err(format!("{} vectors for {expected} texts", out.data.len()));
     }
-    out.data.sort_by_key(|d| d.index);
+    let mut items: Vec<(usize, Vec<f32>)> = out
+        .data
+        .into_iter()
+        .enumerate()
+        .map(|(i, d)| (d.index.unwrap_or(i), d.embedding))
+        .collect();
+    items.sort_by_key(|d| d.0);
+    let want = dims.unwrap_or_else(|| items.first().map_or(0, |d| d.1.len()));
+    if !(8..=4096).contains(&want) {
+        return Err(format!("vectors of {want} values"));
+    }
     let mut vs = Vec::with_capacity(expected);
-    for (i, d) in out.data.into_iter().enumerate() {
-        if d.index != i {
+    for (i, (index, mut v)) in items.into_iter().enumerate() {
+        if index != i {
             return Err("vector indexes are not 0..n".into());
         }
-        if d.embedding.len() != u.native_dims {
-            return Err(format!("vector of {} values", d.embedding.len()));
+        if v.len() != want {
+            return Err(format!("a vector of {} values, expected {want}", v.len()));
         }
-        let mut v = d.embedding;
-        v.truncate(u.dims);
         vectors::normalize(&mut v).map_err(|e| e.to_string())?;
         vs.push(v);
     }
     Ok(vs)
 }
 
-/// Why one embedding run did not give vectors.
+/// Why a request did not give vectors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EmbedError {
     /// Asked to stop (cancel, pause, lost lease).
     Stopped,
-    /// The server stopped before it was ready (tried again once).
-    Exited(String),
+    /// The code the screen explains, and a short message for the log
+    /// (never the key or the text).
     Failed(ErrorCode, String),
 }
 
-/// A free port on 127.0.0.1. Another program could take it before the
-/// server binds it; the server then exits and [`Server::start`] tries again.
-fn free_port() -> std::io::Result<u16> {
-    Ok(std::net::TcpListener::bind(("127.0.0.1", 0))?
-        .local_addr()?
-        .port())
+/// What the screen says about a failed request.
+pub fn error_code(e: &EmbedError) -> ErrorCode {
+    match e {
+        EmbedError::Stopped => ErrorCode::Canceled,
+        EmbedError::Failed(c, _) => *c,
+    }
 }
 
-fn last_line(log: &Path) -> String {
-    std::fs::read_to_string(log)
-        .unwrap_or_default()
-        .lines()
-        .rev()
-        .find(|l| !l.trim().is_empty())
-        .map(|l| l.chars().take(300).collect())
-        .unwrap_or_default()
-}
-
-/// One embedding server, running until dropped.
-pub struct Server {
-    proc: Managed,
+/// One embedding API, ready for requests.
+#[derive(Clone)]
+pub struct Api {
     base: String,
-    key: String,
+    model: String,
+    key: Option<String>,
     agent: ureq::Agent,
-    u: EmbeddingUse,
-    log: PathBuf,
 }
 
-impl Server {
-    /// Starts the server for `model` and waits until it has loaded it.
-    /// Its log goes to `dir/server.log`.
-    pub fn start(
-        tool: &EmbedTool,
-        model: &Path,
-        u: &EmbeddingUse,
-        threads: usize,
-        dir: &Path,
-        mut should_stop: impl FnMut() -> bool,
-    ) -> Result<Server, EmbedError> {
-        let mut last = EmbedError::Failed(ErrorCode::ExtractorFailed, String::new());
-        for _ in 0..2 {
-            match Self::start_once(tool, model, u, threads, dir, &mut should_stop) {
-                Ok(s) => return Ok(s),
-                // The port was taken meanwhile, or another start failure: once more.
-                Err(EmbedError::Exited(m)) => {
-                    last = EmbedError::Failed(ErrorCode::ExtractorFailed, m)
-                }
-                Err(e) => return Err(e),
+impl std::fmt::Debug for Api {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Api")
+            .field("base", &self.base)
+            .field("model", &self.model)
+            .field("key", &self.key.as_ref().map(|_| "<set>"))
+            .finish()
+    }
+}
+
+impl Api {
+    /// An API for `url` and `model`. Refuses a host other than this PC in
+    /// Offline Mode, and one the user did not agree to send text to.
+    pub fn new(
+        url: &str,
+        model: &str,
+        key: Option<String>,
+        remote_allowed: bool,
+        offline: bool,
+    ) -> Result<Api, EmbedError> {
+        let base = normalize_url(url).map_err(|_| {
+            EmbedError::Failed(ErrorCode::InvalidUrl, "embedding API address".into())
+        })?;
+        if !is_loopback(&base) {
+            if offline {
+                return Err(EmbedError::Failed(
+                    ErrorCode::OfflineMode,
+                    "the embedding API is not on this PC".into(),
+                ));
+            }
+            if !remote_allowed {
+                return Err(EmbedError::Failed(
+                    ErrorCode::UrlBlocked,
+                    "sending text to this address was not agreed to".into(),
+                ));
             }
         }
-        Err(last)
-    }
-
-    fn start_once(
-        tool: &EmbedTool,
-        model: &Path,
-        u: &EmbeddingUse,
-        threads: usize,
-        dir: &Path,
-        should_stop: &mut impl FnMut() -> bool,
-    ) -> Result<Server, EmbedError> {
-        let io = |e: std::io::Error| EmbedError::Failed(crate::storage::io_code(&e), e.to_string());
-        let port = free_port().map_err(io)?;
-        // Two random v4 UUIDs: 244 random bits, never written to disk.
-        let key = format!("{}{}", new_id(), new_id()).replace('-', "");
-        let log = dir.join("server.log");
-        let out = std::fs::File::create(&log).map_err(io)?;
-        let err = out.try_clone().map_err(io)?;
-        let mut cmd = ManagedCommand::new(&tool.exe);
-        cmd.args(server_args(model, u, threads, port, &key))
-            .current_dir(dir)
-            .stdout(Stdio::from(out))
-            .stderr(Stdio::from(err))
-            .low_priority();
-        let proc = cmd
-            .spawn()
-            .map_err(|e| EmbedError::Failed(spawn_error_code(&e), e.to_string()))?;
-        let mut s = Server {
-            proc,
-            base: format!("http://127.0.0.1:{port}"),
-            key,
-            // No proxy: ureq reads none unless asked, and this is loopback.
+        let model = model.trim();
+        if model.is_empty() || model.len() > 200 {
+            return Err(EmbedError::Failed(
+                ErrorCode::ModelMissing,
+                "model name".into(),
+            ));
+        }
+        Ok(Api {
+            base,
+            model: model.to_owned(),
+            key: key.filter(|k| !k.is_empty()),
+            // No redirects: the text goes to the address the user gave.
             agent: ureq::AgentBuilder::new()
-                .timeout_connect(Duration::from_secs(2))
+                .timeout_connect(CONNECT_TIMEOUT)
                 .timeout(REQUEST_TIMEOUT)
                 .redirects(0)
                 .build(),
-            u: u.clone(),
-            log,
+        })
+    }
+
+    /// The API in the settings, with its key from the credential store.
+    pub fn from_settings(
+        cfg: &EmbeddingApi,
+        secrets: &dyn SecretStore,
+        offline: bool,
+    ) -> Result<Api, EmbedError> {
+        let key = match &cfg.key_ref {
+            Some(r) => {
+                let r = SecretRef::parse(r).ok_or_else(|| {
+                    EmbedError::Failed(ErrorCode::AccessDenied, "API key reference".into())
+                })?;
+                let s = secrets.get(&r).map_err(|_| {
+                    EmbedError::Failed(ErrorCode::AccessDenied, "API key not found".into())
+                })?;
+                Some(String::from_utf8_lossy(s.expose()).into_owned())
+            }
+            None => None,
         };
-        let deadline = Instant::now() + START_TIMEOUT;
-        loop {
-            if should_stop() {
-                return Err(EmbedError::Stopped);
-            }
-            if let Some(code) = s.exited() {
-                return Err(EmbedError::Exited(format!(
-                    "exit {code}: {}",
-                    last_line(&s.log)
-                )));
-            }
-            let r = s
-                .agent
-                .get(&format!("{}/health", s.base))
-                .set("Authorization", &format!("Bearer {}", s.key))
-                .timeout(Duration::from_secs(2))
-                .call();
-            if matches!(&r, Ok(r) if r.status() == 200) {
-                return Ok(s);
-            }
-            if Instant::now() >= deadline {
-                return Err(EmbedError::Failed(
-                    ErrorCode::ExtractorFailed,
-                    "the embedding server did not start".into(),
-                ));
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
+        Api::new(&cfg.url, &cfg.model, key, cfg.remote_allowed, offline)
     }
 
-    /// The exit status once the server has stopped by itself.
-    fn exited(&mut self) -> Option<String> {
-        match self.proc.try_wait() {
-            Ok(Some(st)) => Some(st.to_string()),
-            Ok(None) => None,
-            Err(e) => Some(e.to_string()),
-        }
+    pub fn base(&self) -> &str {
+        &self.base
     }
 
-    /// Embeds `texts` with one request. A stop request or the server dying
-    /// ends the wait at once (the request thread ends when the server is
-    /// killed).
+    /// Vectors for `texts` with one request, in order; each `dims` long
+    /// (`None`: whatever the first one has). A stop request ends the wait
+    /// at once.
     pub fn embed(
-        &mut self,
-        role: Role,
+        &self,
         texts: &[&str],
+        dims: Option<usize>,
         mut should_stop: impl FnMut() -> bool,
     ) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let input: Vec<String> = texts.iter().map(|t| prompt(&self.u, role, t)).collect();
-        let body = serde_json::json!({ "input": input, "encoding_format": "float" }).to_string();
-        let req = self
+        let input: Vec<String> = texts.iter().map(|t| prompt(t)).collect();
+        let body = serde_json::json!({
+            "model": self.model,
+            "input": input,
+            "encoding_format": "float",
+        })
+        .to_string();
+        let mut req = self
             .agent
-            .post(&format!("{}/v1/embeddings", self.base))
-            .set("Authorization", &format!("Bearer {}", self.key))
+            .post(&format!("{}/embeddings", self.base))
             .set("Content-Type", "application/json");
+        if let Some(k) = &self.key {
+            req = req.set("Authorization", &format!("Bearer {k}"));
+        }
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let r = match req.send_string(&body) {
@@ -343,18 +307,20 @@ impl Server {
                         .take(RESPONSE_MAX + 1)
                         .read_to_end(&mut buf)
                         .map(|_| buf)
-                        .map_err(|e| e.to_string())
+                        .map_err(|e| (ErrorCode::NetworkUnavailable, e.kind().to_string()))
                 }
-                Err(ureq::Error::Status(code, resp)) => {
-                    let t: String = resp
-                        .into_string()
-                        .unwrap_or_default()
-                        .chars()
-                        .take(300)
-                        .collect();
-                    Err(format!("HTTP {code}: {t}"))
+                Err(ureq::Error::Status(code, _)) => Err((
+                    match code {
+                        401 | 403 => ErrorCode::AccessDenied,
+                        404 => ErrorCode::ModelMissing,
+                        429 => ErrorCode::RateLimited,
+                        _ => ErrorCode::ExtractorFailed,
+                    },
+                    format!("HTTP {code}"),
+                )),
+                Err(ureq::Error::Transport(t)) => {
+                    Err((ErrorCode::NetworkUnavailable, t.kind().to_string()))
                 }
-                Err(e) => Err(e.to_string()),
             };
             let _ = tx.send(r);
         });
@@ -367,16 +333,10 @@ impl Server {
                     ))
                 }
                 Ok(Ok(buf)) => {
-                    return parse_output(&buf, texts.len(), &self.u)
+                    return parse_output(&buf, texts.len(), dims)
                         .map_err(|m| EmbedError::Failed(ErrorCode::ExtractorFailed, m))
                 }
-                Ok(Err(m)) => {
-                    let m = match self.exited() {
-                        Some(code) => format!("server exit {code}: {}", last_line(&self.log)),
-                        None => m,
-                    };
-                    return Err(EmbedError::Failed(ErrorCode::ExtractorFailed, m));
-                }
+                Ok(Err((code, m))) => return Err(EmbedError::Failed(code, m)),
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     return Err(EmbedError::Failed(
                         ErrorCode::InternalError,
@@ -387,63 +347,38 @@ impl Server {
                     if should_stop() {
                         return Err(EmbedError::Stopped);
                     }
-                    if let Some(code) = self.exited() {
-                        return Err(EmbedError::Failed(
-                            ErrorCode::ExtractorFailed,
-                            format!("server exit {code}: {}", last_line(&self.log)),
-                        ));
-                    }
                 }
             }
         }
     }
 }
 
-/// Starts a server, embeds `texts` and stops it (a search query; tests).
-#[allow(clippy::too_many_arguments)]
-pub fn embed(
-    tool: &EmbedTool,
-    model: &Path,
-    u: &EmbeddingUse,
-    role: Role,
-    texts: &[&str],
-    threads: usize,
-    dir: &Path,
-    mut should_stop: impl FnMut() -> bool,
-) -> Result<Vec<Vec<f32>>, EmbedError> {
-    let mut s = Server::start(tool, model, u, threads, dir, &mut should_stop)?;
-    s.embed(role, texts, should_stop)
+/// Asks the API for one vector ("Check" in the settings): its length.
+pub fn check(api: &Api) -> Result<usize, EmbedError> {
+    let v = api.embed(
+        &["VideoVault bağlantı denemesi / connection check"],
+        None,
+        || false,
+    )?;
+    Ok(v.first().map_or(0, Vec::len))
+}
+
+/// What the vectors of `cfg` are made with (§16.3).
+pub fn producer(cfg: &EmbeddingApi) -> Producer {
+    Producer {
+        provider: PROVIDER.into(),
+        model_id: cfg.model.clone(),
+        model_version: cfg.url.clone(),
+        dims: cfg.dims,
+    }
+}
+
+/// The API in the settings, if one was set and checked.
+pub fn configured(c: &Connection) -> Option<EmbeddingApi> {
+    settings::embedding_api(c).ok().flatten()
 }
 
 // ------------------------------------------------------------------ index
-
-/// The installed embedding model searches would use: the first catalog
-/// entry that is installed, verified and pinned as on record.
-pub fn usable_model(
-    c: &Connection,
-    models_dir: &Path,
-) -> Option<(&'static CatalogModel, Installation)> {
-    let cat = models::embedding_catalog();
-    cat.models.iter().find_map(|m| {
-        let spec = cat.spec(m)?;
-        let inst = rows::get(c, &m.id).ok().flatten()?;
-        let ok = inst.status == ModelStatus::Ready
-            && inst.matches(&spec)
-            && models::model_path(models_dir, &inst).is_file();
-        ok.then_some((m, inst))
-    })
-}
-
-/// What the vectors of `m` are made with (§16.3).
-pub fn producer(m: &CatalogModel, inst: &Installation) -> Option<Producer> {
-    let u = m.embedding.as_ref()?;
-    Some(Producer {
-        provider: models::EMBEDDING_PROVIDER.into(),
-        model_id: m.id.clone(),
-        model_version: inst.spec.sha256.clone(),
-        dims: u.dims,
-    })
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -457,8 +392,8 @@ pub fn idempotency_key(generation_id: &str) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexError {
-    /// No embedding model is installed and verified.
-    NoModel,
+    /// No embedding API is set.
+    NoApi,
     Db,
 }
 
@@ -466,18 +401,16 @@ fn new_id() -> String {
     vv_persistence::library::new_id()
 }
 
-/// Makes the index match the installed model: with an active index of this
-/// model, queues the chunks it is missing; otherwise starts a build beside
-/// it (`rebuild` forces one even when the active index is current). Returns
+/// Makes the index match the API in the settings: with an active index of
+/// it, queues the chunks it is missing; otherwise starts a build beside it
+/// (`rebuild` forces one even when the active index is current). Returns
 /// the job, `None` when nothing needs doing.
 pub fn request_index(
     c: &mut Connection,
-    models_dir: &Path,
     rebuild: bool,
     now: i64,
 ) -> Result<Option<Enqueued>, IndexError> {
-    let (m, inst) = usable_model(c, models_dir).ok_or(IndexError::NoModel)?;
-    let p = producer(m, &inst).ok_or(IndexError::NoModel)?;
+    let p = producer(&configured(c).ok_or(IndexError::NoApi)?);
     let tx = c.transaction().map_err(|_| IndexError::Db)?;
     let active = vectors::active(&tx).map_err(|_| IndexError::Db)?;
     let current = active.filter(|a| a.producer == p);
@@ -511,14 +444,13 @@ pub fn request_index(
 }
 
 /// After new transcript chunks were written: queue their vectors when an
-/// index of the installed model is active. Never starts a build.
-pub fn after_chunks_changed(c: &mut Connection, models_dir: &Path, now: i64) -> Option<Enqueued> {
+/// index of the API in the settings is active. Never starts a build.
+pub fn after_chunks_changed(c: &mut Connection, now: i64) -> Option<Enqueued> {
     let active = vectors::active(c).ok().flatten()?;
-    let (m, inst) = usable_model(c, models_dir)?;
-    if producer(m, &inst)? != active.producer {
+    if producer(&configured(c)?) != active.producer {
         return None;
     }
-    request_index(c, models_dir, false, now).ok().flatten()
+    request_index(c, false, now).ok().flatten()
 }
 
 /// Cancels the build under way, if any; the active index stays (AC-24).
@@ -550,10 +482,6 @@ pub fn cancel_build(c: &mut Connection, now: i64) -> bool {
     true
 }
 
-pub fn staging_dir(staging: &Path, job_id: &str) -> PathBuf {
-    staging.join(format!("embed-{job_id}"))
-}
-
 /// The `embedding` and `reindex` jobs: vectors for every chunk the
 /// generation is missing, then (a build) the swap.
 pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
@@ -562,57 +490,38 @@ pub fn run<S: Store>(cx: &Context<S>, lease: Lease) {
         w.end_error(ErrorCode::InternalError, Some("index payload unreadable"));
         return;
     };
-    let dir = staging_dir(&cx.dirs.staging, w.id());
-    let lost = run_in(cx, &w, &p, &dir);
-    if !lost {
-        let _ = std::fs::remove_dir_all(&dir);
-    }
+    run_in(cx, &w, &p);
     cx.events.job_changed(w.id(), None);
 }
 
-/// `true` when the lease was lost (another run goes on).
-fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -> bool {
+fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload) {
     let g = cx
         .store
         .read(|c| vectors::get(c, &p.generation_id).ok().flatten());
     let Some(g) = g else {
         // Canceled or replaced meanwhile: nothing left to do.
         succeed(cx, w, None);
-        return false;
+        return;
     };
-    let found = cx.store.read(|c| usable_model(c, &cx.dirs.models));
-    let Some((m, inst)) = found else {
-        w.end_error(ErrorCode::ModelMissing, None);
-        return false;
+    let Some(cfg) = cx.store.read(configured) else {
+        w.end_error(ErrorCode::ModelMissing, Some("no embedding API is set"));
+        return;
     };
-    let (Some(u), Some(prod)) = (m.embedding.clone(), producer(m, &inst)) else {
-        w.end_error(ErrorCode::ModelMissing, None);
-        return false;
-    };
-    if prod != g.producer {
-        // The installed model is not the one this index is made of.
+    if producer(&cfg) != g.producer {
+        // The settings point at another API or model than this index.
         w.end_error(
             ErrorCode::ModelMissing,
-            Some("the index is for another model file"),
+            Some("the index is for another embedding API or model"),
         );
-        return false;
+        return;
     }
-    let Some(tool) = cx.tools().embedder else {
-        w.end_error(ErrorCode::ToolMissing, None);
-        return false;
+    let api = match Api::from_settings(&cfg, cx.secrets.as_ref(), cx.is_offline()) {
+        Ok(a) => a,
+        Err(e) => {
+            w.end_error(error_code(&e), Some("the embedding API cannot be used"));
+            return;
+        }
     };
-    if std::fs::create_dir_all(dir).is_err() {
-        w.end_error(ErrorCode::PathNotWritable, None);
-        return false;
-    }
-    let cpu = cx
-        .store
-        .read(|c| vv_persistence::settings::get(c).map(|s| s.transcription_cpu))
-        .unwrap_or_default();
-    let threads = resources::threads(cpu, resources::cores());
-    let model_path = models::model_path(&cx.dirs.models, &inst);
-    // Started on the first batch: nothing to embed, no model load.
-    let mut server: Option<Server> = None;
     loop {
         let batch = cx
             .store
@@ -645,42 +554,12 @@ fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -
             return stop(cx, w, &g);
         }
         let texts: Vec<&str> = batch.iter().map(|b| b.text.as_str()).collect();
-        if server.is_none() {
-            match Server::start(&tool, &model_path, &u, threads, dir, || w.should_stop()) {
-                Ok(s) => server = Some(s),
-                Err(EmbedError::Stopped) => return stop(cx, w, &g),
-                Err(EmbedError::Failed(code, _)) => {
-                    w.end_error(code, Some("the embedding server did not start"));
-                    return false;
-                }
-                Err(EmbedError::Exited(_)) => {
-                    w.end_error(
-                        ErrorCode::ExtractorFailed,
-                        Some("the embedding server did not start"),
-                    );
-                    return false;
-                }
-            }
-        }
-        let Some(srv) = server.as_mut() else {
-            return false;
-        };
-        let vs = match srv.embed(Role::Passage, &texts, || w.should_stop()) {
+        let vs = match api.embed(&texts, Some(g.producer.dims), || w.should_stop()) {
             Ok(v) => v,
-            Err(EmbedError::Stopped) => {
-                drop(server.take());
-                return stop(cx, w, &g);
-            }
+            Err(EmbedError::Stopped) => return stop(cx, w, &g),
             Err(EmbedError::Failed(code, _)) => {
-                w.end_error(code, Some("the embedding tool failed"));
-                return false;
-            }
-            Err(EmbedError::Exited(_)) => {
-                w.end_error(
-                    ErrorCode::ExtractorFailed,
-                    Some("the embedding tool failed"),
-                );
-                return false;
+                w.end_error(code, Some("the embedding API failed"));
+                return;
             }
         };
         let wrote = cx.store.write(|c| -> Result<(), vectors::VectorError> {
@@ -693,22 +572,19 @@ fn run_in<S: Store>(cx: &Context<S>, w: &Work<'_, S>, p: &Payload, dir: &Path) -
         });
         if wrote.is_err() {
             w.end_error(ErrorCode::InternalError, Some("vectors not written"));
-            return false;
+            return;
         }
     }
-    drop(server);
     succeed(
         cx,
         w,
         (g.status == GenerationStatus::Building).then_some(&g),
     );
     // Chunks written after the last check: their own job picks them up.
-    let models_dir = cx.dirs.models.clone();
     let now = cx.now();
     cx.store.write(|c| {
-        let _ = after_chunks_changed(c, &models_dir, now);
+        let _ = after_chunks_changed(c, now);
     });
-    false
 }
 
 fn succeed<S: Store>(cx: &Context<S>, w: &Work<'_, S>, build: Option<&Generation>) {
@@ -725,7 +601,7 @@ fn succeed<S: Store>(cx: &Context<S>, w: &Work<'_, S>, build: Option<&Generation
     });
 }
 
-fn stop<S: Store>(cx: &Context<S>, w: &Work<'_, S>, g: &Generation) -> bool {
+fn stop<S: Store>(cx: &Context<S>, w: &Work<'_, S>, g: &Generation) {
     let s = w.stopped().unwrap_or(Stop::Cancel);
     if s == Stop::Cancel && g.status == GenerationStatus::Building {
         cx.store.write(|c| {
@@ -733,74 +609,113 @@ fn stop<S: Store>(cx: &Context<S>, w: &Work<'_, S>, g: &Generation) -> bool {
         });
     }
     w.end_stopped(s);
-    s == Stop::Lost
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn use_() -> EmbeddingUse {
-        EmbeddingUse {
-            native_dims: 4,
-            dims: 2,
-            query_prefix: "Q:".into(),
-            passage_prefix: String::new(),
-            context: 512,
-        }
-    }
-
     #[test]
     fn prompts_are_clean_and_bounded() {
-        let u = use_();
-        assert_eq!(prompt(&u, Role::Query, "a\nb"), "Q:a b");
-        assert_eq!(prompt(&u, Role::Passage, "x\u{0}y"), "x y");
-        assert_eq!(prompt(&u, Role::Passage, "\n\t"), " ");
-        assert_eq!(
-            prompt(&u, Role::Passage, "İstanbul'da  çay"),
-            "İstanbul'da çay"
-        );
+        assert_eq!(prompt("a\nb"), "a b");
+        assert_eq!(prompt("x\u{0}y"), "x y");
+        assert_eq!(prompt("\n\t"), " ");
+        assert_eq!(prompt("İstanbul'da  çay"), "İstanbul'da çay");
         // Cut at a character boundary, never inside "ş" (2 bytes).
         let long = format!("a{}", "ş".repeat(PROMPT_MAX_BYTES));
-        let p = prompt(&u, Role::Passage, &long);
+        let p = prompt(&long);
         assert_eq!(p.len(), PROMPT_MAX_BYTES - 1);
         assert!(p.ends_with('ş'));
     }
 
     #[test]
-    fn output_is_cut_normalized_and_in_order() {
-        let u = use_();
-        let json = br#"{"object":"list","data":[
- {"object":"embedding","index":1,"embedding":[0,2,9,9]},
- {"object":"embedding","index":0,"embedding":[3,4,1,1]}]}
-"#;
-        let v = parse_output(json, 2, &u).unwrap();
-        assert_eq!(v[0], vec![0.6, 0.8]);
-        assert_eq!(v[1], vec![0.0, 1.0]);
-        assert!(parse_output(json, 3, &u).is_err());
+    fn output_is_in_order_normalized_and_of_one_length() {
+        let v8 = |a: f32, b: f32| {
+            let mut v = vec![0.0; 8];
+            v[0] = a;
+            v[1] = b;
+            serde_json::to_string(&v).unwrap()
+        };
+        let json = format!(
+            r#"{{"object":"list","data":[
+ {{"object":"embedding","index":1,"embedding":{}}},
+ {{"object":"embedding","index":0,"embedding":{}}}]}}"#,
+            v8(0.0, 2.0),
+            v8(3.0, 4.0)
+        );
+        let v = parse_output(json.as_bytes(), 2, None).unwrap();
+        assert_eq!(&v[0][..2], &[0.6, 0.8]);
+        assert_eq!(&v[1][..2], &[0.0, 1.0]);
+        assert!(parse_output(json.as_bytes(), 2, Some(8)).is_ok());
+        assert!(parse_output(json.as_bytes(), 2, Some(1024)).is_err());
+        assert!(parse_output(json.as_bytes(), 3, None).is_err());
+        // Ollama's answer without `index` is in input order.
+        let plain = format!(r#"{{"data":[{{"embedding":{}}}]}}"#, v8(1.0, 0.0));
+        assert_eq!(parse_output(plain.as_bytes(), 1, None).unwrap()[0][0], 1.0);
         let short = br#"{"data":[{"index":0,"embedding":[1,2]}]}"#;
-        assert!(parse_output(short, 1, &u).is_err());
-        let zero = br#"{"data":[{"index":0,"embedding":[0,0,1,1]}]}"#;
-        assert!(parse_output(zero, 1, &u).is_err());
-        assert!(parse_output(b"error: model not found", 1, &u).is_err());
+        assert!(parse_output(short, 1, None).is_err());
+        let zero = format!(r#"{{"data":[{{"embedding":{}}}]}}"#, v8(0.0, 0.0));
+        assert!(parse_output(zero.as_bytes(), 1, None).is_err());
+        assert!(parse_output(b"error: model not found", 1, None).is_err());
     }
 
     #[test]
-    fn server_listens_on_loopback_with_a_key_and_no_web_page() {
-        let a = server_args(Path::new("/m dir/model.gguf"), &use_(), 3, 41234, "k3y");
-        assert_eq!(a[1], OsString::from("/m dir/model.gguf"));
-        let s: Vec<String> = a.iter().map(|x| x.to_string_lossy().into_owned()).collect();
-        let pair = |f: &str, v: &str| s.windows(2).any(|w| w[0] == f && w[1] == v);
-        assert!(pair("--host", "127.0.0.1"));
-        assert!(pair("--port", "41234"));
-        assert!(pair("--api-key", "k3y"));
-        assert!(pair("-t", "3"));
-        assert!(pair("--parallel", "1"));
-        assert!(s.contains(&"--embedding".to_owned()));
-        for f in ["--no-webui", "--no-slots", "--offline"] {
-            assert!(s.contains(&f.to_owned()), "{f}");
+    fn addresses_are_normalized_and_loopback_is_this_pc() {
+        assert_eq!(
+            normalize_url(" http://localhost:11434/v1/ ").unwrap(),
+            "http://localhost:11434/v1"
+        );
+        assert_eq!(
+            normalize_url("https://api.example.com/v1").unwrap(),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(normalize_url("ftp://x/v1"), Err(UrlError::Invalid));
+        assert_eq!(normalize_url("localhost:11434"), Err(UrlError::Invalid));
+        assert_eq!(normalize_url("http://u:p@h/v1"), Err(UrlError::Credentials));
+        assert_eq!(normalize_url("http://h/v1?key=x"), Err(UrlError::Invalid));
+        for l in [
+            "http://localhost:11434/v1",
+            "http://LOCALHOST/v1",
+            "http://127.0.0.1:8080/v1",
+            "http://127.5.5.5/v1",
+            "http://[::1]:11434/v1",
+        ] {
+            assert!(is_loopback(l), "{l}");
         }
-        // Never a model download or a public address.
-        assert!(!s.iter().any(|x| x.starts_with("-hf") || x == "0.0.0.0"));
+        for r in [
+            "http://192.168.1.5:11434/v1",
+            "https://api.openai.com/v1",
+            "http://localhost.example.com/v1",
+            "http://0.0.0.0/v1",
+        ] {
+            assert!(!is_loopback(r), "{r}");
+        }
+    }
+
+    #[test]
+    fn a_remote_api_needs_agreement_and_is_blocked_offline() {
+        let remote = "https://api.example.com/v1";
+        assert_eq!(
+            error_code(&Api::new(remote, "m", None, false, false).unwrap_err()),
+            ErrorCode::UrlBlocked
+        );
+        assert_eq!(
+            error_code(&Api::new(remote, "m", None, true, true).unwrap_err()),
+            ErrorCode::OfflineMode
+        );
+        assert!(Api::new(remote, "m", None, true, false).is_ok());
+        // This PC: no agreement needed, works offline.
+        assert!(Api::new("http://localhost:11434/v1", "bge-m3", None, false, true).is_ok());
+        assert!(Api::new("http://localhost:11434/v1", " ", None, false, true).is_err());
+        // The key never shows in a debug print.
+        let a = Api::new(
+            "http://localhost/v1",
+            "m",
+            Some("s3cret".into()),
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(!format!("{a:?}").contains("s3cret"));
     }
 }

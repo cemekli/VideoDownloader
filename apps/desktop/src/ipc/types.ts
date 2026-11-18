@@ -21,8 +21,8 @@ export interface SnippetPart {
 
 /** A real substring of one field. Rendered as text, never as HTML (SEA-03). */
 export interface Snippet {
-  /** `transcript`: words said in the video (F6.4). */
-  field: "title" | "description" | "creator" | "notes" | "tags" | "transcript";
+  /** `transcript`: words said in the video (F6.4). `meaning`: a passage close in meaning (F7.2), nothing highlighted. */
+  field: "title" | "description" | "creator" | "notes" | "tags" | "transcript" | "meaning";
   parts: SnippetPart[];
   cutStart: boolean;
   cutEnd: boolean;
@@ -48,6 +48,15 @@ export interface LibraryItemDto {
   snippet: Snippet | null;
   /** Where the search text was said, grouped under the item (F6.4, SEA-06); only with a search text. */
   transcript: TranscriptMatchesDto | null;
+  /** Passages close in meaning to the search text (F7.2); only in a hybrid result. */
+  meaning: TranscriptMatchesDto | null;
+  /** Why a hybrid result is where it is (SEA-07): its rank in each search, null when not found that way. */
+  foundBy: FoundBy | null;
+}
+
+export interface FoundBy {
+  words: number | null;
+  meaning: number | null;
 }
 
 /** One place in a transcript; it opens at the start of the segment holding the matched word (PLAY-06). */
@@ -113,7 +122,15 @@ export interface ListQuery {
   descending: boolean;
   offset: number;
   limit: number;
+  /** Add search by meaning (F7.2); only with a text and the relevance sort. */
+  meaning?: boolean;
 }
+
+/**
+ * Search by meaning for a page: null when it does not apply; `available` (asked without it, it can run);
+ * `used` (hybrid result); otherwise why it is off.
+ */
+export type MeaningStatus = "available" | "used" | "no_api" | "no_index" | "other_model" | "offline" | "failed";
 
 export interface ItemPage {
   total: number;
@@ -121,6 +138,7 @@ export interface ItemPage {
   items: LibraryItemDto[];
   /** `no_searchable_terms`: the text had no letter or digit; the filtered library is shown (SEA-04). */
   notice: "no_searchable_terms" | null;
+  meaning: MeaningStatus | null;
 }
 
 export interface AssetDto {
@@ -846,10 +864,10 @@ export interface AiJobDto {
   elapsedMs: number | null;
 }
 
-/** One index generation (SPEC §16.3): which model made its vectors and how far it got. */
+/** One index generation (SPEC §16.3): which API and model made its vectors and how far it got. */
 export interface IndexDto {
   modelId: string;
-  modelLabel: string | null;
+  url: string;
   dims: number;
   /** Transcript chunks with a vector / all transcript chunks in the library. */
   done: number;
@@ -858,16 +876,25 @@ export interface IndexDto {
   activatedAt: number | null;
 }
 
-/** Search by meaning (F7.1): the embedding model, the index searches use, a build beside it (AC-24). */
+/** The user's embedding API (F7.1, AI-C07). The key itself never comes back. */
+export interface EmbeddingApiDto {
+  url: string;
+  model: string;
+  dims: number;
+  hasKey: boolean;
+  /** The address is this PC: text does not leave it, works offline. */
+  local: boolean;
+  checkedAt: number;
+}
+
+/** Search by meaning (F7.1): the embedding API, the index searches use, a build beside it (AC-24). */
 export interface SearchIndexDto {
-  models: ModelDto[];
+  api: EmbeddingApiDto | null;
   active: IndexDto | null;
   building: IndexDto | null;
   /** The open or last index job (`embedding` or `reindex`). */
   job: JobDto | null;
-  /** llama-server passed its check. */
-  toolReady: boolean;
-  /** The active index was made with the installed model, so meaning searches can run. */
+  /** The active index was made with the API and model in the settings, so meaning searches can run. */
   searchable: boolean;
 }
 
@@ -890,7 +917,13 @@ export interface ModelClient {
   removeModel(modelId: string): Promise<ModelOverview>;
   getAiProcessing(): Promise<AiProcessing>;
   getSearchIndex(): Promise<SearchIndexDto>;
-  /** Builds the index for the installed embedding model or adds what it misses; `rebuild` starts over beside the active one. */
+  /**
+   * Checks the API with one request and saves it. `key`: null keeps the saved key, "" removes it.
+   * A host other than this PC is refused with URL_BLOCKED unless `allowRemote`.
+   */
+  setEmbeddingApi(url: string, model: string, key: string | null, allowRemote: boolean): Promise<SearchIndexDto>;
+  clearEmbeddingApi(): Promise<SearchIndexDto>;
+  /** Builds the index for the embedding API or adds what it misses; `rebuild` starts over beside the active one. */
   buildSearchIndex(rebuild: boolean): Promise<SearchIndexDto>;
   /** Cancels a build; the active index stays (AC-24). */
   cancelSearchIndex(): Promise<SearchIndexDto>;

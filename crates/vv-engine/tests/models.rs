@@ -167,37 +167,6 @@ fn shipped_catalog_parses_and_is_anchored() {
 }
 
 #[test]
-fn shipped_embedding_catalog_parses_and_is_anchored() {
-    // F7.1, ADR-0035: the embedding model comes from its authors' own
-    // repository at a pinned commit, as a bare GGUF file name.
-    let c = models::embedding_catalog();
-    assert!(
-        !c.models.is_empty(),
-        "tools/embedding-models.json did not parse"
-    );
-    assert_eq!(c.provider, models::EMBEDDING_PROVIDER);
-    assert!(models::EMBEDDING_REPOSITORIES.contains(&c.repository.as_str()));
-    for m in &c.models {
-        assert!(c.spec(m).is_some(), "{} is not pinned", m.id);
-        let e = m.embedding.as_ref().expect("embedding use");
-        assert!(e.dims <= e.native_dims);
-        assert!(std::ptr::eq(models::catalog_for(&m.id), c));
-    }
-    let json = include_str!("../../../tools/embedding-models.json");
-    let other = json.replace(&c.repository, "https://huggingface.co/someone/else");
-    assert!(Catalog::parse(&other).is_err());
-    let file = &c.models[0].file;
-    assert!(Catalog::parse(&json.replace(file.as_str(), &format!("../{file}"))).is_err());
-    assert!(Catalog::parse(&json.replace(".gguf\"", ".exe\"")).is_err());
-    // An embedding entry under the whisper provider is refused, and the reverse.
-    assert!(Catalog::parse(&json.replace("\"llama_cpp\"", "\"whisper_cpp\"")).is_err());
-    assert!(std::ptr::eq(
-        models::catalog_for("whisper-tiny"),
-        models::catalog()
-    ));
-}
-
-#[test]
 fn nothing_is_queued_or_downloaded_without_consent() {
     // AC-20: the library opens and works with no model and no consent.
     let lib = library(Setup::fake());

@@ -1,69 +1,43 @@
-//! STATE.md F7.1, SPEC §16.3, AC-24: the embedding index jobs with the fake
-//! `llama-server` (src/bin/vv-fake-embed.rs): build, search by meaning,
-//! fill after new transcripts, reindex beside the active index, cancel and
-//! pause, a missing model or tool.
-//!
-//! The last test runs the real `llama-server` (Windows CI) with the real
-//! model when `VV_EMBED_TEST_MODEL` names it: a Turkish query finds the
-//! passage that says the same thing in other words (DEC-12, ADR-0035).
+//! STATE.md F7.1, SPEC §16.3, AI-C07, AC-24 (ADR-0035): the embedding index
+//! jobs against a fake OpenAI-compatible API on 127.0.0.1 (the user's
+//! Ollama): build, search by meaning, fill after new transcripts, reindex
+//! beside the active index, cancel, a failing API, a key, another model,
+//! Offline Mode.
 
 mod common;
 
+use common::fake_embed::FakeEmbed;
 use common::*;
 use std::time::Duration;
-use vv_engine::{embed, models};
+use vv_engine::embed;
 use vv_persistence::jobs::{self, CancelReason, JobKind, JobStatus};
 use vv_persistence::library::Clock;
-use vv_persistence::models as model_rows;
+use vv_persistence::settings::{self, EmbeddingApi};
 use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
 use vv_persistence::vectors::{self, GenerationStatus};
+use vv_secrets::{Secret, SecretStore};
 
-const MODEL: &str = "embed-bge-m3";
+pub const MODEL: &str = "bge-m3";
 
-fn install_model(lib: &Lib) {
-    install_model_from(lib, None);
-}
-
-/// The model as if the user agreed and it was downloaded and checked:
-/// `real` (the pinned file), or a sparse file of the pinned size.
-fn install_model_from(lib: &Lib, real: Option<&std::path::Path>) {
-    let cat = models::embedding_catalog();
-    let spec = cat.spec(cat.model(MODEL).unwrap()).unwrap();
-    let dir = &lib.cx().dirs.models;
-    std::fs::create_dir_all(dir).unwrap();
-    match real {
-        Some(src) => {
-            std::fs::copy(src, dir.join(&spec.file_name)).unwrap();
-        }
-        None => {
-            let f = std::fs::File::create(dir.join(&spec.file_name)).unwrap();
-            f.set_len(spec.size_bytes as u64).unwrap();
-        }
-    }
-    let now = lib.clock.now_ms();
-    lib.write(|c| {
-        model_rows::consent(c, &spec, now).unwrap();
-        model_rows::mark_ready(c, MODEL, now).unwrap();
+/// The settings as after a successful "Check" of `fake`.
+fn set_api(lib: &Lib, fake: &FakeEmbed, model: &str, key: Option<&str>) {
+    let key_ref = key.map(|k| {
+        lib.secrets
+            .put(&Secret::new(k.as_bytes().to_vec()))
+            .unwrap()
+            .as_str()
+            .to_owned()
     });
-}
-
-fn mode(lib: &Lib, m: &str) {
-    std::fs::write(lib.cx().dirs.models.join("fake-embed-mode"), m).unwrap();
-}
-
-fn calls(lib: &Lib) -> Vec<usize> {
-    std::fs::read_to_string(lib.cx().dirs.models.join("fake-embed-calls"))
-        .unwrap_or_default()
-        .lines()
-        .map(|l| l.parse().unwrap())
-        .collect()
-}
-
-fn starts(lib: &Lib) -> usize {
-    std::fs::read_to_string(lib.cx().dirs.models.join("fake-embed-starts"))
-        .unwrap_or_default()
-        .lines()
-        .count()
+    let api = EmbeddingApi {
+        url: embed::normalize_url(&fake.url).unwrap(),
+        model: model.into(),
+        dims: common::fake_embed::DIMS,
+        key_ref,
+        remote_allowed: false,
+        checked_at: 1,
+    };
+    let now = lib.clock.now_ms();
+    lib.write(|c| settings::set_embedding_api(c, Some(&api), now).unwrap());
 }
 
 /// A bookmark with a caption transcript of `lines` (one chunk each, 40 s apart).
@@ -96,39 +70,16 @@ fn with_transcript(lib: &Lib, url: &str, lines: &[&str]) -> String {
 
 fn request(lib: &Lib, rebuild: bool) -> Option<String> {
     let now = lib.clock.now_ms();
-    let dir = lib.cx().dirs.models.clone();
-    lib.write(|c| embed::request_index(c, &dir, rebuild, now))
+    lib.write(|c| embed::request_index(c, rebuild, now))
         .unwrap()
         .map(|q| q.id)
 }
 
-fn staging_is_clean(lib: &Lib) -> bool {
-    std::fs::read_dir(&lib.cx().dirs.staging)
-        .unwrap()
-        .flatten()
-        .all(|e| !e.file_name().to_string_lossy().starts_with("embed-"))
-}
-
-/// The text of the best chunk for `query`, through the real path: the
-/// fake tool embeds the query, the repository searches the active index.
-fn best(lib: &Lib, query: &str) -> String {
-    let tool = lib.cx().tools().embedder.unwrap();
-    let m = models::embedding_catalog().model(MODEL).unwrap();
-    let u = m.embedding.clone().unwrap();
-    let path = lib.cx().dirs.models.join(&m.file);
-    let dir = tempfile::tempdir().unwrap();
-    let q = embed::embed(
-        &tool,
-        &path,
-        &u,
-        embed::Role::Query,
-        &[query],
-        1,
-        dir.path(),
-        || false,
-    )
-    .unwrap()
-    .remove(0);
+/// The text of the best chunk for `query`: the API embeds the query, the
+/// repository searches the active index.
+fn best(lib: &Lib, fake: &FakeEmbed, query: &str) -> String {
+    let api = embed::Api::new(&fake.url, MODEL, None, false, false).unwrap();
+    let q = api.embed(&[query], None, || false).unwrap().remove(0);
     lib.write(|c| {
         let g = vectors::active(c).unwrap().unwrap();
         let hit = vectors::search(c, &g, &q, 1).unwrap().remove(0);
@@ -142,25 +93,23 @@ fn best(lib: &Lib, query: &str) -> String {
 }
 
 #[test]
-fn no_model_means_no_index_and_lexical_search_is_untouched() {
+fn no_api_means_no_index_and_lexical_search_is_untouched() {
     let lib = library(Setup::fake());
     with_transcript(&lib, "https://fake.test/a", &["merhaba dünya"]);
-    let dir = lib.cx().dirs.models.clone();
     let now = lib.clock.now_ms();
     assert_eq!(
-        lib.write(|c| embed::request_index(c, &dir, false, now)),
-        Err(embed::IndexError::NoModel)
+        lib.write(|c| embed::request_index(c, false, now)),
+        Err(embed::IndexError::NoApi)
     );
-    assert!(lib
-        .write(|c| embed::after_chunks_changed(c, &dir, now))
-        .is_none());
+    assert!(lib.write(|c| embed::after_chunks_changed(c, now)).is_none());
     assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
 }
 
 #[test]
 fn build_finds_a_topic_said_in_other_words() {
     let lib = library(Setup::fake());
-    install_model(&lib);
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
     with_transcript(
         &lib,
         "https://fake.test/a",
@@ -184,18 +133,22 @@ fn build_finds_a_topic_said_in_other_words() {
     assert_eq!(j.progress.units_done, Some(3));
     assert_eq!(j.progress.units_total, Some(3));
     let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
+    assert_eq!(g.producer.provider, embed::PROVIDER);
     assert_eq!(g.producer.model_id, MODEL);
+    assert_eq!(g.producer.model_version, fake.url);
     assert_eq!(g.producer.dims, 1024);
     assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (3, 3));
-    // One request for the three chunks (a batch), one server for the job.
-    assert_eq!(calls(&lib), vec![3]);
-    assert_eq!(starts(&lib), 1);
+    // One request for the three chunks (a batch), with the model's name.
+    assert_eq!(fake.calls(), vec![3]);
+    assert_eq!(fake.models(), vec![MODEL]);
     assert_eq!(
-        best(&lib, "veritabanı yedekleme"),
+        best(&lib, &fake, "veritabanı yedekleme"),
         "bugün PostgreSQL replikasyonu anlatıyoruz"
     );
-    assert_eq!(best(&lib, "how to bake bread"), "ekşi maya ile ekmek");
-    assert!(staging_is_clean(&lib));
+    assert_eq!(
+        best(&lib, &fake, "how to bake bread"),
+        "ekşi maya ile ekmek"
+    );
     // Up to date: nothing to queue.
     assert!(request(&lib, false).is_none());
 }
@@ -203,36 +156,36 @@ fn build_finds_a_topic_said_in_other_words() {
 #[test]
 fn new_transcripts_are_added_to_the_active_index() {
     let lib = library(Setup::fake());
-    install_model(&lib);
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
     with_transcript(&lib, "https://fake.test/a", &["ekşi maya ile ekmek"]);
     request(&lib, false).unwrap();
     lib.run();
     with_transcript(&lib, "https://fake.test/b", &["PostgreSQL replikasyonu"]);
-    let dir = lib.cx().dirs.models.clone();
     let now = lib.clock.now_ms();
-    let q = lib
-        .write(|c| embed::after_chunks_changed(c, &dir, now))
-        .unwrap();
+    let q = lib.write(|c| embed::after_chunks_changed(c, now)).unwrap();
     assert_eq!(lib.job(&q.id).kind, JobKind::Embedding);
     // Asking again while it is open gives the same job.
-    let again = lib
-        .write(|c| embed::after_chunks_changed(c, &dir, now))
-        .unwrap();
+    let again = lib.write(|c| embed::after_chunks_changed(c, now)).unwrap();
     assert_eq!(again.id, q.id);
     lib.run();
     assert_eq!(lib.job(&q.id).status, JobStatus::Succeeded);
     let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
     assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (2, 2));
     // Only the new chunk was embedded.
-    assert_eq!(calls(&lib), vec![1, 1]);
-    assert_eq!(best(&lib, "database backup"), "PostgreSQL replikasyonu");
+    assert_eq!(fake.calls(), vec![1, 1]);
+    assert_eq!(
+        best(&lib, &fake, "database backup"),
+        "PostgreSQL replikasyonu"
+    );
 }
 
 #[test]
 fn reindex_runs_beside_the_active_index_and_cancel_keeps_it() {
     // AC-24.
     let lib = library(Setup::fake());
-    install_model(&lib);
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
     for i in 0..3 {
         with_transcript(
             &lib,
@@ -249,19 +202,19 @@ fn reindex_runs_beside_the_active_index_and_cancel_keeps_it() {
         lib.write(|c| vectors::coverage(c, first.seq).unwrap()),
         (120, 120)
     );
-    // Four batches, one server: the model is loaded once per job.
-    assert_eq!(calls(&lib), vec![32, 32, 32, 24]);
-    assert_eq!(starts(&lib), 1);
+    assert_eq!(fake.calls(), vec![32, 32, 32, 24]);
 
-    mode(&lib, "slow-after-1");
-    std::fs::remove_file(lib.cx().dirs.models.join("fake-embed-calls")).unwrap();
+    let fake2 = FakeEmbed::start(None);
+    fake2.set_mode("slow-after-1");
+    // Another server (address): its index is built beside the first.
+    set_api(&lib, &fake2, MODEL, None);
     let job = request(&lib, true).unwrap();
     assert_eq!(lib.job(&job).kind, JobKind::Reindex);
     std::thread::scope(|s| {
         let h = s.spawn(|| lib.run());
-        // Wait until the first batch is stored and the second run is under way.
+        // Wait until the first batch is stored and the second request is under way.
         for _ in 0..1000 {
-            if calls(&lib).len() >= 2 {
+            if fake2.calls().len() >= 2 {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -290,16 +243,16 @@ fn reindex_runs_beside_the_active_index_and_cancel_keeps_it() {
             .unwrap()
     });
     assert_eq!(n, 120, "the canceled build's vectors are gone");
-    assert!(staging_is_clean(&lib));
 
     // A completed rebuild replaces it.
-    mode(&lib, "ok");
+    fake2.set_mode("ok");
     let job = request(&lib, true).unwrap();
     lib.run();
     assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
     let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
     assert_ne!(g.id, first.id);
     assert_eq!(g.status, GenerationStatus::Active);
+    assert_eq!(g.producer.model_version, fake2.url);
     let n: i64 = lib.write(|c| {
         c.query_row("SELECT count(*) FROM chunk_embedding", [], |r| r.get(0))
             .unwrap()
@@ -308,9 +261,33 @@ fn reindex_runs_beside_the_active_index_and_cancel_keeps_it() {
 }
 
 #[test]
+fn another_model_in_the_settings_is_a_new_generation() {
+    let lib = library(Setup::fake());
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
+    with_transcript(&lib, "https://fake.test/a", &["PostgreSQL replikasyonu"]);
+    request(&lib, false).unwrap();
+    lib.run();
+    let first = lib.write(|c| vectors::active(c).unwrap()).unwrap();
+    set_api(&lib, &fake, "nomic-embed-text", None);
+    // New transcripts do not go into the old model's index.
+    with_transcript(&lib, "https://fake.test/b", &["ekmek"]);
+    let now = lib.clock.now_ms();
+    assert!(lib.write(|c| embed::after_chunks_changed(c, now)).is_none());
+    // Building asks for a new generation beside the old one.
+    let job = request(&lib, false).unwrap();
+    assert_eq!(lib.job(&job).kind, JobKind::Reindex);
+    lib.run();
+    let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
+    assert_ne!(g.id, first.id);
+    assert_eq!(g.producer.model_id, "nomic-embed-text");
+}
+
+#[test]
 fn cancel_before_it_runs_drops_the_build() {
     let lib = library(Setup::fake());
-    install_model(&lib);
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
     with_transcript(&lib, "https://fake.test/a", &["x"]);
     request(&lib, false).unwrap();
     assert!(lib.write(|c| vectors::building(c).unwrap()).is_some());
@@ -319,92 +296,77 @@ fn cancel_before_it_runs_drops_the_build() {
     assert!(lib.write(|c| vectors::building(c).unwrap()).is_none());
     lib.run();
     assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
+    assert!(fake.calls().is_empty());
 }
 
 #[test]
-fn a_failing_tool_or_a_missing_tool_fails_the_job_and_keeps_no_half_index_active() {
+fn a_failing_api_fails_the_job_and_keeps_no_half_index_active() {
+    for (mode, code) in [
+        ("short", "EXTRACTOR_FAILED"),
+        ("fail", "EXTRACTOR_FAILED"),
+        ("dims-512", "EXTRACTOR_FAILED"),
+    ] {
+        let lib = library(Setup::fake());
+        let fake = FakeEmbed::start(None);
+        set_api(&lib, &fake, MODEL, None);
+        with_transcript(&lib, "https://fake.test/a", &["x"]);
+        fake.set_mode(mode);
+        let job = request(&lib, false).unwrap();
+        lib.run();
+        let j = lib.job(&job);
+        assert!(
+            matches!(j.status, JobStatus::Failed | JobStatus::RetryWait),
+            "{mode}: {j:?}"
+        );
+        assert_eq!(j.error_code.as_deref(), Some(code), "{mode}");
+        assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
+    }
+    // Nothing listens there.
     let lib = library(Setup::fake());
-    install_model(&lib);
+    let gone = FakeEmbed::start(None);
+    let mut dead = gone.clone();
+    dead.url = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        format!("http://127.0.0.1:{port}/v1")
+    };
+    set_api(&lib, &dead, MODEL, None);
     with_transcript(&lib, "https://fake.test/a", &["x"]);
-    mode(&lib, "short");
     let job = request(&lib, false).unwrap();
     lib.run();
-    let j = lib.job(&job);
-    assert!(
-        matches!(j.status, JobStatus::Failed | JobStatus::RetryWait),
-        "{j:?}"
+    assert_eq!(
+        lib.job(&job).error_code.as_deref(),
+        Some("NETWORK_UNAVAILABLE")
     );
-    assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
-
-    let lib = library(Setup {
-        embedder: None,
-        ..Setup::fake()
-    });
-    install_model(&lib);
-    with_transcript(&lib, "https://fake.test/a", &["x"]);
-    let job = request(&lib, false).unwrap();
-    lib.run();
-    let j = lib.job(&job);
-    assert_ne!(j.status, JobStatus::Succeeded);
-    assert_eq!(j.error_code.as_deref(), Some("TOOL_MISSING"), "{j:?}");
-    assert!(lib.write(|c| vectors::active(c).unwrap()).is_none());
 }
 
-/// The pinned llama.cpp build, its libraries, our flags and JSON reader and
-/// the pinned model together: the index is built and a query in other words
-/// (and in the other language) finds the right passage.
 #[test]
-fn real_llama_server_finds_the_topic() {
-    let Some(model) = std::env::var_os("VV_EMBED_TEST_MODEL")
-        .filter(|v| !v.is_empty())
-        .map(std::path::PathBuf::from)
-    else {
-        eprintln!("skipped: VV_EMBED_TEST_MODEL not set");
-        return;
-    };
-    let Some(paths) = real_tool_paths() else {
-        return;
-    };
-    assert!(
-        paths.embedder.is_file(),
-        "VV_EMBED_TEST_MODEL set but no llama-server in tools/bin"
-    );
-    let lib = library(Setup {
-        embedder: Some(paths.embedder.clone()),
-        ..Setup::fake()
-    });
-    install_model_from(&lib, Some(&model));
-    with_transcript(
-        &lib,
-        "https://fake.test/a",
-        &[
-            "Bugün PostgreSQL'de akış replikasyonunu kuruyoruz; birincil sunucu WAL kayıtlarını yedek sunucuya gönderiyor.",
-            "Ekşi maya ile ev ekmeği: hamuru bir gece mayalandırıp sabah taş fırında pişiriyoruz.",
-        ],
-    );
-    with_transcript(
-        &lib,
-        "https://fake.test/b",
-        &[
-            "For your first marathon, build up the weekly long run slowly and rest one day a week.",
-            "We compare index fund fees and why a low expense ratio matters over thirty years.",
-        ],
-    );
+fn a_key_is_sent_from_the_credential_store() {
+    let lib = library(Setup::fake());
+    let fake = FakeEmbed::start(Some("k3y-123"));
+    with_transcript(&lib, "https://fake.test/a", &["PostgreSQL"]);
+    // Without the key: refused, the screen says the key is wrong.
+    set_api(&lib, &fake, MODEL, None);
     let job = request(&lib, false).unwrap();
     lib.run();
-    let j = lib.job(&job);
-    assert_eq!(
-        j.status,
-        JobStatus::Succeeded,
-        "{:?} {:?}",
-        j.error_code,
-        j.redacted_error_message
-    );
-    let g = lib.write(|c| vectors::active(c).unwrap()).unwrap();
-    assert_eq!(g.producer.dims, 1024);
-    assert_eq!(lib.write(|c| vectors::coverage(c, g.seq).unwrap()), (4, 4));
-    assert!(best(&lib, "veritabanı yedekleme").contains("PostgreSQL"));
-    assert!(best(&lib, "how to bake sourdough bread").contains("Ekşi maya"));
-    assert!(best(&lib, "koşu antrenmanı").contains("marathon"));
-    assert!(staging_is_clean(&lib));
+    assert_eq!(lib.job(&job).error_code.as_deref(), Some("ACCESS_DENIED"));
+    // With it: built. The key is nowhere in the library.
+    set_api(&lib, &fake, MODEL, Some("k3y-123"));
+    let job = request(&lib, true).unwrap();
+    lib.run();
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
+    assert!(!lib.dump().contains("k3y-123"));
+}
+
+#[test]
+fn an_api_on_this_pc_works_in_offline_mode() {
+    let lib = library(Setup::fake());
+    let fake = FakeEmbed::start(None);
+    set_api(&lib, &fake, MODEL, None);
+    with_transcript(&lib, "https://fake.test/a", &["PostgreSQL"]);
+    lib.engine.set_offline(true);
+    let job = request(&lib, false).unwrap();
+    lib.run();
+    assert_eq!(lib.job(&job).status, JobStatus::Succeeded);
 }

@@ -134,7 +134,6 @@ fn no_tools() -> Tools {
         media: None,
         ytdlp_version: String::new(),
         whisper: None,
-        embedder: None,
     }
 }
 
@@ -199,7 +198,6 @@ pub fn recheck_tools(engine: &Engine<AppStore>) {
                 &ffmpeg_build(),
                 &version(vv_tools::ToolId::YtDlp),
                 &version(vv_tools::ToolId::WhisperCli),
-                &version(vv_tools::ToolId::LlamaServer),
             )
         }
         (Some(m), None) => Tools {

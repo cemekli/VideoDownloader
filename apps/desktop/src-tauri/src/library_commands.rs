@@ -11,11 +11,11 @@ use tauri::{AppHandle, Manager, Runtime};
 use vv_domain::error::{DomainError, ErrorCode};
 use vv_persistence::library::repo::{self, LibraryItem};
 use vv_persistence::library::search::{
-    self, ArchiveFilter, Field, Filters, QueryNotice, SearchQuery, Snippet, Sort, SortField,
-    TranscriptMatches,
+    self, ArchiveFilter, Field, Filters, Fusion, QueryNotice, SearchPage, SearchQuery, Snippet,
+    Sort, SortField, TranscriptMatches,
 };
 use vv_persistence::library::view::{self, AssetView, LocalState};
-use vv_persistence::library::{Clock, ItemKind, SourcePlatform, SystemClock};
+use vv_persistence::library::{ItemKind, SourcePlatform};
 use vv_persistence::rusqlite::Connection;
 
 /// Window of the "Recently Added" view.
@@ -79,6 +79,11 @@ pub struct ListQuery {
     pub offset: u32,
     #[serde(default = "page")]
     pub limit: u32,
+    /// Add search by meaning (F7.2, SEA-07): only with a text and the
+    /// Relevance sort. The UI asks once without it (instant word results),
+    /// then with it when the first answer said `meaning: "available"`.
+    #[serde(default)]
+    pub meaning: bool,
 }
 
 fn yes() -> bool {
@@ -125,6 +130,20 @@ pub struct LibraryItemDto {
     /// Where a search text was said in the item's transcript (F6.4,
     /// SEA-06); `null` without a text or a transcript match.
     pub transcript: Option<TranscriptMatchesDto>,
+    /// Passages close in meaning to the search text (F7.2); whole chunks,
+    /// nothing highlighted.
+    pub meaning: Option<TranscriptMatchesDto>,
+    /// Why a hybrid result is where it is (SEA-07).
+    pub found_by: Option<FoundByDto>,
+}
+
+/// The item's rank in the word search and in the search by meaning that
+/// hybrid ranking fused (1 = first; `null` = not found that way).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundByDto {
+    pub words: Option<u32>,
+    pub meaning: Option<u32>,
 }
 
 /// One place in a transcript; opening it seeks to `startMs`, the start of
@@ -182,6 +201,11 @@ pub struct ItemPage {
     pub items: Vec<LibraryItemDto>,
     /// `no_searchable_terms` when the text had nothing to search for (SEA-04).
     pub notice: Option<&'static str>,
+    /// Search by meaning for this page (F7.2): `null` when it does not
+    /// apply (no searchable text, another sort); `available` (asked
+    /// without it, it can run); `used` (the result is hybrid); or why it is
+    /// off: `no_tool`, `no_model`, `no_index`, `other_model`, `failed`.
+    pub meaning: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -228,6 +252,7 @@ fn field_name(f: Field) -> &'static str {
         Field::Notes => "notes",
         Field::Tags => "tags",
         Field::Transcript => "transcript",
+        Field::Meaning => "meaning",
     }
 }
 
@@ -277,6 +302,8 @@ pub(crate) fn item_dto(
         removed_at: it.removed_at,
         snippet,
         transcript: None,
+        meaning: None,
+        found_by: None,
     }
 }
 
@@ -365,18 +392,39 @@ pub fn to_search_query_with(
     })
 }
 
-pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage, DomainError> {
-    let smart = match &q.smart_collection_id {
-        Some(id) => Some(
+pub(crate) fn smart_rules(
+    c: &Connection,
+    q: &ListQuery,
+) -> Result<Option<vv_persistence::library::organize::SmartRules>, DomainError> {
+    match &q.smart_collection_id {
+        Some(id) => Ok(Some(
             vv_persistence::library::organize::get_smart_collection(c, id)
                 .map_err(|_| internal("list-smart"))?
                 .ok_or_else(|| internal("smart-collection-not-found"))?
                 .rules,
-        ),
-        None => None,
-    };
-    let sq = to_search_query_with(q, now_ms, smart.as_ref())?;
+        )),
+        None => Ok(None),
+    }
+}
+
+/// The word search alone (`meaning` says whether meaning could be added).
+pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage, DomainError> {
+    let sq = to_search_query_with(q, now_ms, smart_rules(c, q)?.as_ref())?;
     let page = search::search(c, &sq).map_err(|_| internal("list-search"))?;
+    page_dto(c, &sq, page, None)
+}
+
+/// Search by meaning applies: a searchable text and the Relevance sort.
+pub fn meaning_applies(sq: &SearchQuery) -> bool {
+    sq.sort.field == SortField::Relevance && search::build_match(&sq.text, sq.prefix_last).is_some()
+}
+
+pub(crate) fn page_dto(
+    c: &Connection,
+    sq: &SearchQuery,
+    page: SearchPage,
+    meaning: Option<&'static str>,
+) -> Result<ItemPage, DomainError> {
     let ids: Vec<&str> = page.hits.iter().map(|h| h.item.id.as_str()).collect();
     let states = view::local_states(c, &ids).map_err(|_| internal("list-states"))?;
     let items = page
@@ -393,6 +441,10 @@ pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage,
             );
             d.tags = tag_names(c, &h.item.id)?;
             d.transcript = h.transcript.as_ref().map(matches_dto);
+            d.meaning = h.meaning.as_ref().map(matches_dto);
+            d.found_by = h
+                .fusion
+                .map(|Fusion { words, meaning }| FoundByDto { words, meaning });
             Ok(d)
         })
         .collect::<Result<_, DomainError>>()?;
@@ -403,6 +455,7 @@ pub fn list_page(c: &Connection, q: &ListQuery, now_ms: i64) -> Result<ItemPage,
         notice: page.notice.map(|n| match n {
             QueryNotice::NoSearchableTerms => "no_searchable_terms",
         }),
+        meaning,
     })
 }
 
@@ -482,25 +535,26 @@ pub(crate) async fn blocking<R: Runtime, T: Send + 'static>(
         .map_err(|_| internal("task-join"))?
 }
 
-/// One page of the library for the current view, filters, sort and search.
+/// One page of the library for the current view, filters, sort and search;
+/// with `query.meaning`, the hybrid result (F7.2).
 #[tauri::command]
 pub async fn list_items<R: Runtime>(
     app: AppHandle<R>,
     query: ListQuery,
 ) -> Result<ItemPage, DomainError> {
     let t = crate::diag::now_ms();
-    let r = blocking(app, move |st| {
-        let c = st.get()?.reader()?;
-        list_page(&c, &query, SystemClock.now_ms())
-    })
-    .await;
+    let embedder = crate::meaning::embedder(&app);
+    let r = blocking(app, move |st| crate::meaning::list(st, &query, embedder)).await;
     if let Ok(p) = &r {
         crate::diag::log(&format!(
-            "list_items offset {} -> {} of {} in {} ms",
+            "list_items offset {} -> {} of {} in {} ms{}",
             p.offset,
             p.items.len(),
             p.total,
-            crate::diag::now_ms() - t
+            crate::diag::now_ms() - t,
+            p.meaning
+                .map(|m| format!(", meaning {m}"))
+                .unwrap_or_default()
         ));
     }
     r

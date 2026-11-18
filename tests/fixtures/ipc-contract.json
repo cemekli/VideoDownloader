@@ -54,7 +54,8 @@
           "limit": 100,
           "tagIds": [],
           "collectionId": null,
-          "smartCollectionId": null
+          "smartCollectionId": null,
+          "meaning": false
         }
       },
       "response": {
@@ -89,10 +90,13 @@
               "cutStart": false,
               "cutEnd": false
             },
-            "transcript": null
+            "transcript": null,
+            "meaning": null,
+            "foundBy": null
           }
         ],
-        "notice": null
+        "notice": null,
+        "meaning": "available"
       },
       "transcriptShape": {
         "transcriptId": "00000000-0000-4000-8000-00000000c101",
@@ -128,7 +132,40 @@
         ],
         "total": 1
       },
-      "note": "Shape of LibraryItemDto.transcript when a search text was said in the item (F6.4, SEA-06)."
+      "note": "Shape of LibraryItemDto.transcript when a search text was said in the item (F6.4, SEA-06).",
+      "meaningShape": {
+        "meaning": {
+          "transcriptId": "00000000-0000-4000-8000-00000000c101",
+          "language": "tr",
+          "provenance": "source_captions",
+          "partial": false,
+          "coveredMs": 6100,
+          "moments": [
+            {
+              "segmentId": "00000000-0000-4000-8000-00000000c202",
+              "startMs": 3200,
+              "endMs": 6100,
+              "snippet": {
+                "field": "meaning",
+                "parts": [
+                  {
+                    "text": "Bugün sabah yürüyüşü yapıyoruz.",
+                    "highlight": false
+                  }
+                ],
+                "cutStart": false,
+                "cutEnd": false
+              }
+            }
+          ],
+          "total": 1
+        },
+        "foundBy": {
+          "words": null,
+          "meaning": 1
+        },
+        "note": "Shape of LibraryItemDto.meaning and foundBy in a hybrid result (list_items with meaning: true, F7.2, SEA-07)."
+      }
     },
     "get_item": {
       "args": {
@@ -149,7 +186,9 @@
           "archived": false,
           "removedAt": null,
           "snippet": null,
-          "transcript": null
+          "transcript": null,
+          "meaning": null,
+          "foundBy": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "creator": null,
@@ -227,7 +266,9 @@
             "archived": false,
             "removedAt": null,
             "snippet": null,
-            "transcript": null
+            "transcript": null,
+            "meaning": null,
+            "foundBy": null
           },
           "removed": false,
           "matchedBy": "canonical_url"
@@ -257,7 +298,9 @@
           "archived": false,
           "removedAt": null,
           "snippet": null,
-          "transcript": null
+          "transcript": null,
+          "meaning": null,
+          "foundBy": null
         },
         "removed": false,
         "matchedBy": null,
@@ -282,7 +325,9 @@
         "archived": false,
         "removedAt": null,
         "snippet": null,
-        "transcript": null
+        "transcript": null,
+        "meaning": null,
+        "foundBy": null
       }
     },
     "get_sidebar": {
@@ -623,7 +668,9 @@
           "archived": false,
           "removedAt": null,
           "snippet": null,
-          "transcript": null
+          "transcript": null,
+          "meaning": null,
+          "foundBy": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "creator": null,
@@ -682,7 +729,9 @@
             "archived": false,
             "removedAt": null,
             "snippet": null,
-            "transcript": null
+            "transcript": null,
+            "meaning": null,
+            "foundBy": null
           },
           "b": {
             "id": "00000000-0000-4000-8000-0000000000b1",
@@ -698,7 +747,9 @@
             "archived": false,
             "removedAt": null,
             "snippet": null,
-            "transcript": null
+            "transcript": null,
+            "meaning": null,
+            "foundBy": null
           }
         }
       ]
@@ -723,7 +774,9 @@
           "archived": false,
           "removedAt": null,
           "snippet": null,
-          "transcript": null
+          "transcript": null,
+          "meaning": null,
+          "foundBy": null
         },
         "source": {
           "id": "00000000-0000-4000-8000-0000000000b1",
@@ -739,7 +792,9 @@
           "archived": false,
           "removedAt": null,
           "snippet": null,
-          "transcript": null
+          "transcript": null,
+          "meaning": null,
+          "foundBy": null
         },
         "notesAfter": "",
         "tagsToAdd": [
@@ -814,7 +869,9 @@
         "archived": false,
         "removedAt": null,
         "snippet": null,
-        "transcript": null
+        "transcript": null,
+        "meaning": null,
+        "foundBy": null
       }
     },
     "delete_orphan": {
@@ -1918,26 +1975,17 @@
           }
         ],
         "searchIndex": {
-          "models": [
-            {
-              "id": "embed-bge-m3",
-              "label": "BGE-M3",
-              "languages": "multilingual (100+ languages, Turkish and English included)",
-              "sizeBytes": 634553760,
-              "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
-              "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
-              "upstreamMemoryMb": 1024,
-              "needMemoryMb": 1408,
-              "fit": "ok",
-              "status": "ready",
-              "consentAt": 1762700000000,
-              "verifiedAt": 1762700300000,
-              "job": null
-            }
-          ],
+          "api": {
+            "url": "http://localhost:11434/v1",
+            "model": "bge-m3",
+            "dims": 1024,
+            "hasKey": false,
+            "local": true,
+            "checkedAt": 1762700000000
+          },
           "active": {
-            "modelId": "embed-bge-m3",
-            "modelLabel": "BGE-M3",
+            "modelId": "bge-m3",
+            "url": "http://localhost:11434/v1",
             "dims": 1024,
             "done": 3,
             "total": 3,
@@ -1972,7 +2020,6 @@
             "canCancel": false,
             "canRemovePartial": false
           },
-          "toolReady": true,
           "searchable": true
         }
       }
@@ -2390,26 +2437,17 @@
     "get_search_index": {
       "args": {},
       "response": {
-        "models": [
-          {
-            "id": "embed-bge-m3",
-            "label": "BGE-M3",
-            "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 634553760,
-            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
-            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
-            "upstreamMemoryMb": 1024,
-            "needMemoryMb": 1408,
-            "fit": "ok",
-            "status": "ready",
-            "consentAt": 1762700000000,
-            "verifiedAt": 1762700300000,
-            "job": null
-          }
-        ],
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "bge-m3",
+          "dims": 1024,
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
         "active": {
-          "modelId": "embed-bge-m3",
-          "modelLabel": "BGE-M3",
+          "modelId": "bge-m3",
+          "url": "http://localhost:11434/v1",
           "dims": 1024,
           "done": 3,
           "total": 3,
@@ -2444,7 +2482,6 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "toolReady": true,
         "searchable": true
       }
     },
@@ -2453,26 +2490,17 @@
         "rebuild": false
       },
       "response": {
-        "models": [
-          {
-            "id": "embed-bge-m3",
-            "label": "BGE-M3",
-            "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 634553760,
-            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
-            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
-            "upstreamMemoryMb": 1024,
-            "needMemoryMb": 1408,
-            "fit": "ok",
-            "status": "ready",
-            "consentAt": 1762700000000,
-            "verifiedAt": 1762700300000,
-            "job": null
-          }
-        ],
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "bge-m3",
+          "dims": 1024,
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
         "active": {
-          "modelId": "embed-bge-m3",
-          "modelLabel": "BGE-M3",
+          "modelId": "bge-m3",
+          "url": "http://localhost:11434/v1",
           "dims": 1024,
           "done": 3,
           "total": 3,
@@ -2507,33 +2535,23 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "toolReady": true,
         "searchable": true
       }
     },
     "cancel_search_index": {
       "args": {},
       "response": {
-        "models": [
-          {
-            "id": "embed-bge-m3",
-            "label": "BGE-M3",
-            "languages": "multilingual (100+ languages, Turkish and English included)",
-            "sizeBytes": 634553760,
-            "license": "MIT (BAAI/bge-m3; Q8_0 GGUF published by ggml-org, the llama.cpp project)",
-            "source": "https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF",
-            "upstreamMemoryMb": 1024,
-            "needMemoryMb": 1408,
-            "fit": "ok",
-            "status": "ready",
-            "consentAt": 1762700000000,
-            "verifiedAt": 1762700300000,
-            "job": null
-          }
-        ],
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "bge-m3",
+          "dims": 1024,
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
         "active": {
-          "modelId": "embed-bge-m3",
-          "modelLabel": "BGE-M3",
+          "modelId": "bge-m3",
+          "url": "http://localhost:11434/v1",
           "dims": 1024,
           "done": 3,
           "total": 3,
@@ -2568,8 +2586,107 @@
           "canCancel": false,
           "canRemovePartial": false
         },
-        "toolReady": true,
         "searchable": true
+      }
+    },
+    "set_embedding_api": {
+      "args": {
+        "url": "http://localhost:11434/v1",
+        "model": "bge-m3",
+        "key": null,
+        "allowRemote": false
+      },
+      "response": {
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "bge-m3",
+          "dims": 1024,
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
+        "active": {
+          "modelId": "bge-m3",
+          "url": "http://localhost:11434/v1",
+          "dims": 1024,
+          "done": 3,
+          "total": 3,
+          "createdAt": 1762700400000,
+          "activatedAt": 1762700460000
+        },
+        "building": null,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000e001",
+          "kind": "reindex",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "build",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 3,
+          "unitsTotal": 3,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "searchable": true
+      }
+    },
+    "clear_embedding_api": {
+      "args": {},
+      "response": {
+        "api": null,
+        "active": {
+          "modelId": "bge-m3",
+          "url": "http://localhost:11434/v1",
+          "dims": 1024,
+          "done": 3,
+          "total": 3,
+          "createdAt": 1762700400000,
+          "activatedAt": 1762700460000
+        },
+        "building": null,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000e001",
+          "kind": "reindex",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "build",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 3,
+          "unitsTotal": 3,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        },
+        "searchable": false
       }
     }
   },

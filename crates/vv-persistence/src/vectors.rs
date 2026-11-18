@@ -3,7 +3,7 @@
 //!
 //! Rules kept here:
 //! - Every vector belongs to a generation, and a generation to exactly one
-//!   provider, model, model file and size. Vectors of two generations are
+//!   provider, API address, model and size. Vectors of two generations are
 //!   never compared: [`search`] reads one generation only.
 //! - At most one generation is `active` (answers searches) and at most one
 //!   is `building` beside it. [`activate`] swaps them in one transaction;
@@ -68,7 +68,8 @@ impl GenerationStatus {
 pub struct Producer {
     pub provider: String,
     pub model_id: String,
-    /// The model file's pinned SHA-256: a new file is a new generation.
+    /// Where the vectors came from (the API address): another server is
+    /// another generation, even for a model of the same name.
     pub model_version: String,
     pub dims: usize,
 }

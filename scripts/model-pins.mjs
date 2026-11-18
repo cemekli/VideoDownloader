@@ -12,9 +12,6 @@
 //   node scripts/model-pins.mjs --download whisper-tiny --save test-models
 //                                         # and keep it there (the real
 //                                         # whisper-cli test in CI, ADR-0028)
-//   node scripts/model-pins.mjs --catalog tools/embedding-models.json …
-//                                         # the embedding models (F7.1,
-//                                         # ADR-0035; no published SHA-1)
 //
 // The listing gives each LFS file's SHA-256 and size at one commit. The app
 // downloads from that commit only, so a later push to the repository cannot
@@ -27,8 +24,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const catIdx = process.argv.indexOf("--catalog");
-const file = catIdx > 0 ? join(root, process.argv[catIdx + 1]) : join(root, "tools", "models.json");
+const file = join(root, "tools", "models.json");
 const catalog = JSON.parse(readFileSync(file, "utf8"));
 const repo = catalog.repository.replace("https://huggingface.co/", "");
 const write = process.argv.includes("--write");
@@ -85,9 +81,9 @@ if (downloadId) {
   const sha1 = createHash("sha1").update(buf).digest("hex");
   const sha256 = createHash("sha256").update(buf).digest("hex");
   console.log(`${m.id}: downloaded ${buf.length} bytes sha1=${sha1} sha256=${sha256}`);
-  if (m.sha1 && sha1 !== m.sha1) fail(`${m.id}: SHA-1 ${sha1} is not the published ${m.sha1}`);
+  if (sha1 !== m.sha1) fail(`${m.id}: SHA-1 ${sha1} is not the published ${m.sha1}`);
   if (sha256 !== m.sha256 || buf.length !== m.size) fail(`${m.id}: download does not match the pin`);
-  console.log(`✓ ${m.id} matches the pinned SHA-256${m.sha1 ? " and the published SHA-1" : ""}`);
+  console.log(`✓ ${m.id} matches both the published SHA-1 and the pinned SHA-256`);
   if (saveDir) {
     mkdirSync(saveDir, { recursive: true });
     writeFileSync(join(saveDir, m.file), buf);

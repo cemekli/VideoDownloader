@@ -24,6 +24,7 @@ pub mod cookiefile;
 pub mod download;
 pub mod embed;
 pub mod formats;
+pub mod meaning;
 pub mod metadata;
 pub mod models;
 pub mod proc;

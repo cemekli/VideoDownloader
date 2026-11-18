@@ -78,8 +78,6 @@ pub struct Tools {
     pub ytdlp_version: String,
     /// whisper.cpp's `whisper-cli`, with its libraries checked (ADR-0028).
     pub whisper: Option<WhisperTool>,
-    /// llama.cpp's `llama-server` (F7.1, ADR-0035).
-    pub embedder: Option<crate::embed::EmbedTool>,
 }
 
 /// The local transcriber as a job sees it.
@@ -103,7 +101,6 @@ impl Tools {
         ffmpeg_build: &str,
         ytdlp_version: &str,
         whisper_version: &str,
-        llama_version: &str,
     ) -> Tools {
         use vv_tools::ToolId;
         let media = (report.is_ok(ToolId::Ffmpeg) && report.is_ok(ToolId::Ffprobe))
@@ -119,19 +116,12 @@ impl Tools {
             version: whisper_version.to_owned(),
             chunk_ms: crate::transcribe::DEFAULT_CHUNK_MS,
         });
-        let embedder = report
-            .is_ok(ToolId::LlamaServer)
-            .then(|| crate::embed::EmbedTool {
-                exe: paths.embedder.clone(),
-                version: llama_version.to_owned(),
-            });
         Tools {
             report,
             ytdlp,
             media,
             ytdlp_version: ytdlp_version.to_owned(),
             whisper,
-            embedder,
         }
     }
 }

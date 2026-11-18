@@ -43,7 +43,7 @@ pub const MAX_MOMENTS: usize = 5;
 
 /// Transcript states that are searched. `partial` ones carry the range
 /// they cover (§16.2); `stale`, `failed` and the rest are not searched.
-const SEARCHED: &str = "('ready', 'partial')";
+pub(super) const SEARCHED: &str = "('ready', 'partial')";
 
 /// Text as stored in the index: markers removed, dotless `ı` → `i`.
 /// Character for character the same length as [`display`] of the input.
@@ -202,6 +202,9 @@ pub enum Field {
     Tags,
     /// Words said in the video (F6.4); never in [`FIELDS`].
     Transcript,
+    /// A transcript passage close in meaning (F7.2, SEA-07); never in
+    /// [`FIELDS`], and never with highlighted words.
+    Meaning,
 }
 
 /// Column order of `search_document`, and the order a snippet prefers.
@@ -277,6 +280,20 @@ pub struct Hit {
     pub matched: Vec<Field>,
     pub snippet: Option<Snippet>,
     pub transcript: Option<TranscriptMatches>,
+    /// Passages close in meaning to the query (F7.2, hybrid search only):
+    /// whole chunks, nothing highlighted.
+    pub meaning: Option<TranscriptMatches>,
+    /// Why the item is where it is in a hybrid result (SEA-07).
+    pub fusion: Option<Fusion>,
+}
+
+/// The item's place in each list that hybrid ranking fused (1 = first).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fusion {
+    /// In the word search (metadata and transcripts).
+    pub words: Option<u32>,
+    /// In the search by meaning.
+    pub meaning: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -293,7 +310,7 @@ pub struct SearchPage {
     pub notice: Option<QueryNotice>,
 }
 
-fn filter_sql(f: &Filters, params: &mut Vec<Value>) -> String {
+pub(super) fn filter_sql(f: &Filters, params: &mut Vec<Value>) -> String {
     let mut w = vec![if f.removed {
         "i.removed_at IS NOT NULL".to_owned()
     } else {
@@ -385,15 +402,43 @@ fn order_sql(sort: Sort, has_query: bool) -> String {
 
 pub fn search(c: &Connection, q: &SearchQuery) -> super::Result<SearchPage> {
     let fts = build_match(&q.text, q.prefix_last);
-    let notice =
-        (fts.is_none() && !q.text.trim().is_empty()).then_some(QueryNotice::NoSearchableTerms);
+    let notice = notice_of(q, fts.is_some());
     let limit = q.limit.clamp(1, MAX_PAGE);
+    let (total, rows) = ranked(c, q, fts.as_deref(), Some((limit, q.offset)))?;
+    Ok(SearchPage {
+        total,
+        hits: hits(c, fts.as_deref(), rows)?,
+        notice,
+    })
+}
 
+pub(super) fn notice_of(q: &SearchQuery, searchable: bool) -> Option<QueryNotice> {
+    (!searchable && !q.text.trim().is_empty()).then_some(QueryNotice::NoSearchableTerms)
+}
+
+/// One matching item in result order: its id, its `search_document` rowid,
+/// whether the metadata matched and whether a transcript did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Ranked {
+    pub id: String,
+    pub seq: i64,
+    pub metadata: bool,
+    pub transcript: bool,
+}
+
+/// The total and the items of `page` (`(limit, offset)`), or of every
+/// match when `page` is `None` (hybrid ranking fuses the whole list).
+pub(super) fn ranked(
+    c: &Connection,
+    q: &SearchQuery,
+    fts: Option<&str>,
+    page: Option<(u32, u32)>,
+) -> super::Result<(u64, Vec<Ranked>)> {
     let mut params: Vec<Value> = Vec::new();
     // `?1` is the match, used by both indexes; filters bind `?2…` in order.
-    let (with, from, select_extra) = match &fts {
+    let (with, from, select_extra) = match fts {
         Some(m) => {
-            params.push(Value::Text(m.clone()));
+            params.push(Value::Text(m.to_owned()));
             let w = WEIGHTS.map(|x| x.to_string()).join(", ");
             (
                 format!(
@@ -422,47 +467,65 @@ pub fn search(c: &Connection, q: &SearchQuery) -> super::Result<SearchPage> {
     };
     let wh = filter_sql(&q.filters, &mut params);
 
-    let total: i64 = c.query_row(
-        &format!("{with}SELECT count(*) FROM {from}{wh}"),
-        params_from_iter(params.iter()),
-        |r| r.get(0),
-    )?;
-
     let order = order_sql(q.sort, fts.is_some());
-    let sql = format!(
-        "{with}SELECT i.id, i.seq{select_extra} FROM {from}{wh} ORDER BY {order} LIMIT {limit} OFFSET {}",
-        q.offset
-    );
+    let window = match page {
+        Some((limit, offset)) => format!(" LIMIT {limit} OFFSET {offset}"),
+        None => String::new(),
+    };
+    let sql =
+        format!("{with}SELECT i.id, i.seq{select_extra} FROM {from}{wh} ORDER BY {order}{window}");
     let mut stmt = c.prepare(&sql)?;
-    // (id, seq, metadata matched, transcript matched)
     let rows = stmt
         .query_map(params_from_iter(params.iter()), |r| {
-            let (meta, tr) = if fts.is_some() {
+            let (metadata, transcript) = if fts.is_some() {
                 (r.get::<_, bool>(3)?, r.get::<_, bool>(4)?)
             } else {
                 (false, false)
             };
-            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, meta, tr))
+            Ok(Ranked {
+                id: r.get(0)?,
+                seq: r.get(1)?,
+                metadata,
+                transcript,
+            })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    let total = match page {
+        None => rows.len() as i64,
+        Some(_) => c.query_row(
+            &format!("{with}SELECT count(*) FROM {from}{wh}"),
+            params_from_iter(params.iter()),
+            |r| r.get(0),
+        )?,
+    };
+    Ok((total as u64, rows))
+}
 
-    let moments = match &fts {
+/// The hits of `rows` with their snippets and transcript moments.
+pub(super) fn hits(
+    c: &Connection,
+    fts: Option<&str>,
+    rows: Vec<Ranked>,
+) -> super::Result<Vec<Hit>> {
+    let mut moments = match fts {
         Some(m) => {
-            let ids: Vec<&str> = rows.iter().filter(|r| r.3).map(|r| r.0.as_str()).collect();
+            let ids: Vec<&str> = rows
+                .iter()
+                .filter(|r| r.transcript)
+                .map(|r| r.id.as_str())
+                .collect();
             transcript_matches(c, m, &ids)?
         }
         None => Default::default(),
     };
-    let mut moments = moments;
-
     let mut hits = Vec::with_capacity(rows.len());
-    for (id, seq, meta, _) in rows {
-        let item = repo::get_item(c, &id)?.ok_or(super::LibraryError::NotFound)?;
-        let (mut matched, snippet) = match (&fts, meta) {
-            (Some(m), true) => metadata_snippet(c, m, seq, &item)?,
+    for r in rows {
+        let item = repo::get_item(c, &r.id)?.ok_or(super::LibraryError::NotFound)?;
+        let (mut matched, snippet) = match (fts, r.metadata) {
+            (Some(m), true) => metadata_snippet(c, m, r.seq, &item)?,
             _ => (Vec::new(), None),
         };
-        let transcript = moments.remove(&id);
+        let transcript = moments.remove(&r.id);
         if transcript.is_some() {
             matched.push(Field::Transcript);
         }
@@ -471,13 +534,11 @@ pub fn search(c: &Connection, q: &SearchQuery) -> super::Result<SearchPage> {
             matched,
             snippet,
             transcript,
+            meaning: None,
+            fusion: None,
         });
     }
-    Ok(SearchPage {
-        total: total as u64,
-        hits,
-        notice,
-    })
+    Ok(hits)
 }
 
 /// Matched fields and the snippet of one item's metadata.
@@ -640,7 +701,7 @@ const WINDOW: usize = 160;
 
 /// Rebuilds the highlighted index text with the original characters and
 /// cuts a window around the first match.
-fn make_snippet(field: Field, highlighted: &str, original: &str) -> Snippet {
+pub(super) fn make_snippet(field: Field, highlighted: &str, original: &str) -> Snippet {
     let orig: Vec<char> = display(original).chars().collect();
     // (char, highlighted?) in original characters.
     let mut chars: Vec<(char, bool)> = Vec::with_capacity(orig.len());

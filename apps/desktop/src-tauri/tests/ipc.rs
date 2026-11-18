@@ -282,6 +282,8 @@ fn main_capability_grants_only_app_commands() {
         "allow-remove-model",
         "allow-get-ai-processing",
         "allow-get-search-index",
+        "allow-set-embedding-api",
+        "allow-clear-embedding-api",
         "allow-build-search-index",
         "allow-cancel-search-index",
         "allow-list-transcripts",
@@ -367,6 +369,7 @@ fn app_with_library(dir: &std::path::Path) -> (App<MockRuntime>, String) {
 }
 
 use tauri::Manager;
+use vv_persistence::vectors;
 
 #[test]
 fn list_items_matches_contract_shape() {
@@ -392,6 +395,172 @@ fn list_items_matches_contract_shape() {
         item["snippet"]["parts"][0],
         json!({"text": "Deniz", "highlight": true})
     );
+    // No embedding API: the word search, and why meaning is off.
+    assert_eq!(res["meaning"], "no_api");
+    assert!(item["meaning"].is_null() && item["foundBy"].is_null());
+}
+
+/// A one-topic embedding API on 127.0.0.1: texts about the sea or water
+/// get the same vector, anything else another.
+fn tiny_embedding_api() -> String {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://127.0.0.1:{}/v1", l.local_addr().unwrap().port());
+    std::thread::spawn(move || {
+        for mut s in l.incoming().flatten() {
+            let mut r = BufReader::new(s.try_clone().unwrap());
+            let mut len = 0usize;
+            let mut line = String::new();
+            loop {
+                line.clear();
+                if r.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
+                    break;
+                }
+                if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0; len];
+            let _ = r.read_exact(&mut body);
+            let v: Value = serde_json::from_slice(&body).unwrap_or_default();
+            let data: Vec<Value> = v["input"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|t| {
+                    let t = t.as_str().unwrap_or("").to_lowercase();
+                    let mut e = vec![0.0f32; 8];
+                    let sea = ["deniz", "sea", "dalga", "kıyı", "water"]
+                        .iter()
+                        .any(|w| t.contains(w));
+                    e[if sea { 0 } else { 1 }] = 1.0;
+                    json!({ "embedding": e })
+                })
+                .collect();
+            let out = json!({ "data": data }).to_string();
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                out.len()
+            );
+        }
+    });
+    url
+}
+
+#[test]
+fn list_items_adds_matches_by_meaning() {
+    // F7.2, SEA-07, AC-40: the first answer is the word search and says
+    // meaning is available; with `meaning: true` the result is hybrid and
+    // each item says how it was found.
+    use vv_persistence::transcripts::{self, CaptionKind, NewSegment, Origin, Provenance, Status};
+    let d = tempfile::tempdir().unwrap();
+    let (app, deniz) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let url = tiny_embedding_api();
+    let set = ok(
+        &w,
+        "set_embedding_api",
+        json!({ "url": format!("{url}/"), "model": "tiny", "key": null, "allowRemote": false }),
+    );
+    assert_eq!(set["api"]["url"], json!(url), "normalized");
+    assert_eq!(set["api"]["dims"], 8);
+    assert_eq!(set["api"]["local"], true);
+    assert_eq!(set["api"]["hasKey"], false);
+
+    // A second video that never says "deniz" but is about the sea.
+    let mut db =
+        Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+    let mut other = LibraryItem::new(
+        ItemKind::Bookmark,
+        SourcePlatform::Youtube,
+        1_794_000_000_001,
+    );
+    other.canonical_url = Some("https://www.youtube.com/watch?v=aaaaaaaaaaa".into());
+    other.title = Some("Hafta sonu".into());
+    repo::insert_item(db.writer(), &other).unwrap();
+    let tx = db.writer().transaction().unwrap();
+    let origin = Origin {
+        item_id: other.id.clone(),
+        asset_id: None,
+        language: "tr".into(),
+        provenance: Provenance::SourceCaptions,
+        provider: "source_captions".into(),
+        model_id: None,
+        model_version: None,
+        source_fingerprint: "tr:manual:sha256:01".into(),
+        caption_kind: Some(CaptionKind::Manual),
+    };
+    transcripts::save(
+        &tx,
+        &origin,
+        Status::Ready,
+        None,
+        &[NewSegment::new(5_000, 8_000, "Dalgalar kıyıya vuruyor.")],
+        None,
+        1,
+    )
+    .unwrap();
+    tx.commit().unwrap();
+    // The index, as a finished build would leave it.
+    {
+        let c = db.writer();
+        let g = vectors::begin_build(
+            c,
+            &vectors::Producer {
+                provider: "openai_compatible".into(),
+                model_id: "tiny".into(),
+                model_version: url.clone(),
+                dims: 8,
+            },
+            "g1",
+            1,
+        )
+        .unwrap();
+        let mut sea = vec![0.0f32; 8];
+        sea[0] = 1.0;
+        for ch in vectors::pending(c, g.seq, 10).unwrap() {
+            vectors::put(c, &g, ch.chunk_seq, &ch.text, &sea).unwrap();
+        }
+        vectors::activate(c, "g1", 2).unwrap();
+    }
+    let q = |meaning: bool| {
+        json!({ "query": { "text": "deniz", "view": "all", "platforms": [], "kinds": [],
+            "sort": "relevance", "descending": true, "offset": 0, "limit": 100, "meaning": meaning } })
+    };
+    let words = ok(&w, "list_items", q(false));
+    assert_eq!(words["meaning"], "available");
+    assert_eq!(words["total"], 1);
+    let both = ok(&w, "list_items", q(true));
+    assert_eq!(both["meaning"], "used");
+    assert_eq!(both["total"], 2);
+    assert_eq!(both["items"][0]["id"], json!(deniz));
+    assert_eq!(
+        both["items"][0]["foundBy"],
+        json!({ "words": 1, "meaning": null })
+    );
+    let m = &both["items"][1];
+    assert_eq!(m["id"], json!(other.id));
+    assert_eq!(m["foundBy"], json!({ "words": null, "meaning": 1 }));
+    assert_eq!(m["meaning"]["moments"][0]["startMs"], 5_000);
+    assert_eq!(m["meaning"]["moments"][0]["snippet"]["field"], "meaning");
+    let c = contract();
+    let shape = &c["commands"]["list_items"]["meaningShape"];
+    assert_same_shape(
+        &m["meaning"],
+        &with_nulls_of(&m["meaning"], &shape["meaning"]),
+        "list_items meaning",
+    );
+    // Another sort: meaning does not apply.
+    let mut added = q(true);
+    added["query"]["sort"] = json!("added");
+    assert!(ok(&w, "list_items", added)["meaning"].is_null());
+    // The API forgotten: words only, lexical search unchanged (AC-40).
+    ok(&w, "clear_embedding_api", json!({}));
+    let after = ok(&w, "list_items", q(true));
+    assert_eq!(after["meaning"], "no_api");
+    assert_eq!(after["total"], 1);
 }
 
 #[test]
@@ -1485,7 +1654,7 @@ fn model_commands_match_contract_and_need_consent() {
     assert_eq!(a["machine"]["cpuUse"], "light");
     assert!(a["machine"]["threads"].as_u64().unwrap() <= 2);
 
-    // F7.1: search by meaning is off until the embedding model is there;
+    // F7.1: search by meaning is off until an embedding API is set;
     // building without it is refused, cancel with nothing running is a no-op.
     let si = &a["searchIndex"];
     assert_same_shape(
@@ -1496,14 +1665,8 @@ fn model_commands_match_contract_and_need_consent() {
     let g = ok(&w, "get_search_index", json!({}));
     let sg = spec("get_search_index");
     assert_same_shape(&g, &with_nulls_of(&g, &sg), "get_search_index");
-    assert_same_shape(
-        &g["models"][0],
-        &with_nulls_of(&g["models"][0], &sg["models"][0]),
-        "get_search_index.models[0]",
-    );
-    assert_eq!(g["models"][0]["id"], "embed-bge-m3");
-    assert_eq!(g["models"][0]["status"], "not_installed");
-    assert!(g["active"].is_null() && g["building"].is_null() && g["job"].is_null());
+    assert!(g["api"].is_null() && g["active"].is_null() && g["building"].is_null());
+    assert!(g["job"].is_null());
     assert_eq!(g["searchable"], false);
     let e = invoke(
         &w,
@@ -1517,26 +1680,42 @@ fn model_commands_match_contract_and_need_consent() {
     assert!(c2["active"].is_null());
     let text = g.to_string();
     assert!(!text.contains(&*d.path().to_string_lossy()), "{text}");
-    // The embedding model is agreed to like a transcription model (AC-20).
+    // A remote API is refused until the user agrees text goes there
+    // (AI-C07); an address with credentials or not http(s) is refused.
+    for (url, code) in [
+        ("https://embed.example.com/v1", "URL_BLOCKED"),
+        ("http://user:pw@localhost:11434/v1", "URL_HAS_CREDENTIALS"),
+        ("file:///etc/passwd", "INVALID_URL"),
+    ] {
+        let e = invoke(
+            &w,
+            "set_embedding_api",
+            json!({ "url": url, "model": "bge-m3", "key": null, "allowRemote": false }),
+            app_origin(),
+        )
+        .unwrap_err();
+        assert_eq!(e["code"], code, "{url}");
+    }
+    // Nothing listens on this port: the check fails and nothing is saved.
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    };
     let e = invoke(
         &w,
-        "download_model",
-        json!({ "modelId": "embed-bge-m3", "agreed": false }),
+        "set_embedding_api",
+        json!({ "url": format!("http://127.0.0.1:{port}/v1"), "model": "bge-m3", "key": null, "allowRemote": false }),
         app_origin(),
     )
     .unwrap_err();
-    assert_eq!(e["code"], "INPUT_REJECTED");
-    let _ = ok(
-        &w,
-        "download_model",
-        json!({ "modelId": "embed-bge-m3", "agreed": true }),
+    assert_eq!(e["code"], "NETWORK_UNAVAILABLE");
+    assert!(ok(&w, "get_search_index", json!({}))["api"].is_null());
+    let cl = ok(&w, "clear_embedding_api", json!({}));
+    assert_same_shape(
+        &cl,
+        &with_nulls_of(&cl, &spec("clear_embedding_api")),
+        "clear_embedding_api",
     );
-    let g = ok(&w, "get_search_index", json!({}));
-    assert_eq!(g["models"][0]["status"], "pending");
-    assert_eq!(g["models"][0]["job"]["kind"], "model_download");
-    let _ = ok(&w, "remove_model", json!({ "modelId": "embed-bge-m3" }));
-    let g = ok(&w, "get_search_index", json!({}));
-    assert_eq!(g["models"][0]["status"], "not_installed");
 }
 
 #[test]

@@ -88,6 +88,8 @@ const COMMANDS: &[&str] = &[
     "remove_model",
     "get_ai_processing",
     "get_search_index",
+    "set_embedding_api",
+    "clear_embedding_api",
     "build_search_index",
     "cancel_search_index",
     "list_transcripts",

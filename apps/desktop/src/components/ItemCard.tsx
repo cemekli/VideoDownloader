@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { LibraryItemDto, Snippet } from "../ipc/types";
 import { formatDate, formatDuration } from "../format";
 import { LOCAL_STATE, PLATFORM_LABEL } from "../labels";
-import { tn } from "../i18n";
+import { t, tn } from "../i18n";
 
 export function StateBadge({ state }: { state: LibraryItemDto["localState"] }) {
   const s = LOCAL_STATE[state];
@@ -27,14 +27,23 @@ export function SnippetText({ snippet }: { snippet: Snippet }) {
   );
 }
 
-/** The first place a search text was said, with its timecode (F6.4, SEA-06). */
+/**
+ * The first place a search text was said, with its timecode (F6.4, SEA-06);
+ * without one, the closest passage in meaning (F7.2), marked as such.
+ */
 export function MomentLine({ item }: { item: LibraryItemDto }) {
-  const tr = item.transcript;
+  const meaning = !item.transcript?.moments[0];
+  const tr = meaning ? item.meaning : item.transcript;
   const m = tr?.moments[0];
   if (!tr || !m) return null;
   const more = tr.total - 1;
   return (
-    <p className="snippet snippet-moment" data-testid="snippet" data-field="transcript">
+    <p className="snippet snippet-moment" data-testid="snippet" data-field={meaning ? "meaning" : "transcript"}>
+      {meaning && (
+        <span className="meaning-tag" title={t("search.meaning_hint")}>
+          {t("search.meaning_tag")}{" "}
+        </span>
+      )}
       <span className="timecode">{formatDuration(m.startMs)}</span> {m.snippet.cutStart && "…"}
       {m.snippet.parts.map((p, i) => (p.highlight ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
       {m.snippet.cutEnd && "…"}

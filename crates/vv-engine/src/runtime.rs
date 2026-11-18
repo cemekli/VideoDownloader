@@ -32,8 +32,8 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     (&[JobKind::ModelDownload], 1),
     // Small text files; two runs of yt-dlp each (F6.2).
     (&[JobKind::FetchCaptions], 2),
-    // One heavy local AI job at a time (§13.3): whisper.cpp and
-    // llama-server each use most cores and their model's memory (F6.2,
+    // One heavy AI job at a time (§13.3): whisper.cpp uses most cores, and
+    // the embedding API is usually the user's Ollama on the same PC (F6.2,
     // F6.6, F7.1).
     (
         &[JobKind::Transcription, JobKind::Embedding, JobKind::Reindex],

@@ -33,10 +33,6 @@ pub enum ToolId {
     /// without it only local transcription is unavailable.
     #[serde(rename = "whisper-cli")]
     WhisperCli,
-    /// llama.cpp's `llama-server` (F7.1, ADR-0035). Optional: without it
-    /// only search by meaning is unavailable.
-    #[serde(rename = "llama-server")]
-    LlamaServer,
 }
 
 /// Every tool the app needs; a manifest without one of them is rejected.
@@ -45,10 +41,10 @@ pub const REQUIRED_TOOLS: &[ToolId] =
 
 /// Tools the manifest may name but need not, and that may have no build
 /// for some platforms (whisper.cpp publishes no Linux binary).
-pub const OPTIONAL_TOOLS: &[ToolId] = &[ToolId::WhisperCli, ToolId::LlamaServer];
+pub const OPTIONAL_TOOLS: &[ToolId] = &[ToolId::WhisperCli];
 
-/// The whisper.cpp and llama.cpp Windows releases are built with MSVC and
-/// load their libraries from their own folder; only `.dll` companions exist.
+/// The whisper.cpp release `whisper-bin-x64.zip` is built with MSVC and
+/// loads its libraries from its own folder; only `.dll` companions exist.
 const COMPANION_EXTENSION: &str = ".dll";
 /// More companions than a release could plausibly need is a broken entry.
 const MAX_COMPANIONS: usize = 32;
@@ -64,7 +60,6 @@ impl ToolId {
             ToolId::Ffmpeg => "ffmpeg",
             ToolId::Ffprobe => "ffprobe",
             ToolId::WhisperCli => "whisper-cli",
-            ToolId::LlamaServer => "llama-server",
         }
     }
 
@@ -86,7 +81,6 @@ impl ToolId {
                 "https://github.com/BtbN/FFmpeg-Builds/releases/download/"
             }
             ToolId::WhisperCli => "https://github.com/ggml-org/whisper.cpp/releases/download/",
-            ToolId::LlamaServer => "https://github.com/ggml-org/llama.cpp/releases/download/",
         }
     }
 }
@@ -320,11 +314,7 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
             ))
         }
         (
-            ToolId::Deno
-            | ToolId::Ffmpeg
-            | ToolId::Ffprobe
-            | ToolId::WhisperCli
-            | ToolId::LlamaServer,
+            ToolId::Deno | ToolId::Ffmpeg | ToolId::Ffprobe | ToolId::WhisperCli,
             Provenance::PublishedSha256,
         ) => {}
         (_, _) => return Err(bad("unexpected provenance kind".into())),
@@ -350,10 +340,7 @@ fn validate_tool(t: &Tool) -> Result<(), ManifestError> {
             // The version must be part of the URL, so a "latest" link cannot sneak in.
             a.url.starts_with(prefix)
                 && (a.url.contains(&format!("/{}/", t.version))
-                    || a.url.contains(&format!("/v{}/", t.version))
-                    // llama.cpp tags its builds `b<number>`.
-                    || (t.id == ToolId::LlamaServer
-                        && a.url.contains(&format!("/b{}/", t.version))))
+                    || a.url.contains(&format!("/v{}/", t.version)))
         };
         if !pinned {
             return Err(bad(format!(

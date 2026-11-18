@@ -16,6 +16,8 @@ use vv_persistence::library::{bookmark, Clock, FixedClock};
 use vv_persistence::rusqlite::Connection;
 use vv_persistence::{Database, OpenOptions};
 
+pub mod fake_embed;
+
 pub const CANARY: &str = "VVCANARY-7f3a91";
 
 pub struct TestStore {
@@ -121,8 +123,6 @@ pub struct Setup {
     pub policy: Policy,
     /// `whisper-cli`; the fake one unless a test sets the real one.
     pub whisper: Option<PathBuf>,
-    /// `llama-server`; the fake one unless a test sets the real one.
-    pub embedder: Option<PathBuf>,
 }
 
 impl Setup {
@@ -132,7 +132,6 @@ impl Setup {
             media: media_tools(),
             policy: Policy::default(),
             whisper: Some(PathBuf::from(env!("CARGO_BIN_EXE_vv-fake-whisper"))),
-            embedder: Some(PathBuf::from(env!("CARGO_BIN_EXE_vv-fake-embed"))),
         }
     }
 }
@@ -166,10 +165,6 @@ pub fn library(setup: Setup) -> Lib {
             exe,
             version: "1.9.2".into(),
             chunk_ms: vv_engine::transcribe::DEFAULT_CHUNK_MS,
-        }),
-        embedder: setup.embedder.map(|exe| vv_engine::embed::EmbedTool {
-            exe,
-            version: "test".into(),
         }),
     };
     let cx = Context {
