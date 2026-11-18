@@ -213,23 +213,7 @@ impl Api {
         remote_allowed: bool,
         offline: bool,
     ) -> Result<Api, EmbedError> {
-        let base = normalize_url(url).map_err(|_| {
-            EmbedError::Failed(ErrorCode::InvalidUrl, "embedding API address".into())
-        })?;
-        if !is_loopback(&base) {
-            if offline {
-                return Err(EmbedError::Failed(
-                    ErrorCode::OfflineMode,
-                    "the embedding API is not on this PC".into(),
-                ));
-            }
-            if !remote_allowed {
-                return Err(EmbedError::Failed(
-                    ErrorCode::UrlBlocked,
-                    "sending text to this address was not agreed to".into(),
-                ));
-            }
-        }
+        let base = checked_base(url, remote_allowed, offline)?;
         let model = model.trim();
         if model.is_empty() || model.len() > 200 {
             return Err(EmbedError::Failed(
@@ -241,12 +225,7 @@ impl Api {
             base,
             model: model.to_owned(),
             key: key.filter(|k| !k.is_empty()),
-            // No redirects: the text goes to the address the user gave.
-            agent: ureq::AgentBuilder::new()
-                .timeout_connect(CONNECT_TIMEOUT)
-                .timeout(REQUEST_TIMEOUT)
-                .redirects(0)
-                .build(),
+            agent: agent(),
         })
     }
 
@@ -256,18 +235,7 @@ impl Api {
         secrets: &dyn SecretStore,
         offline: bool,
     ) -> Result<Api, EmbedError> {
-        let key = match &cfg.key_ref {
-            Some(r) => {
-                let r = SecretRef::parse(r).ok_or_else(|| {
-                    EmbedError::Failed(ErrorCode::AccessDenied, "API key reference".into())
-                })?;
-                let s = secrets.get(&r).map_err(|_| {
-                    EmbedError::Failed(ErrorCode::AccessDenied, "API key not found".into())
-                })?;
-                Some(String::from_utf8_lossy(s.expose()).into_owned())
-            }
-            None => None,
-        };
+        let key = stored_key(cfg.key_ref.as_deref(), secrets)?;
         Api::new(&cfg.url, &cfg.model, key, cfg.remote_allowed, offline)
     }
 
@@ -291,65 +259,137 @@ impl Api {
             "encoding_format": "float",
         })
         .to_string();
-        let mut req = self
-            .agent
-            .post(&format!("{}/embeddings", self.base))
-            .set("Content-Type", "application/json");
-        if let Some(k) = &self.key {
-            req = req.set("Authorization", &format!("Bearer {k}"));
-        }
-        let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let r = match req.send_string(&body) {
-                Ok(resp) => {
-                    let mut buf = Vec::new();
-                    resp.into_reader()
-                        .take(RESPONSE_MAX + 1)
-                        .read_to_end(&mut buf)
-                        .map(|_| buf)
-                        .map_err(|e| (ErrorCode::NetworkUnavailable, e.kind().to_string()))
-                }
-                Err(ureq::Error::Status(code, _)) => Err((
-                    match code {
-                        401 | 403 => ErrorCode::AccessDenied,
-                        404 => ErrorCode::ModelMissing,
-                        429 => ErrorCode::RateLimited,
-                        _ => ErrorCode::ExtractorFailed,
-                    },
-                    format!("HTTP {code}"),
-                )),
-                Err(ureq::Error::Transport(t)) => {
-                    Err((ErrorCode::NetworkUnavailable, t.kind().to_string()))
-                }
-            };
-            let _ = tx.send(r);
-        });
-        loop {
-            match rx.recv_timeout(POLL) {
-                Ok(Ok(buf)) if buf.len() as u64 > RESPONSE_MAX => {
-                    return Err(EmbedError::Failed(
-                        ErrorCode::ExtractorFailed,
-                        "answer too large".into(),
-                    ))
-                }
-                Ok(Ok(buf)) => {
-                    return parse_output(&buf, texts.len(), dims)
-                        .map_err(|m| EmbedError::Failed(ErrorCode::ExtractorFailed, m))
-                }
-                Ok(Err((code, m))) => return Err(EmbedError::Failed(code, m)),
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err(EmbedError::Failed(
-                        ErrorCode::InternalError,
-                        "request thread".into(),
-                    ))
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if should_stop() {
-                        return Err(EmbedError::Stopped);
-                    }
+        let buf = post_json(
+            &self.agent,
+            &format!("{}/embeddings", self.base),
+            self.key.as_deref(),
+            body,
+            &mut should_stop,
+        )?;
+        parse_output(&buf, texts.len(), dims)
+            .map_err(|m| EmbedError::Failed(ErrorCode::ExtractorFailed, m))
+    }
+}
+
+/// An agent for the user's API: short connect timeout, long answer
+/// timeout (a CPU-only server), no redirects (the text goes to the address
+/// the user gave).
+pub(crate) fn agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        .redirects(0)
+        .build()
+}
+
+/// Posts `body` (JSON) to `url` with the key as a bearer token and returns
+/// the answer body. The request runs on its own thread; a stop request
+/// ends the wait at once. HTTP errors map to the codes the screen
+/// explains; the message never holds the key or the text.
+pub(crate) fn post_json(
+    agent: &ureq::Agent,
+    url: &str,
+    key: Option<&str>,
+    body: String,
+    should_stop: &mut dyn FnMut() -> bool,
+) -> Result<Vec<u8>, EmbedError> {
+    let mut req = agent.post(url).set("Content-Type", "application/json");
+    if let Some(k) = key {
+        req = req.set("Authorization", &format!("Bearer {k}"));
+    }
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let r = match req.send_string(&body) {
+            Ok(resp) => {
+                let mut buf = Vec::new();
+                resp.into_reader()
+                    .take(RESPONSE_MAX + 1)
+                    .read_to_end(&mut buf)
+                    .map(|_| buf)
+                    .map_err(|e| (ErrorCode::NetworkUnavailable, e.kind().to_string()))
+            }
+            Err(ureq::Error::Status(code, _)) => Err((
+                match code {
+                    401 | 403 => ErrorCode::AccessDenied,
+                    404 => ErrorCode::ModelMissing,
+                    429 => ErrorCode::RateLimited,
+                    _ => ErrorCode::ExtractorFailed,
+                },
+                format!("HTTP {code}"),
+            )),
+            Err(ureq::Error::Transport(t)) => {
+                Err((ErrorCode::NetworkUnavailable, t.kind().to_string()))
+            }
+        };
+        let _ = tx.send(r);
+    });
+    loop {
+        match rx.recv_timeout(POLL) {
+            Ok(Ok(buf)) if buf.len() as u64 > RESPONSE_MAX => {
+                return Err(EmbedError::Failed(
+                    ErrorCode::ExtractorFailed,
+                    "answer too large".into(),
+                ))
+            }
+            Ok(Ok(buf)) => return Ok(buf),
+            Ok(Err((code, m))) => return Err(EmbedError::Failed(code, m)),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(EmbedError::Failed(
+                    ErrorCode::InternalError,
+                    "request thread".into(),
+                ))
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if should_stop() {
+                    return Err(EmbedError::Stopped);
                 }
             }
         }
+    }
+}
+
+/// Checks an address for use: normalized, and a host other than this PC
+/// is refused in Offline Mode and without the user's agreement.
+pub(crate) fn checked_base(
+    url: &str,
+    remote_allowed: bool,
+    offline: bool,
+) -> Result<String, EmbedError> {
+    let base = normalize_url(url)
+        .map_err(|_| EmbedError::Failed(ErrorCode::InvalidUrl, "API address".into()))?;
+    if !is_loopback(&base) {
+        if offline {
+            return Err(EmbedError::Failed(
+                ErrorCode::OfflineMode,
+                "the API is not on this PC".into(),
+            ));
+        }
+        if !remote_allowed {
+            return Err(EmbedError::Failed(
+                ErrorCode::UrlBlocked,
+                "sending text to this address was not agreed to".into(),
+            ));
+        }
+    }
+    Ok(base)
+}
+
+/// The key a setting refers to, from the credential store.
+pub(crate) fn stored_key(
+    key_ref: Option<&str>,
+    secrets: &dyn SecretStore,
+) -> Result<Option<String>, EmbedError> {
+    match key_ref {
+        Some(r) => {
+            let r = SecretRef::parse(r).ok_or_else(|| {
+                EmbedError::Failed(ErrorCode::AccessDenied, "API key reference".into())
+            })?;
+            let s = secrets.get(&r).map_err(|_| {
+                EmbedError::Failed(ErrorCode::AccessDenied, "API key not found".into())
+            })?;
+            Ok(Some(String::from_utf8_lossy(s.expose()).into_owned()))
+        }
+        None => Ok(None),
     }
 }
 

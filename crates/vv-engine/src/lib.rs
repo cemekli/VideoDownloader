@@ -32,6 +32,7 @@ pub mod resources;
 pub mod runtime;
 pub mod storage;
 pub mod storage_move;
+pub mod suggest;
 pub mod toolset;
 pub mod transcribe;
 pub mod verify;

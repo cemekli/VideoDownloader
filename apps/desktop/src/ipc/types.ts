@@ -1059,4 +1059,77 @@ export interface TranscriptClient {
   exportNote(itemId: string, segmentIds: string[]): Promise<NoteExport>;
 }
 
-export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient;
+/** The user's chat API for tag suggestions (F7.3, AI-C07). The key itself never comes back. */
+export interface SuggestApiDto {
+  url: string;
+  model: string;
+  hasKey: boolean;
+  /** The address is this PC: text does not leave it, works offline. */
+  local: boolean;
+  checkedAt: number;
+}
+
+/** "Suggest for all": the run under way or the last one since the app started. */
+export interface SuggestRunDto {
+  running: boolean;
+  /** Items looked at / all items. */
+  done: number;
+  total: number;
+  /** Items the model was asked about; the rest were up to date or had no text. */
+  asked: number;
+  suggested: number;
+  failed: number;
+  /** Why the run stopped early, when it did. */
+  errorCode: string | null;
+  canceled: boolean;
+  startedAt: number;
+  finishedAt: number | null;
+}
+
+/** Tag suggestions (F7.3): the chat API, "Suggest for all" and how many suggestions wait. */
+export interface TagSuggestDto {
+  api: SuggestApiDto | null;
+  run: SuggestRunDto | null;
+  pending: number;
+}
+
+/** One pending suggestion (SPEC §11 `AIProposal`, AI-B02): nothing changes until it is accepted. */
+export interface ProposalDto {
+  id: string;
+  itemId: string;
+  type: "tag" | "topic" | "collection";
+  value: string;
+  /** The model that suggested it. */
+  modelId: string;
+}
+
+export interface ItemSuggestions {
+  /** `current`: the item's text did not change since the last suggestions (AI-B04). */
+  outcome: "asked" | "current" | "no_text";
+  proposals: ProposalDto[];
+}
+
+export interface DecideResult {
+  /** The item's pending suggestions after the decision. */
+  proposals: ProposalDto[];
+  /** The "add tag" an accept made; Undo reverts it. */
+  op: OpResult | null;
+}
+
+/** Tag suggestions from the user's chat API (F7.3, ADR-0037). */
+export interface SuggestClient {
+  getTagSuggest(): Promise<TagSuggestDto>;
+  /** Checks the API with one short question and saves it. `key`: null keeps the saved key, "" removes it. */
+  setSuggestApi(url: string, model: string, key: string | null, allowRemote: boolean): Promise<TagSuggestDto>;
+  clearSuggestApi(): Promise<TagSuggestDto>;
+  /** Starts "Suggest for all"; `force` asks again for items that are up to date. */
+  suggestAll(force: boolean): Promise<TagSuggestDto>;
+  cancelSuggestAll(): Promise<TagSuggestDto>;
+  listAiProposals(itemId: string): Promise<ProposalDto[]>;
+  /** Asks the model for one item now; `force` asks again when nothing changed. */
+  suggestTags(itemId: string, force: boolean): Promise<ItemSuggestions>;
+  /** Accepts (adding the tag, named `name` when edited) or rejects a suggestion. */
+  decideAiProposal(id: string, accept: boolean, name: string | null): Promise<DecideResult>;
+}
+
+export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient & SuggestClient;

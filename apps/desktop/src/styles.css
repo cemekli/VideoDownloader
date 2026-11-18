@@ -233,6 +233,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tag-chip { display: inline-flex; align-items: center; gap: 2px; padding: 0 0 0 var(--s2); border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: .85rem; }
 .chip-x { border: 0; background: none; cursor: pointer; width: 22px; height: 22px; border-radius: 999px; color: var(--muted); }
 .chip-x:hover { background: var(--surface-3); color: var(--text); }
+/* Suggested tags (F7.3): dashed until accepted. */
+.suggestion-chip { border-style: dashed; }
+.chip-text { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: text; }
+.chip-input { font: inherit; width: 12em; border: 0; background: transparent; color: inherit; }
 .notes-input { width: 100%; resize: vertical; padding: var(--s2); border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); }
 .notes-bar { display: flex; align-items: center; gap: var(--s3); margin: var(--s2) 0 var(--s4); }
 .dup-list, .orphan-list, .merge-list { list-style: none; margin: 0; padding: 0; }

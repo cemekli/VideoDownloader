@@ -2734,6 +2734,161 @@
         },
         "searchable": false
       }
+    },
+    "get_tag_suggest": {
+      "args": {},
+      "response": {
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "qwen3.5:4b",
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
+        "run": {
+          "running": false,
+          "done": 12,
+          "total": 12,
+          "asked": 10,
+          "suggested": 38,
+          "failed": 0,
+          "errorCode": null,
+          "canceled": false,
+          "startedAt": 1762700500000,
+          "finishedAt": 1762700800000
+        },
+        "pending": 38
+      }
+    },
+    "set_suggest_api": {
+      "args": {
+        "url": "http://localhost:11434/v1",
+        "model": "qwen3.5:4b",
+        "key": null,
+        "allowRemote": false
+      },
+      "response": {
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "qwen3.5:4b",
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
+        "run": null,
+        "pending": 38
+      }
+    },
+    "clear_suggest_api": {
+      "args": {},
+      "response": {
+        "api": null,
+        "run": null,
+        "pending": 38
+      }
+    },
+    "suggest_all": {
+      "args": {
+        "force": false
+      },
+      "response": {
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "qwen3.5:4b",
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
+        "run": {
+          "running": true,
+          "done": 3,
+          "total": 12,
+          "asked": 10,
+          "suggested": 38,
+          "failed": 0,
+          "errorCode": null,
+          "canceled": false,
+          "startedAt": 1762700500000,
+          "finishedAt": null
+        },
+        "pending": 38
+      }
+    },
+    "cancel_suggest_all": {
+      "args": {},
+      "response": {
+        "api": {
+          "url": "http://localhost:11434/v1",
+          "model": "qwen3.5:4b",
+          "hasKey": false,
+          "local": true,
+          "checkedAt": 1762700000000
+        },
+        "run": {
+          "running": false,
+          "done": 12,
+          "total": 12,
+          "asked": 10,
+          "suggested": 38,
+          "failed": 0,
+          "errorCode": null,
+          "canceled": false,
+          "startedAt": 1762700500000,
+          "finishedAt": 1762700800000
+        },
+        "pending": 38
+      }
+    },
+    "list_ai_proposals": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001"
+      },
+      "response": [
+        {
+          "id": "00000000-0000-4000-8000-0000000a1001",
+          "itemId": "00000000-0000-4000-8000-000000000001",
+          "type": "tag",
+          "value": "deniz",
+          "modelId": "qwen3.5:4b"
+        }
+      ]
+    },
+    "suggest_tags": {
+      "args": {
+        "itemId": "00000000-0000-4000-8000-000000000001",
+        "force": false
+      },
+      "response": {
+        "outcome": "asked",
+        "proposals": [
+          {
+            "id": "00000000-0000-4000-8000-0000000a1001",
+            "itemId": "00000000-0000-4000-8000-000000000001",
+            "type": "tag",
+            "value": "deniz",
+            "modelId": "qwen3.5:4b"
+          }
+        ]
+      }
+    },
+    "decide_ai_proposal": {
+      "args": {
+        "id": "00000000-0000-4000-8000-0000000a1001",
+        "accept": true,
+        "name": null
+      },
+      "response": {
+        "proposals": [],
+        "op": {
+          "changed": 1,
+          "unchanged": 0,
+          "failed": 0,
+          "undo": {
+            "kind": "tag_items",
+            "size": 1
+          }
+        }
+      }
     }
   },
   "domainError": {
