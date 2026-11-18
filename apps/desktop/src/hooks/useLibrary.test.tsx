@@ -28,3 +28,40 @@ describe("useLibrary reloads", () => {
     expect(result.current.data).toBe(before);
   });
 });
+
+// F7.2 (ADR-0036): the word result comes first; when meaning is
+// `available` the same query is asked with `meaning: true` and the fused
+// result replaces it. Later pages keep the flag; a failing API leaves the
+// word result with "failed".
+describe("useLibrary search by meaning", () => {
+  const records = manyRecords(150);
+  const query: Omit<ListQuery, "offset" | "limit"> = { text: "video", view: "all", platforms: [], kinds: [], sort: "relevance", descending: false };
+  const make = (second: "used" | "throw") => {
+    const listItems = vi.fn(async (q: ListQuery) => {
+      const page = queryRecords(records, { ...q, text: "" }, FIXTURE_NOW);
+      if (!q.meaning) return { ...page, meaning: "available" as const };
+      if (second === "throw") throw new Error("api down");
+      return { ...page, items: [...page.items].reverse(), meaning: "used" as const };
+    });
+    return { listItems, client: { listItems } as unknown as LibraryClient };
+  };
+
+  it("shows words first, then the result with meaning; more pages keep asking for it", async () => {
+    const { listItems, client } = make("used");
+    const { result } = renderHook(() => useLibrary(client, query, 0));
+    await waitFor(() => expect(result.current.data.status === "ready" && result.current.data.meaning).toBe("used"));
+    expect(listItems.mock.calls[0]![0].meaning).toBeUndefined();
+    expect(listItems.mock.calls[1]![0].meaning).toBe(true);
+    listItems.mockClear();
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.data.status === "ready" && result.current.data.items.length).toBe(150));
+    expect(listItems.mock.calls[0]![0]).toMatchObject({ meaning: true, offset: PAGE_SIZE });
+  });
+
+  it("keeps the word result when the API fails", async () => {
+    const { client } = make("throw");
+    const { result } = renderHook(() => useLibrary(client, query, 0));
+    await waitFor(() => expect(result.current.data.status === "ready" && result.current.data.meaning).toBe("failed"));
+    expect(result.current.data.status === "ready" && result.current.data.items.length).toBe(PAGE_SIZE);
+  });
+});

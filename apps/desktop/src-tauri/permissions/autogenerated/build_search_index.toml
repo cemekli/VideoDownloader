@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-build-search-index"
+description = "Enables the build_search_index command without any pre-configured scope."
+commands.allow = ["build_search_index"]
+
+[[permission]]
+identifier = "deny-build-search-index"
+description = "Denies the build_search_index command without any pre-configured scope."
+commands.deny = ["build_search_index"]

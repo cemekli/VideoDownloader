@@ -320,6 +320,12 @@ fn finish<S: Store>(
         })
     });
     match r {
+        Ok(()) if found.is_some() => {
+            // New chunks: their vectors, when search by meaning is on (F7.1).
+            cx.store.write(|c| {
+                let _ = crate::embed::after_chunks_changed(c, now);
+            });
+        }
         Ok(()) | Err(jobs::JobError::Stale) => {}
         // Cancelled while saving: nothing was kept.
         Err(jobs::JobError::InvalidTransition { .. }) => {

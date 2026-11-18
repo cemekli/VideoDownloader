@@ -46,6 +46,7 @@ import type {
   VerifyDto,
   ModelClient,
   ModelOverview,
+  SearchIndexDto,
   AiProcessing,
   TranscriptClient,
   ItemTranscripts,
@@ -116,7 +117,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...downloads.sessions,
     ...models,
     ...transcripts,
-    getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs() }),
+    getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs(), searchIndex: await models.getSearchIndex() }),
     // Transcription jobs live with the fixture transcripts; the rest are downloads.
     cancelJob: async (jobId) => transcripts.cancelOwnJob(jobId) ?? downloads.client.cancelJob(jobId),
     downloads,
@@ -257,6 +258,11 @@ const sessionCommands: SessionClient = {
 /** Transcription models (F6.1). */
 const modelCommands: ModelClient = {
   listModels: () => call<ModelOverview>("list_models"),
+  getSearchIndex: () => call<SearchIndexDto>("get_search_index"),
+  setEmbeddingApi: (url, model, key, allowRemote) => call<SearchIndexDto>("set_embedding_api", { url, model, key, allowRemote }),
+  clearEmbeddingApi: () => call<SearchIndexDto>("clear_embedding_api"),
+  buildSearchIndex: (rebuild: boolean) => call<SearchIndexDto>("build_search_index", { rebuild }),
+  cancelSearchIndex: () => call<SearchIndexDto>("cancel_search_index"),
   downloadModel: (modelId, agreed) => call<ModelOverview>("download_model", { modelId, agreed }),
   verifyModel: (modelId) => call<ModelOverview>("verify_model", { modelId }),
   removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),

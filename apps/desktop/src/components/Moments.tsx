@@ -14,12 +14,16 @@ const SOURCE = {
  * F6.4, SEA-06). Each moment shows its real segment time; with a file on
  * this PC it plays from there (PLAY-06). A partial transcript says how far
  * it was searched (§16.2). Text is rendered as text (SEA-03).
+ *
+ * `meaning`: passages found by meaning rather than by the words (F7.2);
+ * they are about the search text, so nothing in them is marked.
  */
-export function Moments({ matches, playable, onOpen }: { matches: TranscriptMatchesDto; playable: boolean; onOpen: (segmentId: string) => void }) {
+export function Moments({ matches, playable, onOpen, meaning = false }: { matches: TranscriptMatchesDto; playable: boolean; onOpen: (segmentId: string) => void; meaning?: boolean }) {
   const more = matches.total - matches.moments.length;
   return (
-    <section data-testid="inspector-moments">
-      <h4>{t("search.said_title")}</h4>
+    <section data-testid={meaning ? "inspector-meaning" : "inspector-moments"}>
+      <h4>{t(meaning ? "search.meaning_title" : "search.said_title")}</h4>
+      {meaning && <p className="muted small">{t("search.meaning_hint")}</p>}
       <p className="muted small">
         {languageName(matches.language)} · {t(SOURCE[matches.provenance])}
       </p>

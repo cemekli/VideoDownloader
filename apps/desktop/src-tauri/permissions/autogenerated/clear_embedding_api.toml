@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clear-embedding-api"
+description = "Enables the clear_embedding_api command without any pre-configured scope."
+commands.allow = ["clear_embedding_api"]
+
+[[permission]]
+identifier = "deny-clear-embedding-api"
+description = "Denies the clear_embedding_api command without any pre-configured scope."
+commands.deny = ["clear_embedding_api"]

@@ -93,6 +93,36 @@ const ONBOARDING: &str = "onboarding_completed_at";
 const LEGAL: &str = "legal_ack_at";
 const DOWNLOAD_ROOT: &str = "active_download_root_id";
 const TRANSCRIPTION_CPU: &str = "transcription_cpu";
+const EMBEDDING_API: &str = "embedding_api";
+
+/// The user's embedding API for search by meaning (STATE.md F7.1, SPEC
+/// AI-C07, ADR-0035): an OpenAI-compatible `/v1/embeddings`. Saved only
+/// after a check answered with vectors of `dims` values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingApi {
+    /// Base address, normalized (`http://localhost:11434/v1`).
+    pub url: String,
+    pub model: String,
+    /// Length of the vectors the check got back.
+    pub dims: usize,
+    /// The API key in the OS credential store, if one was given.
+    pub key_ref: Option<String>,
+    /// The user agreed that transcript text goes to this address (a host
+    /// other than this PC, AI-C07).
+    pub remote_allowed: bool,
+    pub checked_at: i64,
+}
+
+/// The embedding API, if one was set.
+pub fn embedding_api(c: &Connection) -> Result<Option<EmbeddingApi>> {
+    Ok(read::<Option<EmbeddingApi>>(c, EMBEDDING_API)?.flatten())
+}
+
+/// Sets or clears (`None`) the embedding API.
+pub fn set_embedding_api(c: &Connection, api: Option<&EmbeddingApi>, now_ms: i64) -> Result<()> {
+    write(c, EMBEDDING_API, &api, now_ms)
+}
 
 fn read_raw(c: &Connection, key: &str) -> Result<Option<String>> {
     Ok(

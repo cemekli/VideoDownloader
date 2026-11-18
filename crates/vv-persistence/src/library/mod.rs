@@ -7,6 +7,7 @@
 //! revision they read and fail with `REVISION_CONFLICT` when it moved.
 
 pub mod bookmark;
+pub mod hybrid;
 pub mod merge;
 pub mod organize;
 pub mod playback;

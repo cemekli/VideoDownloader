@@ -4,6 +4,7 @@ import type { AiJobDto, AiProcessing, CpuUse, DownloadClient, MachineDto, ModelC
 import { formatBytes, formatDuration } from "../format";
 import { formatDateTime, t, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
+import { SearchIndexBlock } from "./SearchIndex";
 import { TranscriptionBlock } from "./Transcription";
 import { languageName } from "./Transcripts";
 
@@ -118,6 +119,13 @@ export function AiProcessingView({
           {t("ai.models.title")}
         </h2>
         <TranscriptionBlock client={client} notify={notify} onChanged={() => void reload()} />
+      </section>
+
+      <section aria-labelledby="ai-search-index">
+        <h2 id="ai-search-index" className="downloads-heading">
+          {t("search_index.title")}
+        </h2>
+        <SearchIndexBlock client={client} notify={notify} onChanged={() => void reload()} />
       </section>
     </div>
   );

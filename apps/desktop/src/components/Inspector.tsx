@@ -66,6 +66,7 @@ export function Inspector({
   downloadJob = null,
   transcripts,
   moments = null,
+  meaningMoments = null,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -83,6 +84,8 @@ export function Inspector({
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
   /** Where the current search text was said in the item (F6.4). */
   moments?: TranscriptMatchesDto | null;
+  /** Passages close in meaning to the search text (F7.2). */
+  meaningMoments?: TranscriptMatchesDto | null;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -117,7 +120,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -161,6 +164,7 @@ function Details({
   downloadJob,
   transcripts,
   moments,
+  meaningMoments,
   onSaved,
 }: {
   detail: ItemDetail;
@@ -170,6 +174,7 @@ function Details({
   downloadJob: JobDto | null;
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
   moments: TranscriptMatchesDto | null;
+  meaningMoments: TranscriptMatchesDto | null;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -209,6 +214,9 @@ function Details({
       )}
       {/* With a search text, where it was said comes right under the actions (F6.4). */}
       {moments && moments.moments.length > 0 && <Moments matches={moments} playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />}
+      {meaningMoments && meaningMoments.moments.length > 0 && (
+        <Moments matches={meaningMoments} meaning playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />
+      )}
       <p className="inspector-state">
         <StateBadge state={item.localState} />
         <span className="muted"> {LOCAL_STATE[item.localState].hint}</span>

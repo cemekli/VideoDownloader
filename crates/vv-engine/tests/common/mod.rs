@@ -16,6 +16,8 @@ use vv_persistence::library::{bookmark, Clock, FixedClock};
 use vv_persistence::rusqlite::Connection;
 use vv_persistence::{Database, OpenOptions};
 
+pub mod fake_embed;
+
 pub const CANARY: &str = "VVCANARY-7f3a91";
 
 pub struct TestStore {

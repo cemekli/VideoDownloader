@@ -1274,3 +1274,55 @@ STATE.md F6.7. SPEC AI-A07 (kalite ve hız gerçek fixture ile ölçülür, sabi
 - `crates/vv-asr-quality/tests/report.rs`: gerçek kütüphane dosyasında (migration'larla açılan şema) gerçek TR altyazı fixture'ı referans; iki model, kısmi döküm, iki denemeli iş; tablo, terimler ve karışan kelimeler.
 - `crates/vv-asr-quality/tests/fuzz.rs`: normalleştirme ve hizalama Türkçe harf, birleşik işaret, emoji, kapanmamış parantez ve denetim karakterleriyle panic vermez; aynı metin 0 hata, hata sayısı simetrik.
 - Asıl ölçüm Cuma'nın bilgisayarında: sonuçlar `docs/asr-quality.md`'de.
+
+## ADR-0035: Anlamsal arama için kullanıcının embedding API'si, vektör deposu ve indeks nesilleri
+
+STATE.md F7.1. SPEC §16.3 (vektörler sağlayıcı/model/sürüm/boyut ile saklanır, farklı modelin vektörleri karşılaştırılmaz; reindex eski indeksin yanında kurulur, iptal yarım indeksi aramaya sokmaz; model yoksa kelime araması çalışır), AI-C07 (bulut/uzak sağlayıcı açık izinle), DATA-05 (Çevrimdışı Mod), DEC-12, AC-24.
+
+**Bağlam.** F6 dökümleri zaman kodlu parçalara (`search_chunk`, en çok 400 karakter / 30 s) böler ve FTS5 ile kelime araması yapar. "veritabanı yedekleme" diye arayan kişi "PostgreSQL replikasyonu" geçen yeri de bulmalı; bunun için her parçanın anlam vektörü gerekir. PR #61'in ilk hâli llama.cpp `llama-server`'ı yönetilen araç olarak paketliyor ve BGE-M3'ü onayla indiriyordu. Cuma'nın kararı (14 Kas 2026): **sunucuyu biz barındırmayalım, dışarıdan yalnız API adresi alalım.** Cuma zaten WSL'de Ollama çalıştırıyor (`localhost:11434`, `bge-m3`). Böylece uygulama 25 MB'lık bir araç, 22 DLL, 635 MB'lık bir model kataloğu ve süreç yönetimi taşımıyor; kullanıcı istediği modeli ve donanımı (GPU dahil) kendi sunucusunda seçiyor.
+
+**Karar.**
+
+- **Sağlayıcı: OpenAI uyumlu `/v1/embeddings`** (`openai_compatible`). Ollama, LM Studio, llama.cpp `llama-server`, vLLM ve bulut servisleri bunu konuşuyor. İstek `{model, input: [...], encoding_format: "float"}`; isteğe bağlı anahtar `Authorization: Bearer`. Yanıtta `index` alanı yoksa (Ollama) sıra esas alınır. 32 parça bir istektir; istek ayrı iş parçacığında bekler, iptal 50 ms içinde görülür. ureq, yönlendirme izlenmez.
+- **Ayar: AI Processing → Search by meaning.** Adres (varsayılan `http://localhost:11434/v1`), model (varsayılan `bge-m3`), isteğe bağlı anahtar. "Check and save" tek bir istek gönderir ve yalnız vektör dönerse kaydeder; dönen uzunluk indeksin boyutu olur. Adres kullanıcı adı/parola içeremez (`URL_HAS_CREDENTIALS`), yalnız http/https.
+- **Anahtar** OS kimlik deposunda (`vv-secrets`, Windows'ta DPAPI) tutulur; ayarlarda yalnız başvurusu durur. Ekrana, günlüğe, hata metnine ya da veritabanına geri gelmez (`Api`'nin Debug çıktısı da gizler). Boş alan kayıtlı anahtarı korur; "Remove the saved key" siler.
+- **Uzak adres (AI-C07).** Bu bilgisayar dışındaki bir adres (`localhost`, `127.x`, `::1` dışı) döküm parçalarını ve arama metinlerini oraya gönderir. Ekran önce sorar ("Send transcript text to another computer?"); izin olmadan arka uç `URL_BLOCKED` döner. Çevrimdışı Mod'da uzak adres kullanılmaz (`OFFLINE_MODE`), yerel adres çalışmaya devam eder.
+- **Hatalar.** HTTP 401/403 → `ACCESS_DENIED` ("Check the key"; `LOGIN_REQUIRED` işi bloke ederdi), 404 → `MODEL_MISSING` ("ollama pull"), 429 → `RATE_LIMITED`, bağlantı yok → `NETWORK_UNAVAILABLE` ("Is the server running?"), okunamayan yanıt/yanlış boyut → `EXTRACTOR_FAILED`. Ekran bu kodları API diliyle açıklar.
+- **İstem.** Denetim karakterleri temizlenir, 1800 bayta (karakter sınırında) kesilir: bir token en az bir bayt olduğundan 2048'lik bağlamlı modelleri de aşmaz.
+- **Vektör deposu: SQLite** (migration 0014). `embedding_generation` (sağlayıcı `openai_compatible`, model adı, **API adresi** `model_version` olarak, boyut, `building`/`active`; her durumdan en çok bir satır) ve `chunk_embedding` (nesil + parça, metnin hash'i, L2-normalize `f32` LE BLOB; parça silinince cascade). Arama tam (her vektör puanlanır); birkaç yüz video on binlerce parça eder, milisaniyeler sürer.
+- **Nesiller (AC-24).** Başka bir adres ya da model başka bir nesildir (aynı ada sahip model başka sunucuda başka vektör verebilir). Yeni nesil etkin olanın yanında `building` olarak kurulur, tamamlanınca tek işlemde etkin olur ve eskisi silinir. İptal yalnız `building` nesli siler. Aramalar yalnız etkin nesli okur ve yalnız ayardaki API o nesli yaptıysa anlamla arar (`searchable`); değilse ekran "made with … at …, not with the API above" der ve kelime araması aynen çalışır. API'yi unutmak indeksi silmez.
+- **İşler.** `reindex` (nesil kurma) ve `embedding` (etkin indekse yeni parçalar) transkripsiyonla aynı tek ağır-AI yuvasını paylaşır (yerel bir sunucu da aynı işlemciyi kullanır). Yeni döküm yazılınca etkin indeks ayardaki API'ye aitse eksik parçalar için iş kuyruğa girer.
+- **Model seçimi** kullanıcınındır. Önerilen ve ölçülen BGE-M3 (MIT, 1024 boyut, çok dilli): PR #61'deki CI ölçümünde TR/EN fixture'ında (`tests/fixtures/semantic-tr-en.json`, 15 parça, 13 sorgu, ortak kelime olmadan aynı konu) hit@1 13/13, MRR 1,000; EmbeddingGemma-300M aynı sonucu verdi ama Gemma şartları kısıtlı; EmbeddingGemma-2 ve Qwen3-Embedding-0.6B 12/13. Bu bir eleme, kalite iddiası değil (AI-A07); F7.2'de gerçek API ile yeniden ölçülür (ADR-0036).
+
+**Reddedilen.** Sunucuyu paketleyip yönetmek (PR #61'in ilk hâli): bakım, Windows ikilisi/DLL'ler, model indirme ve Linux'ta ikili olmaması; kullanıcı zaten bir sunucu çalıştırıyorsa ikinci bir kopya bellek harcar. Ayrı vektör veritabanı (sqlite-vec, LanceDB): yedek ve taşınabilirliğe bir parça daha ekler.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/vectors.rs`: kurma → etkinleştirme → yanında yeniden kurma → iptal (etkin indeks ve vektör sayısı aynı) → tamamlanan yeniden kurma eskisinin yerini alıyor; aynı üretici kaldığı yerden sürüyor, başka üretici yarım kurulumu siliyor; ikinci `building` satırı reddediliyor; yanlış boyutlu/sıfır/NaN vektör reddediliyor.
+- `crates/vv-engine/tests/embed.rs` (süreç içi sahte OpenAI uyumlu sunucu, `tests/common/fake_embed.rs`): API yokken indeks yok; kurma; yeni dökümler ekleniyor; yeniden kurma + iptal (AC-24); başka model yeni nesil; API hataları ve kapalı port `NETWORK_UNAVAILABLE`; anahtar kimlik deposundan gidiyor, anahtarsız `ACCESS_DENIED`, anahtar `lib.dump()`'ta yok; Çevrimdışı Mod'da yerel adres çalışıyor.
+- `crates/vv-engine/src/embed.rs` birim testleri: istem, yanıt ayrıştırma (`index`'siz Ollama yanıtı), adres normalleştirme, yerel/uzak ayrımı, uzak izin ve çevrimdışı.
+- `apps/desktop/src-tauri/tests/ipc.rs`: `set_embedding_api` (`URL_BLOCKED`, `URL_HAS_CREDENTIALS`, `INVALID_URL`, kapalı portta `NETWORK_UNAVAILABLE`), `clear_embedding_api`, sözleşme şekilleri.
+- `apps/desktop/src/SearchIndex.test.tsx`: API yokken indeks düğmesi yok; cevap vermeyen adres formda kalıyor; kaydedip kurma; uzak adres için izin (iptal hiçbir şey kaydetmez), anahtar ekrana dönmüyor; yeniden kurmayı iptal edince eski indeks kalıyor; başka API ile yapılmış indeks uyarısı.
+
+## ADR-0036: Hibrit sıralama: kelime ve anlam araması tek listede (RRF)
+
+STATE.md F7.2. SPEC §7.4 SEA-07 (sonuç neden bulunduğunu söyler), §16.3 (lexical + vector, RRF; benzerlik puanı olasılık değildir), AC-40 (model/indeks yokken kelime araması aynen çalışır).
+
+**Bağlam.** F7.1 indeksi kuruyor ama arama kutusu hâlâ yalnız kelimeyle arıyor. Kelime araması (BM25, metadata + döküm) kesin eşleşmede çok iyi; anlam araması ortak kelime olmadan aynı konuyu buluyor ama her sorguya "en yakın" bir şey döndürüyor. Sorgu vektörü kullanıcının API'sinden gelir: yerelde onlarca milisaniye, uzakta yüzlerce milisaniye ya da hiç.
+
+**Karar.**
+
+- **Füzyon: Reciprocal Rank Fusion**, `k = 60`: `1/(60 + kelime sırası) + 1/(60 + anlam sırası)`. Yalnız sıralar kullanılır; BM25 ile kosinüs aynı ölçeğe çekilmez. İki yoldan da bulunan öğe öne geçer. Eşitlikte kelime sırası, sonra anlam sırası, sonra id (sayfalar kararlı).
+- **Anlam tarafı.** Etkin nesilde sorguya en yakın 200 parça (`MEANING_POOL`); benzerliği `MIN_SIMILARITY` (şimdilik 0,50) altında kalanlar atılır, yoksa alakasız bir kütüphanede her sorgu bir şey listelerdi. Öğe en iyi parçasının sırasını alır. Filtreler, görünümler ve "Recently removed" bu tarafa da uygulanır.
+- **Yalnız Relevance sıralamasında ve aranabilir bir metin varken.** Başka sıralamada, API/indeks yokken ya da API cevap vermezse sonuç kelime aramasıyla aynıdır (AC-40).
+- **Açıklanabilirlik (SEA-07).** Her sonuç iki listedeki sırasını taşır (`foundBy: {words, meaning}`). Benzerlik puanı gösterilmez (kalibre değil). Yalnız anlamla bulunan öğenin kartında en yakın parça zaman koduyla ve "≈ in meaning" etiketiyle görünür, hiçbir şey işaretlenmez (eşleşen kelime yok). Details'te "Close in meaning" bölümü bu parçaları listeler ve oradan oynatır; kelime eşleşmeleri "Said in the video"da kalır.
+- **İki aşama.** `list_items` `meaning` olmadan hemen kelime sonucunu ve `meaning: "available"` (ya da kapalı olma nedeni: `no_api`, `no_index`, `other_model`, `offline`) döner. Ekran sonucu gösterir, "Also searching by meaning…" der ve aynı sorguyu `meaning: true` ile yeniden ister; gelen birleşik sonuç (`used`) yerini alır. API düşerse kelime sonucu kalır ve `failed` söylenir. Sonraki sayfalar bayrağı korur; aynı sorgunun yeniden yüklenmesi (küçük resim geldi) doğrudan anlamla ister, ızgara kelime sırasına geri sıçramaz. Sorgu vektörü (nesil, metin) anahtarlı 64 girdilik bir önbellekte tutulur: sayfalar ve yeniden yüklemeler API'ye tekrar gitmez. API ayarı değişince önbellek boşalır. Gömme sırasında veritabanı bağlantısı tutulmaz.
+
+**Açık.** `MIN_SIMILARITY` geçicidir: Cuma'nın Ollama'sı (bge-m3) ile `VV_EMBED_TEST_URL=http://localhost:11434/v1 VV_EMBED_TEST_MODEL=bge-m3 cargo test -p vv-engine --test meaning real_` fixture'da ilgili parçaların en düşük ve ilgisizlerin en yüksek benzerliğini `test-artifacts/hybrid-search.md`'ye yazar; eşik ikisinin arasına çekilecek ve gerçek kütüphanede denenecek.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/hybrid_search.rs`: vektör yokken sonuç kelime aramasıyla aynı; iki yoldan bulunan öne geçiyor; yalnız anlamla bulunan öğe zaman kodlu parçasıyla geliyor; eşik altı gelmiyor; filtre ve görünüm anlam tarafında da geçerli; Relevance dışı sıralamada füzyon yok; sayfalama birleşik listede kararlı.
+- `crates/vv-engine/tests/meaning.rs`: kapalı olma nedenleri, hibrit sonuç, önbellek (ikinci sorgu API'ye gitmiyor), API düşünce hata; gerçek API ile isteğe bağlı kalite raporu (hit@1, MRR, recall; kelime yalnız vs hibrit).
+- `apps/desktop/src-tauri/tests/ipc.rs` `list_items_adds_matches_by_meaning`: gerçek komut yolu, küçük bir yerel API ile.
+- `src/hooks/useLibrary.test.tsx` (iki aşama, sonraki sayfa bayrağı, API düşünce kelime sonucu) ve `src/MeaningResults.test.tsx` (kart satırı, "Close in meaning" listesi).

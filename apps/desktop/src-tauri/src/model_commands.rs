@@ -246,6 +246,8 @@ pub struct AiProcessing {
     /// Open transcriptions first (oldest first, as they run), then the
     /// last finished ones, newest first.
     pub jobs: Vec<AiJobDto>,
+    /// Search by meaning: the embedding API, the index and its job (F7.1).
+    pub search_index: crate::search_index_commands::SearchIndexDto,
 }
 
 /// Finished jobs AI Processing lists below the open ones.
@@ -310,6 +312,7 @@ pub async fn get_ai_processing<R: Runtime>(app: AppHandle<R>) -> Result<AiProces
             machine: machine(&c, &d, tool),
             models: overview(&c, &d),
             jobs: ai_jobs(&c, &d.staging, now()),
+            search_index: crate::search_index_commands::search_index(&c, &d),
         })
     })
     .await

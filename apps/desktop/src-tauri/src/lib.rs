@@ -13,10 +13,12 @@ pub mod engine;
 pub mod instance;
 pub mod library;
 pub mod library_commands;
+pub mod meaning;
 pub mod media_protocol;
 mod model_commands;
 pub mod organize_commands;
 pub mod player_commands;
+mod search_index_commands;
 mod session_commands;
 pub mod thumb_protocol;
 pub mod transcript_commands;
@@ -30,6 +32,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
         .manage(instance::InstanceState::default())
         .manage(library::LibraryState::default())
         .manage(engine::EngineState::default())
+        .manage(meaning::MeaningState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::get_status,
@@ -116,6 +119,11 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             model_commands::verify_model,
             model_commands::remove_model,
             model_commands::get_ai_processing,
+            search_index_commands::get_search_index,
+            search_index_commands::set_embedding_api,
+            search_index_commands::clear_embedding_api,
+            search_index_commands::build_search_index,
+            search_index_commands::cancel_search_index,
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,

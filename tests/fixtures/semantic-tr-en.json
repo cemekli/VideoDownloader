@@ -1,0 +1,35 @@
+{
+  "comment": "AC-40 / DEC-12 retrieval fixture (STATE.md F7.1–F7.2): the same topic in different words, Turkish and English. Each query names the passages that answer it; none shares its key words with them, so lexical search alone does not find them. Written by hand for this test, not taken from any video.",
+  "passages": [
+    { "id": "pg-replication-tr", "lang": "tr", "text": "Ana sunucudaki her değişikliği ikinci bir PostgreSQL makinesine akıtıyoruz; birincisi çökerse WAL kayıtları sayesinde ikincisi kaldığı yerden devam ediyor." },
+    { "id": "pg-replication-en", "lang": "en", "text": "We stream the write-ahead log to a standby PostgreSQL server, so if the primary dies the replica already holds every committed transaction." },
+    { "id": "dumps-tr", "lang": "tr", "text": "Her gece pg_dump ile tüm tabloları bir dosyaya döküp şifreleyerek başka bir şehirdeki depolamaya gönderiyoruz." },
+    { "id": "sourdough-tr", "lang": "tr", "text": "Ekşi mayayı bir gün önceden besleyin, hamuru on iki saat buzdolabında dinlendirin ve döküm tencerede pişirin." },
+    { "id": "sourdough-en", "lang": "en", "text": "Feed the starter the night before, give the dough a long cold proof in the fridge and bake it in a covered cast-iron pot." },
+    { "id": "running-tr", "lang": "tr", "text": "Yarı maratona hazırlanırken haftada bir uzun koşu yapın ve diğer günlerde nabzı düşük tutarak tempo kazanın." },
+    { "id": "running-en", "lang": "en", "text": "Most of your weekly mileage should be slow, conversational running; the long run on Sunday builds endurance for race day." },
+    { "id": "rust-borrow-en", "lang": "en", "text": "The borrow checker refuses this because two mutable references to the same vector would be alive at once." },
+    { "id": "rust-borrow-tr", "lang": "tr", "text": "Derleyici aynı vektöre aynı anda iki değiştirilebilir referans olmasına izin vermediği için bu kod derlenmiyor." },
+    { "id": "solar-tr", "lang": "tr", "text": "Çatıya koyduğumuz panellerin ürettiği elektriği gündüz bataryada biriktirip akşam evin ihtiyacı için kullanıyoruz." },
+    { "id": "solar-en", "lang": "en", "text": "The rooftop photovoltaic array charges a home battery during the day, which then powers the house after sunset." },
+    { "id": "tax-tr", "lang": "tr", "text": "Serbest çalışanlar yıllık beyannameyi mart ayında verir; kira ve sağlık giderlerinin bir kısmı matrahtan düşülebilir." },
+    { "id": "kubernetes-en", "lang": "en", "text": "When a pod keeps crashing, Kubernetes restarts it with an exponential back-off, which is why you see CrashLoopBackOff." },
+    { "id": "istanbul-tr", "lang": "tr", "text": "Kadıköy'den vapura binip Eminönü'ne geçtik, sonra Mısır Çarşısı'nda baharat ve lokum aldık." },
+    { "id": "guitar-en", "lang": "en", "text": "Keep your thumb behind the neck and press just behind the fret so the barre chord rings clean on every string." }
+  ],
+  "queries": [
+    { "id": "q1", "lang": "tr", "text": "veritabanı yedekleme", "relevant": ["pg-replication-tr", "pg-replication-en", "dumps-tr"] },
+    { "id": "q2", "lang": "en", "text": "database failover to a second machine", "relevant": ["pg-replication-tr", "pg-replication-en"] },
+    { "id": "q3", "lang": "tr", "text": "ev yapımı ekmek tarifi", "relevant": ["sourdough-tr", "sourdough-en"] },
+    { "id": "q4", "lang": "en", "text": "how to bake bread at home", "relevant": ["sourdough-tr", "sourdough-en"] },
+    { "id": "q5", "lang": "tr", "text": "dayanıklılık antrenmanı", "relevant": ["running-tr", "running-en"] },
+    { "id": "q6", "lang": "en", "text": "marathon training plan", "relevant": ["running-tr", "running-en"] },
+    { "id": "q7", "lang": "tr", "text": "Rust sahiplik hatası", "relevant": ["rust-borrow-en", "rust-borrow-tr"] },
+    { "id": "q8", "lang": "en", "text": "renewable energy storage at home", "relevant": ["solar-tr", "solar-en"] },
+    { "id": "q9", "lang": "tr", "text": "güneş enerjisi", "relevant": ["solar-tr", "solar-en"] },
+    { "id": "q10", "lang": "en", "text": "income tax deductions for freelancers", "relevant": ["tax-tr"] },
+    { "id": "q11", "lang": "tr", "text": "konteyner sürekli yeniden başlıyor", "relevant": ["kubernetes-en"] },
+    { "id": "q12", "lang": "en", "text": "ferry trip and shopping in Istanbul", "relevant": ["istanbul-tr"] },
+    { "id": "q13", "lang": "tr", "text": "gitar akor basma tekniği", "relevant": ["guitar-en"] }
+  ]
+}

@@ -40,7 +40,7 @@ export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${item
  *  `transcripts`: the first YouTube item starts with the real Turkish captions fixture, so search finds its words (F6.4). */
 export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts" | "low-memory";
 
-export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript"> {
+export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript" | "meaning" | "foundBy"> {
   creator: string | null;
   description: string | null;
   canonicalUrl: string | null;
@@ -253,6 +253,8 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
     offset: q.offset,
     notice,
     items: page.map(({ r, snippet, said }) => toDto(r, snippet ?? null, said)),
+    // The fixture library has no embedding API: words only (F7.2).
+    meaning: ts.length && q.sort === "relevance" ? "no_api" : null,
   };
 }
 
@@ -272,6 +274,8 @@ function toDto(r: FixtureRecord, snippet: Snippet | null, transcript: Transcript
     removedAt: r.removed ? r.removedAt : null,
     snippet,
     transcript,
+    meaning: null,
+    foundBy: null,
   };
 }
 

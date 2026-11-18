@@ -18,7 +18,7 @@ import { ResizeHandle } from "./components/ResizeHandle";
 import { Sidebar, type Scope } from "./components/Sidebar";
 import { TopBar, type SortChoice } from "./components/TopBar";
 import { useDebounced, useMediaQuery, useOnline } from "./hooks/useEnv";
-import { useLibrary } from "./hooks/useLibrary";
+import { useLibrary, type MeaningState } from "./hooks/useLibrary";
 import { useOrganize } from "./hooks/useOrganize";
 import { usePrefs } from "./hooks/usePrefs";
 import { useSettings } from "./hooks/useSettings";
@@ -57,6 +57,24 @@ interface Toast {
 }
 
 /** Ctrl+Z / Delete act on the list only, never inside a text field. */
+/**
+ * One line under the search box on what search by meaning did (F7.2). No
+ * API set: nothing, ordinary search is the default and needs no note.
+ */
+function meaningNote(m: MeaningState): string | null {
+  switch (m) {
+    case "searching":
+    case "used":
+    case "no_index":
+    case "other_model":
+    case "offline":
+    case "failed":
+      return t(`search.meaning.${m}`);
+    default:
+      return null;
+  }
+}
+
 function inTextField(t: EventTarget | null): boolean {
   return !!(t as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
 }
@@ -574,6 +592,11 @@ export function App({ client }: { client?: BackendClient }) {
               Nothing to search for in “{searchText.trim()}”; showing the whole list.
             </p>
           )}
+          {data.status === "ready" && meaningNote(data.meaning) && (
+            <p className="muted small" data-testid="meaning-status" data-meaning={data.meaning ?? ""} aria-live="polite">
+              {meaningNote(data.meaning)}
+            </p>
+          )}
           {scope.kind === "ai" ? (
             <AiProcessingView client={c} notify={(m, tone) => toast(m, tone)} onSettings={updateSettings} />
           ) : scope.kind === "sessions" ? (
@@ -607,6 +630,7 @@ export function App({ client }: { client?: BackendClient }) {
             refreshKey={org.version + reloadKey * 1000}
             transcripts={c}
             moments={activeId ? (items.find((i) => i.id === activeId)?.transcript ?? null) : null}
+            meaningMoments={activeId ? (items.find((i) => i.id === activeId)?.meaning ?? null) : null}
             downloadJob={activeId ? (jobs.find((j) => j.kind === "download" && j.itemId === activeId && (isOpen(j) || j.status === "failed")) ?? null) : null}
             collections={sb?.collections ?? []}
             emptyHint={view === "removed" ? "Items in Recently removed can be restored or deleted from the bar above the list." : undefined}
