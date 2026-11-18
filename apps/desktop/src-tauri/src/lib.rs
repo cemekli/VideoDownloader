@@ -103,6 +103,8 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             download_commands::get_storage_usage,
             download_commands::set_storage_quota,
             download_commands::move_media_folder,
+            download_commands::list_storage_roots,
+            download_commands::locate_storage_root,
             session_commands::list_sessions,
             session_commands::connect_session,
             session_commands::set_session_consent,

@@ -715,6 +715,23 @@ export interface ClearedJobs {
   freedBytes: number;
 }
 
+/** A folder that holds library files. No full path: the drive letter is enough to tell the disk. */
+export interface StorageRootDto {
+  id: string;
+  kind: "managed_media" | "external_import";
+  label: string;
+  /** The Windows drive it was on (`F:`). */
+  drive: string | null;
+  status: "unknown" | "available" | "disconnected" | "inaccessible";
+  files: number;
+}
+
+export interface LocatedDto {
+  found: number;
+  checked: number;
+  roots: StorageRootDto[];
+}
+
 export interface DownloadClient {
   getToolHealth(): Promise<ToolStatus>;
   listJobs(): Promise<JobDto[]>;
@@ -729,6 +746,13 @@ export interface DownloadClient {
   getStorageUsage(): Promise<StorageUsage>;
   setStorageQuota(bytes: number | null): Promise<StorageUsage>;
   moveMediaFolder(): Promise<JobDto | null>;
+  /** Folders that hold library files and whether each can be reached now (DATA-09). */
+  listStorageRoots(): Promise<StorageRootDto[]>;
+  /**
+   * "Locate drive…": the backend asks where the folder is now (its drive got another letter) and points the
+   * library there after checking its files are in it. Nothing is copied. `null` when the dialog was closed.
+   */
+  locateStorageRoot(rootId: string): Promise<LocatedDto | null>;
   /** Job and item changes from the backend; ids only. */
   onJobChanged(cb: (e: JobChanged) => void): Promise<() => void>;
 }

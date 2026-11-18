@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   ClearedJobs,
+  LocatedDto,
+  StorageRootDto,
   ApplyImport,
   AppStatus,
   BackupDto,
@@ -226,6 +228,8 @@ const downloadCommands: DownloadClient = {
   getStorageUsage: () => call<StorageUsage>("get_storage_usage"),
   setStorageQuota: (bytes) => call<StorageUsage>("set_storage_quota", { bytes }),
   moveMediaFolder: () => call<JobDto | null>("move_media_folder"),
+  listStorageRoots: () => call<StorageRootDto[]>("list_storage_roots"),
+  locateStorageRoot: (rootId) => call<LocatedDto | null>("locate_storage_root", { rootId }),
   async onJobChanged(cb) {
     try {
       const a = await listen<JobChanged>(JOB_EVENT, (e) => cb(e.payload));
@@ -314,7 +318,7 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory", "drive-moved"];
 
 /** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts|low-memory` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {

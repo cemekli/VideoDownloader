@@ -1474,6 +1474,38 @@
         "quotaExceeded": false
       }
     },
+    "list_storage_roots": {
+      "args": {},
+      "response": [
+        {
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "managed_media",
+          "label": "VideoVault",
+          "drive": "F:",
+          "status": "disconnected",
+          "files": 667
+        }
+      ]
+    },
+    "locate_storage_root": {
+      "args": {
+        "rootId": "00000000-0000-4000-8000-00000000c001"
+      },
+      "response": {
+        "found": 50,
+        "checked": 50,
+        "roots": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c001",
+            "kind": "managed_media",
+            "label": "VideoVault",
+            "drive": "E:",
+            "status": "available",
+            "files": 667
+          }
+        ]
+      }
+    },
     "move_media_folder": {
       "args": {},
       "response": {

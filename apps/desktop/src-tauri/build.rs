@@ -71,6 +71,8 @@ const COMMANDS: &[&str] = &[
     "get_storage_usage",
     "set_storage_quota",
     "move_media_folder",
+    "list_storage_roots",
+    "locate_storage_root",
     "list_sessions",
     "connect_session",
     "set_session_consent",

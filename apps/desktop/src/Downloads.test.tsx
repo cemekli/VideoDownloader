@@ -156,6 +156,27 @@ describe("Downloads", () => {
     expect(await screen.findByTestId("downloads-empty")).toHaveTextContent("No downloads yet");
   });
 
+  it("a drive that came back under another letter is located again from Settings (DATA-09)", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient(undefined, "drive-moved")} />);
+    await user.click(await screen.findByTestId("settings-button"));
+    const settings = await screen.findByTestId("settings");
+    const root = await within(settings).findByTestId("storage-root");
+    expect(root).toHaveTextContent("The folder “VideoVault” on F: can't be reached (667 files).");
+    await user.click(within(root).getByTestId("storage-root-locate"));
+    expect(await screen.findByText("Found “VideoVault” on E: (50 of 50 files checked). Its videos play again.")).toBeVisible();
+    await waitFor(() => expect(within(settings).queryByTestId("storage-roots")).toBeNull());
+  });
+
+  it("a reachable media folder shows no drive warning", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient()} />);
+    await user.click(await screen.findByTestId("settings-button"));
+    const settings = await screen.findByTestId("settings");
+    await within(settings).findByTestId("storage-usage");
+    expect(within(settings).queryByTestId("storage-roots")).toBeNull();
+  });
+
   it("Settings shows storage use, sets a limit and lists the tool check (DATA-07, MT-11)", async () => {
     const user = userEvent.setup();
     render(<App client={createFixtureClient()} />);

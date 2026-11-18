@@ -7,7 +7,7 @@
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
 import type { FixtureRecord, FixtureScenario } from "./fixture";
-import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, JobDto, Platform, PresetId, SessionClient, SessionDto, StorageUsage, ToolStatus, VerifyDto, VerifyOutcome } from "./types";
+import type { BrowserProfileDto, DownloadClient, DownloadOptions, JobChanged, JobDto, Platform, PresetId, SessionClient, SessionDto, StorageRootDto, StorageUsage, ToolStatus, VerifyDto, VerifyOutcome } from "./types";
 
 const MB = 1024 * 1024;
 const PRESETS: PresetId[] = ["best", "1080", "720", "audio"];
@@ -32,6 +32,12 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
   let storage: StorageUsage = { ...(contract.commands.get_storage_usage.response as StorageUsage), quotaBytes: null };
   let clock = 1_793_500_000_000;
   let seq = 0;
+  // Settings → Storage: `drive-moved` is a USB drive that came back as E: (was F:).
+  const roots: StorageRootDto[] = [
+    scenario === "drive-moved"
+      ? { ...(contract.commands.list_storage_roots.response[0] as StorageRootDto) }
+      : { id: "00000000-0000-4000-8000-00000000c002", kind: "managed_media", label: "media", drive: null, status: "available", files: Math.max(1, records.filter((r) => r.localState !== "bookmark_only").length) },
+  ];
   const now = () => (clock += 1_000);
 
   const sessions: SessionDto[] = [];
@@ -187,6 +193,15 @@ export function createFixtureDownloads(records: FixtureRecord[], scenario: Fixtu
       if (bytes === 0) throw err("INPUT_REJECTED", "set_storage_quota");
       storage = { ...storage, quotaBytes: bytes, quotaExceeded: bytes !== null && storage.managedMediaBytes >= bytes };
       return { ...storage };
+    },
+    async listStorageRoots() {
+      return structuredClone(roots);
+    },
+    async locateStorageRoot(rootId) {
+      const r = roots.find((x) => x.id === rootId);
+      if (!r) throw err("INPUT_REJECTED", "locate_storage_root");
+      Object.assign(r, { status: "available", drive: "E:" });
+      return { found: Math.min(50, r.files), checked: Math.min(50, r.files), roots: structuredClone(roots) };
     },
     async moveMediaFolder() {
       const m = contract.commands.move_media_folder.response as JobDto;

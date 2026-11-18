@@ -76,6 +76,8 @@
     "allow-get-storage-usage",
     "allow-set-storage-quota",
     "allow-move-media-folder",
+    "allow-list-storage-roots",
+    "allow-locate-storage-root",
     "allow-list-sessions",
     "allow-connect-session",
     "allow-set-session-consent",

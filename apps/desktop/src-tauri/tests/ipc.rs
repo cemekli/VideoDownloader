@@ -266,6 +266,8 @@ fn main_capability_grants_only_app_commands() {
         "allow-get-storage-usage",
         "allow-set-storage-quota",
         "allow-move-media-folder",
+        "allow-list-storage-roots",
+        "allow-locate-storage-root",
         "allow-list-sessions",
         "allow-connect-session",
         "allow-set-session-consent",
@@ -1362,6 +1364,20 @@ fn download_commands_match_contract_shape() {
         &ai,
         &spec("clear_finished_ai_jobs"),
         "clear_finished_ai_jobs",
+    );
+
+    // Settings → Storage lists folders that hold library files; a bookmark
+    // has none yet.
+    assert_eq!(ok(&w, "list_storage_roots", json!({})), json!([]));
+    assert!(
+        invoke(
+            &w,
+            "locate_storage_root",
+            json!({ "rootId": 7 }),
+            app_origin()
+        )
+        .is_err(),
+        "a root id that is not a string is refused"
     );
 
     let m = ok(&w, "fetch_metadata", json!({ "itemId": id }));
