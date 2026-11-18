@@ -29,8 +29,9 @@ test("window shows real backend status, not fixture data", async () => {
 test("library opens from a fresh data directory and answers list_items (F1.7)", async () => {
   const page = (await app.page.evaluate(() =>
     (window as unknown as { __TAURI_INTERNALS__: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__.invoke("list_items", { query: { text: "deniz" } }),
-  )) as { total: number; items: unknown[]; notice: string | null };
-  expect(page).toEqual({ total: 0, offset: 0, items: [], notice: null });
+  )) as { total: number; items: unknown[]; notice: string | null; meaning: string | null };
+  // Sorted by date added (the default), so search by meaning does not apply (F7.2).
+  expect(page).toEqual({ total: 0, offset: 0, items: [], notice: null, meaning: null });
   // A tampered query is refused by deserialization, not run.
   const refused = await app.page.evaluate(async () => {
     try {
