@@ -108,6 +108,31 @@ describe("Downloads", () => {
     expect(await screen.findByText(/Deleted the partial file/)).toBeVisible();
   });
 
+  it("Clear finished takes completed and canceled downloads off the list, asking first when partial files would be deleted", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient();
+    render(<App client={client} />);
+    await startDownload(user, "720");
+    await waitFor(() => expect(screen.getByTestId("downloads-done")).toBeVisible(), SLOW);
+    await startDownload(user, "best", "0003");
+    await waitFor(() => expect(client.downloads.jobs()[0]!.partialBytes).toBeGreaterThan(0), SLOW);
+    await user.click(within(screen.getByTestId("downloads-active")).getByTestId("job-cancel"));
+    await screen.findByTestId("downloads-failed");
+
+    // A canceled download keeps a partial file: Cancel in the dialog clears nothing.
+    await user.click(screen.getByTestId("downloads-clear"));
+    let dialog = await screen.findByTestId("confirm-dialog");
+    expect(within(dialog).getByTestId("downloads-clear-partial")).toHaveTextContent("Partial files of failed or canceled downloads are deleted");
+    await user.click(within(dialog).getByText("Cancel"));
+    expect(screen.getByTestId("downloads-done")).toBeVisible();
+
+    await user.click(screen.getByTestId("downloads-clear"));
+    dialog = await screen.findByTestId("confirm-dialog");
+    await user.click(within(dialog).getByTestId("confirm-submit"));
+    expect(await screen.findByText("Cleared 2 downloads from the list.")).toBeVisible();
+    expect(await screen.findByTestId("downloads-empty")).toBeVisible();
+  });
+
   it("shows the download where it was started: top bar indicator and the item's details", async () => {
     const user = userEvent.setup();
     render(<App client={createFixtureClient()} />);
@@ -129,6 +154,27 @@ describe("Downloads", () => {
     render(<App client={createFixtureClient()} />);
     await user.click(await screen.findByTestId("nav-downloads"));
     expect(await screen.findByTestId("downloads-empty")).toHaveTextContent("No downloads yet");
+  });
+
+  it("a drive that came back under another letter is located again from Settings (DATA-09)", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient(undefined, "drive-moved")} />);
+    await user.click(await screen.findByTestId("settings-button"));
+    const settings = await screen.findByTestId("settings");
+    const root = await within(settings).findByTestId("storage-root");
+    expect(root).toHaveTextContent("The folder “VideoVault” on F: can't be reached (667 files).");
+    await user.click(within(root).getByTestId("storage-root-locate"));
+    expect(await screen.findByText("Found “VideoVault” on E: (50 of 50 files checked). Its videos play again.")).toBeVisible();
+    await waitFor(() => expect(within(settings).queryByTestId("storage-roots")).toBeNull());
+  });
+
+  it("a reachable media folder shows no drive warning", async () => {
+    const user = userEvent.setup();
+    render(<App client={createFixtureClient()} />);
+    await user.click(await screen.findByTestId("settings-button"));
+    const settings = await screen.findByTestId("settings");
+    await within(settings).findByTestId("storage-usage");
+    expect(within(settings).queryByTestId("storage-roots")).toBeNull();
   });
 
   it("Settings shows storage use, sets a limit and lists the tool check (DATA-07, MT-11)", async () => {

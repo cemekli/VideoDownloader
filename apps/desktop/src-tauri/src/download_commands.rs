@@ -193,13 +193,50 @@ pub(crate) fn job_dto(c: &Connection, staging: &Path, j: &Job) -> JobDto {
 /// Jobs shown on the Downloads screen: downloads and media-folder moves,
 /// newest first.
 pub fn list(c: &Connection, staging: &Path, limit: i64) -> Result<Vec<JobDto>, DomainError> {
-    let all = jobs::list(c, &[], limit.saturating_mul(4)).map_err(job_err)?;
-    Ok(all
-        .iter()
-        .filter(|j| matches!(j.kind, JobKind::Download | JobKind::StorageMove))
-        .take(limit as usize)
-        .map(|j| job_dto(c, staging, j))
-        .collect())
+    let all = jobs::list_shown(c, DOWNLOAD_KINDS, limit).map_err(job_err)?;
+    Ok(all.iter().map(|j| job_dto(c, staging, j)).collect())
+}
+
+/// What the Downloads screen lists.
+pub const DOWNLOAD_KINDS: &[JobKind] = &[JobKind::Download, JobKind::StorageMove];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cleared {
+    /// Jobs taken off the list.
+    pub cleared: usize,
+    /// Partial files of failed or canceled downloads that were deleted.
+    pub freed_bytes: u64,
+}
+
+/// "Clear finished" on the Downloads screen: completed, failed and
+/// canceled jobs leave the list; open ones stay. A failed or canceled
+/// download's partial file is deleted with it, since nothing would offer to
+/// resume it any more. Downloaded videos stay in the library.
+#[tauri::command]
+pub async fn clear_finished_downloads<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Cleared, DomainError> {
+    blocking(app, move |st| {
+        let d = dirs(st)?;
+        let done = st.get()?.write(|c| {
+            jobs::clear_finished(c, DOWNLOAD_KINDS, now())
+                .map_err(|_| crate::library::internal("jobs-clear"))
+        })?;
+        let freed_bytes = done
+            .iter()
+            .filter(|j| {
+                j.kind == JobKind::Download
+                    && matches!(j.status, JobStatus::Failed | JobStatus::Canceled)
+            })
+            .map(|j| download::remove_partial(&d.staging, j).unwrap_or(0))
+            .sum();
+        Ok(Cleared {
+            cleared: done.len(),
+            freed_bytes,
+        })
+    })
+    .await
 }
 
 fn one(c: &Connection, staging: &Path, id: &str) -> Result<JobDto, DomainError> {
@@ -539,6 +576,130 @@ pub async fn move_media_folder<R: Runtime>(
     r
 }
 
+/// A folder that holds library files (managed media or imported files),
+/// as Settings → Storage lists it. The full path stays in the backend; the
+/// drive (`F:`) is enough to tell which disk it was on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageRootDto {
+    pub id: String,
+    /// `managed_media` (downloads) or `external_import` (imported files).
+    pub kind: String,
+    /// The folder's own name.
+    pub label: String,
+    /// The Windows drive it was on (`F:`), when it has one.
+    pub drive: Option<String>,
+    /// `available`, `disconnected`, `inaccessible` or `unknown`.
+    pub status: String,
+    /// Files of the library in it.
+    pub files: usize,
+}
+
+pub fn drive_of(path: &str) -> Option<String> {
+    let b = path.as_bytes();
+    (b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
+        .then(|| format!("{}:", (b[0] as char).to_ascii_uppercase()))
+}
+
+pub fn storage_roots(c: &Connection) -> Result<Vec<StorageRootDto>, DomainError> {
+    let roots = repo::list_storage_roots(c).map_err(|_| internal("roots-list"))?;
+    let mut out = Vec::new();
+    for r in roots {
+        if !matches!(
+            r.kind,
+            StorageRootKind::ManagedMedia | StorageRootKind::ExternalImport
+        ) {
+            continue;
+        }
+        let files = repo::assets_in_root(c, &r.id)
+            .map_err(|_| internal("roots-assets"))?
+            .iter()
+            .filter(|a| a.role == vv_persistence::library::AssetRole::Original)
+            .count();
+        if files == 0 {
+            continue;
+        }
+        out.push(StorageRootDto {
+            drive: drive_of(&r.path),
+            id: r.id,
+            kind: r.kind.as_str().to_owned(),
+            label: r.label,
+            status: r.status.as_str().to_owned(),
+            files,
+        });
+    }
+    Ok(out)
+}
+
+/// Settings → Storage: the folders that hold library files and whether
+/// each can be reached now.
+#[tauri::command]
+pub async fn list_storage_roots<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<StorageRootDto>, DomainError> {
+    blocking(app, |st| storage_roots(&st.get()?.reader()?)).await
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocatedDto {
+    pub found: usize,
+    pub checked: usize,
+    pub roots: Vec<StorageRootDto>,
+}
+
+/// "Locate drive…" for a folder whose drive came back under another letter
+/// (DATA-09): the user picks where the folder is now, in a native dialog
+/// here (the path never reaches the webview). Nothing is copied; the folder
+/// must hold the files the library expects (`FILE_MISSING` otherwise).
+/// `null` when the dialog was closed.
+#[tauri::command]
+pub async fn locate_storage_root<R: Runtime>(
+    app: AppHandle<R>,
+    root_id: String,
+) -> Result<Option<LocatedDto>, DomainError> {
+    use tauri_plugin_dialog::DialogExt;
+    use vv_import::roots::{locate, LocateError};
+    let a = app.clone();
+    let r = blocking(app.clone(), move |st| {
+        let picked = match crate::e2e_picked() {
+            Some(p) => p.into_iter().next(),
+            None => {
+                let mut dialog = app.dialog().file();
+                if let Some(w) = app.get_webview_window("main") {
+                    dialog = dialog.set_parent(&w);
+                }
+                dialog
+                    .blocking_pick_folder()
+                    .and_then(|p| p.into_path().ok())
+            }
+        };
+        let Some(dir) = picked else { return Ok(None) };
+        st.get()?.write(|c| {
+            let l = locate(c, &SystemClock, &root_id, &dir).map_err(|e| match e {
+                LocateError::NotFound => {
+                    DomainError::new(ErrorCode::InputRejected, "locate-unknown-root")
+                }
+                LocateError::NotThere(_) => {
+                    DomainError::new(ErrorCode::FileMissing, "locate-files-not-there")
+                }
+                LocateError::Unreadable => {
+                    DomainError::new(ErrorCode::StorageRootUnavailable, "locate-unreadable")
+                }
+                LocateError::Db(_) => internal("locate-db"),
+            })?;
+            Ok(Some(LocatedDto {
+                found: l.found,
+                checked: l.checked,
+                roots: storage_roots(c)?,
+            }))
+        })
+    })
+    .await;
+    wake(&a);
+    r
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,5 +784,54 @@ mod tests {
     fn tool_status_without_an_engine_is_not_ready() {
         let s = tool_status(None);
         assert!(!s.ready && !s.checking && s.tools.is_empty());
+    }
+
+    #[test]
+    fn storage_roots_name_the_drive_not_the_path() {
+        assert_eq!(drive_of(r"f:\VideoVault\media"), Some("F:".into()));
+        assert_eq!(drive_of("/media/usb/VideoVault"), None);
+        let d = tempfile::tempdir().unwrap();
+        let mut db = Database::open(&d.path().join("l.sqlite"), &OpenOptions::default()).unwrap();
+        let c = db.writer();
+        let r = repo::StorageRoot {
+            id: vv_persistence::library::new_id(),
+            kind: StorageRootKind::ManagedMedia,
+            label: "VideoVault".into(),
+            path: r"F:\VideoVault".into(),
+            volume_id: None,
+            status: vv_persistence::library::StorageRootStatus::Disconnected,
+            created_at: 1,
+            last_verified_at: None,
+        };
+        repo::insert_storage_root(c, &r).unwrap();
+        assert!(
+            storage_roots(c).unwrap().is_empty(),
+            "a folder without files is not listed"
+        );
+        let mut it = repo::LibraryItem::new(
+            vv_persistence::library::ItemKind::LocalVideo,
+            vv_persistence::library::SourcePlatform::Local,
+            1,
+        );
+        it.title = Some("x".into());
+        repo::insert_item(c, &it).unwrap();
+        let a = repo::MediaAsset::new(
+            &it.id,
+            vv_persistence::library::AssetRole::Original,
+            vv_persistence::library::MediaKind::Video,
+            vv_persistence::library::StorageKind::Managed,
+            &r.id,
+            "a.mp4",
+            1,
+        );
+        repo::insert_media_asset(c, &a).unwrap();
+        let l = storage_roots(c).unwrap();
+        assert_eq!(l.len(), 1);
+        assert_eq!(
+            (l[0].drive.as_deref(), l[0].status.as_str(), l[0].files),
+            (Some("F:"), "disconnected", 1)
+        );
+        let json = serde_json::to_string(&l).unwrap();
+        assert!(!json.contains("VideoVault\\\\"), "no full path");
     }
 }

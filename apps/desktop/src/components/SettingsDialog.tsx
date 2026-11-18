@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
-import type { BackendClient, BackupDto, BackupPreview, PendingImport, Settings, SettingsPatch, StorageOverview, StorageUsage, Theme, ToolStatus } from "../ipc/types";
+import type { BackendClient, BackupDto, BackupPreview, PendingImport, Settings, SettingsPatch, StorageOverview, StorageRootDto, StorageUsage, Theme, ToolStatus } from "../ipc/types";
 import { formatBytes } from "../format";
 import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
@@ -68,6 +68,38 @@ export function StorageUsageBlock({ usage, busy, onQuota, onMove }: { usage: Sto
       <p id="move-help" className="muted small">
         {t("storage.move.help")}
       </p>
+    </div>
+  );
+}
+
+/**
+ * DATA-09: folders with library files whose drive can't be reached now. A
+ * USB drive that came back under another letter is found again with
+ * "Locate drive…": the backend asks for the folder, checks its files are
+ * there and points the library at it. Nothing is copied.
+ */
+export function StorageRootsBlock({ roots, busy, onLocate }: { roots: StorageRootDto[] | null; busy: boolean; onLocate: (r: StorageRootDto) => void }) {
+  const away = (roots ?? []).filter((r) => r.status === "disconnected" || r.status === "inaccessible");
+  if (away.length === 0) return null;
+  return (
+    <div className="storage-roots" data-testid="storage-roots">
+      {away.map((r) => (
+        <div key={r.id} className="model-row" data-testid="storage-root" data-status={r.status}>
+          <p className="warning small">
+            {t(r.status === "inaccessible" ? "storage.root.inaccessible" : "storage.root.disconnected", {
+              label: r.label,
+              drive: r.drive ?? "",
+              files: r.files,
+            })}
+          </p>
+          <p className="muted small">{t("storage.root.help")}</p>
+          <div className="actions">
+            <button type="button" className="button" disabled={busy} onClick={() => onLocate(r)} data-testid="storage-root-locate">
+              {t("storage.root.locate")}
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -143,6 +175,7 @@ export function SettingsDialog({
 }) {
   const [storage, setStorage] = useState<StorageOverview | null>(null);
   const [usage, setUsage] = useState<StorageUsage | null>(null);
+  const [roots, setRoots] = useState<StorageRootDto[] | null>(null);
   const [tools, setTools] = useState<ToolStatus | null>(null);
   const [backups, setBackups] = useState<BackupDto[] | null>(null);
   const [paths, setPaths] = useState(false);
@@ -156,6 +189,7 @@ export function SettingsDialog({
   useEffect(() => {
     client.getStorageOverview().then(setStorage, fail);
     client.getStorageUsage().then(setUsage, fail);
+    client.listStorageRoots().then(setRoots, () => {});
     client.getToolHealth().then(setTools, () => {});
     client.listBackups().then(setBackups, fail);
     client.getStatus().then((s) => setVersion(s.appVersion), () => {});
@@ -236,6 +270,28 @@ export function SettingsDialog({
         <section aria-labelledby="set-storage">
           <h3 id="set-storage">{t("settings.storage")}</h3>
           <StorageLine storage={storage} onChoose={() => void run(async () => setStorage((await client.chooseMediaFolder()) ?? storage))} />
+          <StorageRootsBlock
+            roots={roots}
+            busy={busy}
+            onLocate={(r) =>
+              void (async () => {
+                setBusy(true);
+                try {
+                  const l = await client.locateStorageRoot(r.id);
+                  if (!l) return;
+                  setRoots(l.roots);
+                  const now = l.roots.find((x) => x.id === r.id) ?? l.roots.find((x) => x.label === r.label);
+                  notify(t("storage.root.located", { label: r.label, drive: now?.drive ?? "", found: l.found, checked: l.checked }));
+                  onLibraryChanged();
+                } catch (e) {
+                  const code = errorCode(e);
+                  notify(code === "FILE_MISSING" ? t("storage.root.not_there", { label: r.label }) : errorMessage(code), "error");
+                } finally {
+                  setBusy(false);
+                }
+              })()
+            }
+          />
           <StorageUsageBlock
             usage={usage}
             busy={busy}

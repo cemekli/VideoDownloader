@@ -386,3 +386,4 @@ button.moment-button:hover, button.moment-button:focus-visible { background: var
 .transcribe-local [data-testid="transcribe-memory"] p {
   margin: 4px 0;
 }
+.downloads-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--s2); }

@@ -709,6 +709,29 @@ export interface JobChanged {
   itemId: string | null;
 }
 
+/** "Clear finished" on Downloads and AI Processing. */
+export interface ClearedJobs {
+  cleared: number;
+  freedBytes: number;
+}
+
+/** A folder that holds library files. No full path: the drive letter is enough to tell the disk. */
+export interface StorageRootDto {
+  id: string;
+  kind: "managed_media" | "external_import";
+  label: string;
+  /** The Windows drive it was on (`F:`). */
+  drive: string | null;
+  status: "unknown" | "available" | "disconnected" | "inaccessible";
+  files: number;
+}
+
+export interface LocatedDto {
+  found: number;
+  checked: number;
+  roots: StorageRootDto[];
+}
+
 export interface DownloadClient {
   getToolHealth(): Promise<ToolStatus>;
   listJobs(): Promise<JobDto[]>;
@@ -718,9 +741,18 @@ export interface DownloadClient {
   cancelJob(jobId: string): Promise<JobDto>;
   retryJob(jobId: string): Promise<JobDto>;
   removePartial(jobId: string): Promise<{ freedBytes: number }>;
+  /** Takes completed, failed and canceled jobs off the list (open ones stay); partial files of failed/canceled downloads are deleted. */
+  clearFinishedDownloads(): Promise<ClearedJobs>;
   getStorageUsage(): Promise<StorageUsage>;
   setStorageQuota(bytes: number | null): Promise<StorageUsage>;
   moveMediaFolder(): Promise<JobDto | null>;
+  /** Folders that hold library files and whether each can be reached now (DATA-09). */
+  listStorageRoots(): Promise<StorageRootDto[]>;
+  /**
+   * "Locate drive…": the backend asks where the folder is now (its drive got another letter) and points the
+   * library there after checking its files are in it. Nothing is copied. `null` when the dialog was closed.
+   */
+  locateStorageRoot(rootId: string): Promise<LocatedDto | null>;
   /** Job and item changes from the backend; ids only. */
   onJobChanged(cb: (e: JobChanged) => void): Promise<() => void>;
 }
@@ -916,6 +948,8 @@ export interface ModelClient {
   /** Cancels an open download and removes the file and the consent. */
   removeModel(modelId: string): Promise<ModelOverview>;
   getAiProcessing(): Promise<AiProcessing>;
+  /** Takes finished transcription jobs off AI Processing; transcripts stay. */
+  clearFinishedAiJobs(): Promise<ClearedJobs>;
   getSearchIndex(): Promise<SearchIndexDto>;
   /**
    * Checks the API with one request and saves it. `key`: null keeps the saved key, "" removes it.

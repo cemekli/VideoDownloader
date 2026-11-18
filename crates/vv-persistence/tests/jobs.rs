@@ -653,3 +653,47 @@ fn every_kind_and_state_round_trips() {
     assert_eq!(JobKind::ALL.len(), 16);
     assert_eq!(JobStatus::ALL.len(), 10);
 }
+
+/// "Clear finished" (Downloads, AI Processing): finished jobs of the given
+/// kinds leave the list, open ones and other kinds stay, nothing is
+/// deleted, and a retry lists the job again.
+#[test]
+fn clear_finished_hides_only_finished_jobs_of_those_kinds() {
+    let d = tempfile::tempdir().unwrap();
+    let mut db = open(d.path());
+    let c = db.writer();
+    let done = add(c, JobKind::Download, "d1", 1);
+    let open = add(c, JobKind::Download, "d2", 2);
+    let other = add(c, JobKind::Transcription, "t1", 3);
+    jobs::cancel(c, &done, CancelReason::User, 4).unwrap();
+    jobs::cancel(c, &other, CancelReason::User, 5).unwrap();
+    let kinds = [JobKind::Download];
+    let shown = |c: &Connection| -> Vec<String> {
+        jobs::list_shown(c, &kinds, 50)
+            .unwrap()
+            .into_iter()
+            .map(|j| j.id)
+            .collect()
+    };
+    assert_eq!(shown(c), vec![open.clone(), done.clone()]);
+
+    let cleared = jobs::clear_finished(c, &kinds, 6).unwrap();
+    assert_eq!(
+        cleared.iter().map(|j| j.id.clone()).collect::<Vec<_>>(),
+        vec![done.clone()]
+    );
+    assert_eq!(shown(c), vec![open.clone()]);
+    assert_eq!(status(c, &done), JobStatus::Canceled, "the row stays");
+    assert_eq!(
+        jobs::list_shown(c, &[JobKind::Transcription], 50)
+            .unwrap()
+            .len(),
+        1,
+        "other kinds are untouched"
+    );
+    assert!(jobs::clear_finished(c, &kinds, 7).unwrap().is_empty());
+
+    jobs::cancel(c, &open, CancelReason::User, 8).unwrap();
+    jobs::retry(c, &done, 9).unwrap();
+    assert_eq!(shown(c), vec![open, done]);
+}

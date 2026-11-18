@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
 import type { AiJobDto, AiProcessing, CpuUse, DownloadClient, MachineDto, ModelClient, Settings, SettingsPatch } from "../ipc/types";
 import { formatBytes, formatDuration } from "../format";
-import { formatDateTime, t, type MessageKey } from "../i18n";
+import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
 import { SearchIndexBlock } from "./SearchIndex";
 import { TranscriptionBlock } from "./Transcription";
@@ -64,6 +64,19 @@ export function AiProcessingView({
     }
   };
 
+  const clear = async () => {
+    setBusy(true);
+    try {
+      const r = await client.clearFinishedAiJobs();
+      notify(tn("ai.queue.cleared", r.cleared));
+      await reload();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const cancel = async (a: AiJobDto) => {
     setBusy(true);
     try {
@@ -104,6 +117,13 @@ export function AiProcessingView({
         <h2 id="ai-queue" className="downloads-heading">
           {t("ai.queue.title")}
         </h2>
+        {done.length > 0 && (
+          <div className="downloads-toolbar">
+            <button type="button" className="button" disabled={busy} onClick={() => void clear()} data-testid="ai-jobs-clear">
+              {t("ai.queue.clear")}
+            </button>
+          </div>
+        )}
         {view.jobs.length === 0 && <p className="muted small">{t("ai.queue.empty")}</p>}
         {(open.length > 0 || done.length > 0) && (
           <ul className="job-list" data-testid="ai-jobs">

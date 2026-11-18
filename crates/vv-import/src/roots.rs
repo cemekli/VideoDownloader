@@ -144,3 +144,118 @@ pub fn check_storage(c: &mut Connection, clock: &dyn Clock) -> Result<StorageChe
     tx.commit()?;
     Ok(report)
 }
+
+/// How many of a root's files "Locate drive" looks for in the new folder.
+pub const LOCATE_SAMPLE: usize = 50;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Located {
+    /// Sampled files found in the new folder with their recorded size.
+    pub found: usize,
+    pub checked: usize,
+}
+
+#[derive(Debug)]
+pub enum LocateError {
+    NotFound,
+    /// Too few of the root's files are in that folder: it is not the same
+    /// folder (the root is left as it was).
+    NotThere(Located),
+    Unreadable,
+    Db(LibraryError),
+}
+
+impl From<LibraryError> for LocateError {
+    fn from(e: LibraryError) -> Self {
+        LocateError::Db(e)
+    }
+}
+
+impl From<vv_persistence::rusqlite::Error> for LocateError {
+    fn from(e: vv_persistence::rusqlite::Error) -> Self {
+        LocateError::Db(e.into())
+    }
+}
+
+/// "Locate drive…" (DATA-09): the drive of a root came back under another
+/// letter or mount point, so its files are in `dir` now. Files are stored
+/// relative to their root, so pointing the root at `dir` brings them all
+/// back; nothing is copied or moved. `dir` must hold at least half of a
+/// sample of the root's files with their recorded sizes. When another root
+/// of the same kind already uses `dir` (the folder was picked again in
+/// Settings), the files are moved over to that root and this one is
+/// removed. Assets are checked again afterwards.
+pub fn locate(
+    c: &mut Connection,
+    clock: &dyn Clock,
+    root_id: &str,
+    dir: &Path,
+) -> Result<Located, LocateError> {
+    let dir = fsutil::canonical(dir).map_err(|_| LocateError::Unreadable)?;
+    if root_status(&dir) != StorageRootStatus::Available {
+        return Err(LocateError::Unreadable);
+    }
+    let path = dir.to_str().ok_or(LocateError::Unreadable)?.to_owned();
+    let root = repo::get_storage_root(c, root_id)?.ok_or(LocateError::NotFound)?;
+    let mut sample: Vec<(String, Option<i64>)> = repo::assets_in_root(c, root_id)?
+        .into_iter()
+        .map(|a| (a.storage_ref, a.size_bytes))
+        .collect();
+    sample.sort();
+    sample.dedup();
+    let step = sample.len().div_ceil(LOCATE_SAMPLE).max(1);
+    let sample: Vec<_> = sample.into_iter().step_by(step).collect();
+    let found = sample
+        .iter()
+        .filter(
+            |(r, size)| match std::fs::metadata(fsutil::resolve_ref(&dir, r)) {
+                Ok(m) if m.is_file() => size.is_none_or(|s| s == m.len() as i64),
+                _ => false,
+            },
+        )
+        .count();
+    let res = Located {
+        found,
+        checked: sample.len(),
+    };
+    if !sample.is_empty() && (found == 0 || found * 2 < sample.len()) {
+        return Err(LocateError::NotThere(res));
+    }
+    let now = clock.now_ms();
+    let tx = c.transaction()?;
+    let other = repo::list_storage_roots(&tx)?
+        .into_iter()
+        .find(|r| r.id != root.id && r.kind == root.kind && r.path == path);
+    if let Some(o) = other {
+        tx.execute(
+            "UPDATE media_asset SET storage_root_id = ?2 WHERE storage_root_id = ?1",
+            [&root.id, &o.id],
+        )?;
+        tx.execute(
+            "UPDATE OR IGNORE orphan_media SET storage_root_id = ?2 WHERE storage_root_id = ?1",
+            [&root.id, &o.id],
+        )?;
+        tx.execute(
+            "DELETE FROM orphan_media WHERE storage_root_id = ?1",
+            [&root.id],
+        )?;
+        if vv_persistence::settings::get(&tx)
+            .ok()
+            .and_then(|s| s.active_download_root_id)
+            .as_deref()
+            == Some(root.id.as_str())
+        {
+            vv_persistence::settings::set_download_root(&tx, &o.id, now)
+                .map_err(|_| LocateError::Unreadable)?;
+        }
+        tx.execute("DELETE FROM storage_root WHERE id = ?1", [&root.id])?;
+    } else {
+        tx.execute(
+            "UPDATE storage_root SET path = ?2, status = 'available', last_verified_at = ?3 WHERE id = ?1",
+            vv_persistence::rusqlite::params![root.id, path, now],
+        )?;
+    }
+    tx.commit()?;
+    check_storage(c, clock)?;
+    Ok(res)
+}

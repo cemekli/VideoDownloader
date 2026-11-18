@@ -357,6 +357,50 @@ pub fn list(c: &Connection, statuses: &[JobStatus], limit: i64) -> Result<Vec<Jo
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// Up to `limit` jobs of `kinds` that the user has not cleared from the
+/// Downloads or AI Processing list, newest first.
+pub fn list_shown(c: &Connection, kinds: &[JobKind], limit: i64) -> Result<Vec<Job>> {
+    let mut st = c.prepare(&format!(
+        "SELECT {COLUMNS} FROM job WHERE cleared_at IS NULL AND type IN ({}) \
+         ORDER BY created_at DESC, id LIMIT ?1",
+        kind_list(kinds)
+    ))?;
+    let rows = st.query_map([limit], from_row)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// "Clear finished": hides the succeeded, failed and canceled jobs of
+/// `kinds` from the lists and returns them. Open and blocked jobs stay.
+/// Nothing is deleted; a retry shows the job again.
+pub fn clear_finished(c: &Connection, kinds: &[JobKind], now: i64) -> Result<Vec<Job>> {
+    let mut st = c.prepare(&format!(
+        "SELECT {COLUMNS} FROM job WHERE cleared_at IS NULL AND type IN ({}) \
+         AND status IN ('succeeded','failed','canceled') ORDER BY created_at, id",
+        kind_list(kinds)
+    ))?;
+    let jobs: Vec<Job> = st
+        .query_map([], from_row)?
+        .collect::<rusqlite::Result<_>>()?;
+    for j in &jobs {
+        c.execute(
+            "UPDATE job SET cleared_at = ?2 WHERE id = ?1",
+            params![j.id, now],
+        )?;
+    }
+    Ok(jobs)
+}
+
+fn kind_list(kinds: &[JobKind]) -> String {
+    if kinds.is_empty() {
+        return "NULL".into();
+    }
+    kinds
+        .iter()
+        .map(|k| format!("'{}'", k.as_str()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 pub fn children(c: &Connection, parent_id: &str) -> Result<Vec<Job>> {
     let mut st = c.prepare(&format!(
         "SELECT {COLUMNS} FROM job WHERE parent_job_id = ?1 ORDER BY created_at, id"
@@ -1058,7 +1102,8 @@ pub fn retry(c: &mut Connection, id: &str, now: i64) -> Result<JobStatus> {
     }
     tx.execute(
         "UPDATE job SET status = ?2, blocked_reason = ?3, attempts = 0, generation = generation + 1, cancel_requested = 0, cancel_reason = NULL,
-                next_retry_at = NULL, error_code = NULL, redacted_error_message = NULL, finished_at = NULL, updated_at = ?4
+                next_retry_at = NULL, error_code = NULL, redacted_error_message = NULL, finished_at = NULL, updated_at = ?4,
+                cleared_at = NULL
           WHERE id = ?1",
         params![id, status.as_str(), blocked, now],
     )?;

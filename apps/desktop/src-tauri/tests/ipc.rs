@@ -258,12 +258,16 @@ fn main_capability_grants_only_app_commands() {
         "allow-cancel-job",
         "allow-retry-job",
         "allow-remove-partial",
+        "allow-clear-finished-downloads",
+        "allow-clear-finished-ai-jobs",
         "allow-get-download-options",
         "allow-start-download",
         "allow-fetch-metadata",
         "allow-get-storage-usage",
         "allow-set-storage-quota",
         "allow-move-media-folder",
+        "allow-list-storage-roots",
+        "allow-locate-storage-root",
         "allow-list-sessions",
         "allow-connect-session",
         "allow-set-session-consent",
@@ -1333,6 +1337,48 @@ fn download_commands_match_contract_shape() {
     ok(&w, "cancel_job", json!({ "jobId": j["id"] }));
     let p = ok(&w, "remove_partial", json!({ "jobId": j["id"] }));
     assert_same_shape(&p, &spec("remove_partial"), "remove_partial");
+
+    // "Clear finished": the canceled job leaves the list; a new download of
+    // the same item is listed again.
+    let cl = ok(&w, "clear_finished_downloads", json!({}));
+    assert_same_shape(
+        &cl,
+        &spec("clear_finished_downloads"),
+        "clear_finished_downloads",
+    );
+    assert_eq!(cl["cleared"], 1);
+    assert_eq!(ok(&w, "list_jobs", json!({})).as_array().unwrap().len(), 0);
+    let again = ok(
+        &w,
+        "start_download",
+        json!({ "itemId": id, "preset": "720" }),
+    );
+    let l = ok(&w, "list_jobs", json!({}));
+    assert_eq!(l.as_array().unwrap().len(), 1);
+    assert_eq!(l[0]["id"], again["id"]);
+    // An open job is never cleared.
+    assert_eq!(ok(&w, "clear_finished_downloads", json!({}))["cleared"], 0);
+    ok(&w, "cancel_job", json!({ "jobId": again["id"] }));
+    let ai = ok(&w, "clear_finished_ai_jobs", json!({}));
+    assert_same_shape(
+        &ai,
+        &spec("clear_finished_ai_jobs"),
+        "clear_finished_ai_jobs",
+    );
+
+    // Settings → Storage lists folders that hold library files; a bookmark
+    // has none yet.
+    assert_eq!(ok(&w, "list_storage_roots", json!({})), json!([]));
+    assert!(
+        invoke(
+            &w,
+            "locate_storage_root",
+            json!({ "rootId": 7 }),
+            app_origin()
+        )
+        .is_err(),
+        "a root id that is not a string is refused"
+    );
 
     let m = ok(&w, "fetch_metadata", json!({ "itemId": id }));
     assert!(m.is_string());

@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  ClearedJobs,
+  LocatedDto,
+  StorageRootDto,
   ApplyImport,
   AppStatus,
   BackupDto,
@@ -117,6 +120,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...downloads.sessions,
     ...models,
     ...transcripts,
+    clearFinishedAiJobs: async () => transcripts.clearOwnJobs(),
     getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs(), searchIndex: await models.getSearchIndex() }),
     // Transcription jobs live with the fixture transcripts; the rest are downloads.
     cancelJob: async (jobId) => transcripts.cancelOwnJob(jobId) ?? downloads.client.cancelJob(jobId),
@@ -220,9 +224,12 @@ const downloadCommands: DownloadClient = {
   cancelJob: (jobId) => call<JobDto>("cancel_job", { jobId }),
   retryJob: (jobId) => call<JobDto>("retry_job", { jobId }),
   removePartial: (jobId) => call<{ freedBytes: number }>("remove_partial", { jobId }),
+  clearFinishedDownloads: () => call<ClearedJobs>("clear_finished_downloads"),
   getStorageUsage: () => call<StorageUsage>("get_storage_usage"),
   setStorageQuota: (bytes) => call<StorageUsage>("set_storage_quota", { bytes }),
   moveMediaFolder: () => call<JobDto | null>("move_media_folder"),
+  listStorageRoots: () => call<StorageRootDto[]>("list_storage_roots"),
+  locateStorageRoot: (rootId) => call<LocatedDto | null>("locate_storage_root", { rootId }),
   async onJobChanged(cb) {
     try {
       const a = await listen<JobChanged>(JOB_EVENT, (e) => cb(e.payload));
@@ -267,6 +274,7 @@ const modelCommands: ModelClient = {
   verifyModel: (modelId) => call<ModelOverview>("verify_model", { modelId }),
   removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),
   getAiProcessing: () => call<AiProcessing>("get_ai_processing"),
+  clearFinishedAiJobs: () => call<ClearedJobs>("clear_finished_ai_jobs"),
 };
 
 /** Transcripts (F6.2). */
@@ -310,7 +318,7 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory", "drive-moved"];
 
 /** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts|low-memory` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
