@@ -1326,3 +1326,27 @@ STATE.md F7.2. SPEC §7.4 SEA-07 (sonuç neden bulunduğunu söyler), §16.3 (le
 - `crates/vv-engine/tests/meaning.rs`: kapalı olma nedenleri, hibrit sonuç, önbellek (ikinci sorgu API'ye gitmiyor), API düşünce hata; gerçek API ile isteğe bağlı kalite raporu (hit@1, MRR, recall; kelime yalnız vs hibrit).
 - `apps/desktop/src-tauri/tests/ipc.rs` `list_items_adds_matches_by_meaning`: gerçek komut yolu, küçük bir yerel API ile.
 - `src/hooks/useLibrary.test.tsx` (iki aşama, sonraki sayfa bayrağı, API düşünce kelime sonucu) ve `src/MeaningResults.test.tsx` (kart satırı, "Close in meaning" listesi).
+
+## ADR-0037: Etiket önerileri: kullanıcının sohbet API'si, kabul edilmeden değişiklik yok
+
+STATE.md F7.3. SPEC §11 `AIProposal`, AI-B01 (başlık, açıklama ve dökümden düzenlenebilir öneriler), AI-B02 (öneri etiketleri sessizce değiştirmez; reddedilen değer aynı öğeye bir daha önerilmez), AI-B04 (aynı kaynak/model tekrar işlenmez), AI-C07 (uzak adrese metin göndermek izinle), §19 `list_ai_proposals`, `decide_ai_proposal`.
+
+**Bağlam.** F7.1'de embedding için verilen karar (ADR-0035, Cuma, 18 Kas) burada da geçerli: uygulama dil modeli barındırmaz. Cuma'nın Ollama'sında (WSL, `localhost:11434`) `qwen3.5:2b/4b/9b`, `qwen2.5:7b`, `gemma4:12b` hazır. Qwen 3.x "düşünen" modeller: düşünme açıkken CPU'da video başına dakikalar sürer.
+
+**Karar.**
+
+- **Sağlayıcı:** OpenAI uyumlu `/v1/chat/completions`. AI Processing → "Tag suggestions": adres (varsayılan `http://localhost:11434/v1`), model (varsayılan `qwen3.5:4b`), isteğe bağlı anahtar (OS kimlik deposu). "Check and save" kısa bir soru sorar ve etiket listesi gelirse kaydeder. Adres kuralları embedding ile aynı (ortak kod): bu bilgisayar dışı adres izin ister ve Çevrimdışı Mod'da kullanılmaz; yönlendirme izlenmez; anahtar ve metin günlüğe yazılmaz.
+- **İstek:** sistem mesajı + öğenin başlığı (300 bayt), açıklaması (1.200), en yeni kullanılabilir dökümden videonun başına, ortasına ve sonuna yayılmış parçalar (4.000 bayt; Ollama'nın 4.096 token varsayılan bağlamına sığar) ve kütüphanenin en çok kullanılan 60 etiketi (model uyuyorsa onları aynen kullansın, yeni etiketleri kütüphanenin dilinde yazsın). `temperature 0.2`, cevap JSON şemasıyla (`{"tags": [...]}`) istenir. Düşünme `reasoning_effort: "none"` ile kapatılır; alanı tanımayan sunucu (HTTP 400) alansız bir kez daha sorulur. `<think>…</think>` ve JSON çevresindeki yazı yok sayılır.
+- **Saklama (migration 0016).** `ai_proposal`: öğe, tür (`tag`; `topic`/`collection` şimdilik üretilmez), değer, normalize değer (etiketle aynı katlama: "İstanbul" = "istanbul"), durum, sağlayıcı, model, adres, kaynak parmak izi. `(item, type, normalize değer)` tekil: kabul ve red satırları kalır, bu yüzden reddedilen ya da kabul edilen değer, öğenin zaten taşıdığı etiket ve aynı cevaptaki tekrarlar yeniden önerilmez (model değişse de). Yeni çalıştırma bekleyenleri değiştirir; bir çalıştırmada en çok 8 öneri. `ai_proposal_run`: öğe başına son parmak izi (istem sürümü + model + adres + metin); aynıysa sorulmaz, hiçbir şey önerilmemiş olsa da (AI-B04). "Suggest again" bunu atlar.
+- **Kabul.** `decide_ai_proposal(accept)` etiketi her zamanki "add tag" işlemiyle ekler (Undo geri alır) ve ilişkiyi `origin = 'ai_accepted', proposal_id` yapar. Kullanıcı adı önce düzenleyebilir. Red hiçbir etikete dokunmaz. Undo öneriyi bekleyene döndürmez: kullanıcı karar vermiştir.
+- **Arayüz.** Details'te "Suggested tags": kesik çizgili çipler; ✓ ekler, × reddeder, ada tıklayınca düzenlenir; "Suggest tags" o öğe için hemen sorar. AI Processing'de "Suggest for all videos" kütüphaneyi en yeniden başlayarak tek tek gezer, güncel olanları atlar, ilerlemeyi ve bekleyen öneri sayısını gösterir, durdurulabilir; erişim/model/ağ hatasında ya da üç ardışık hatada durur.
+- **Kuyruk işi değil.** Toplu çalıştırma uygulama içinde tek bir arka plan iş parçacığıdır. `job.type` CHECK listesinde öneri türü yok ve SQLite'ta bu kısıtı değiştirmek tabloyu yeniden kurmayı gerektirir (yabancı anahtarlar açıkken `download` ve `job_attempt` satırlarını silerdi). Öneri işi dosya tutmaz, parmak izi sayesinde yarıda kalınca baştan değil kaldığı yerden sürer; uygulama yeniden başlayınca kullanıcı tekrar "Suggest for all" der.
+
+**Açık.** Öneri kalitesi ve hızı Cuma'nın Ollama'sıyla denenecek (`qwen3.5:4b`, gerekirse `9b`/`gemma4:12b`). `reasoning_effort: "none"`'ın Ollama sürümünde düşünmeyi gerçekten kapattığı ilk denemede süreyle görülür; kapatmıyorsa düşünmeyen bir model (`qwen2.5:7b`) önerilir. Konu ve koleksiyon önerileri (AI-B01'in kalanı) ve ilgili öğeler (AI-B06) sonraya.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-engine/tests/suggest.rs`: gönderilen istek (model, metin, kütüphane etiketleri, şema, düşünme kapalı), temizleme ve tekrarların atılması, hiçbir şeyin uygulanmaması, aynı metnin tekrar sorulmaması, reddedilen değerin geri gelmemesi, kabulün `ai_accepted` olması, 400'de alansız tekrar, anahtar, uzak adres, Çevrimdışı Mod, metni olmayan öğe.
+- `crates/vv-persistence/src/proposals.rs` ve `crates/vv-engine/src/suggest.rs` birim testleri: döküm örnekleme, değer temizleme, parmak izi, `<think>` ve sarılı JSON okuma.
+- `apps/desktop/src-tauri/tests/ipc.rs` `suggest_commands_match_contract_and_never_apply_by_themselves` ve `suggest_commands.rs` birim testi: sözleşme, izin, anahtarın dönmemesi, kabulün Undo ile geri alınması, red.
+- `src/TagSuggest.test.tsx`: ayar formu, uzak adres onayı, toplu çalıştırma, Details'te sor/düzenle/kabul/red.

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, TagRef, TranscriptClient, TranscriptMatchesDto } from "../ipc/types";
+import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, OpResult, SuggestClient, TagRef, TranscriptClient, TranscriptMatchesDto } from "../ipc/types";
+import { ItemTagSuggestions } from "./TagSuggest";
 import { Transcripts } from "./Transcripts";
 import { Moments } from "./Moments";
 import { ItemDownload } from "./DownloadsView";
@@ -47,6 +48,8 @@ export interface InspectorActions {
   openDownloads?(): void;
   /** Plays the item from a search moment (F6.4, PLAY-06). */
   openMoment?(segmentId: string): void;
+  /** A suggested tag was accepted (F7.3): tags and counts changed. */
+  tagsChanged?(op: OpResult | null): void;
 }
 
 /**
@@ -67,6 +70,7 @@ export function Inspector({
   transcripts,
   moments = null,
   meaningMoments = null,
+  suggestions,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -86,6 +90,8 @@ export function Inspector({
   moments?: TranscriptMatchesDto | null;
   /** Passages close in meaning to the search text (F7.2). */
   meaningMoments?: TranscriptMatchesDto | null;
+  /** Tag suggestions (F7.3); without it the section is not shown. */
+  suggestions?: SuggestClient;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -120,7 +126,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} suggestions={suggestions} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -165,6 +171,7 @@ function Details({
   transcripts,
   moments,
   meaningMoments,
+  suggestions,
   onSaved,
 }: {
   detail: ItemDetail;
@@ -175,6 +182,7 @@ function Details({
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
   moments: TranscriptMatchesDto | null;
   meaningMoments: TranscriptMatchesDto | null;
+  suggestions?: SuggestClient;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -263,6 +271,17 @@ function Details({
               </li>
             </ul>
           </section>
+          {suggestions && (
+            <ItemTagSuggestions
+              key={item.id}
+              client={suggestions}
+              itemId={item.id}
+              onAccepted={(op) => {
+                actions.tagsChanged?.(op);
+                void client.getItem(item.id).then(onSaved, () => undefined);
+              }}
+            />
+          )}
           <section data-testid="inspector-collections">
             <h4>Collections</h4>
             <ul className="chips">

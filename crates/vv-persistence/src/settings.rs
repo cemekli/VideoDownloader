@@ -94,6 +94,7 @@ const LEGAL: &str = "legal_ack_at";
 const DOWNLOAD_ROOT: &str = "active_download_root_id";
 const TRANSCRIPTION_CPU: &str = "transcription_cpu";
 const EMBEDDING_API: &str = "embedding_api";
+const SUGGEST_API: &str = "suggest_api";
 
 /// The user's embedding API for search by meaning (STATE.md F7.1, SPEC
 /// AI-C07, ADR-0035): an OpenAI-compatible `/v1/embeddings`. Saved only
@@ -122,6 +123,33 @@ pub fn embedding_api(c: &Connection) -> Result<Option<EmbeddingApi>> {
 /// Sets or clears (`None`) the embedding API.
 pub fn set_embedding_api(c: &Connection, api: Option<&EmbeddingApi>, now_ms: i64) -> Result<()> {
     write(c, EMBEDDING_API, &api, now_ms)
+}
+
+/// The user's chat API for tag suggestions (STATE.md F7.3, SPEC AI-B01,
+/// ADR-0037): an OpenAI-compatible `/v1/chat/completions`. Saved only
+/// after a check got an answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestApi {
+    /// Base address, normalized (`http://localhost:11434/v1`).
+    pub url: String,
+    pub model: String,
+    /// The API key in the OS credential store, if one was given.
+    pub key_ref: Option<String>,
+    /// The user agreed that item text goes to this address (a host other
+    /// than this PC, AI-C07).
+    pub remote_allowed: bool,
+    pub checked_at: i64,
+}
+
+/// The suggestion API, if one was set.
+pub fn suggest_api(c: &Connection) -> Result<Option<SuggestApi>> {
+    Ok(read::<Option<SuggestApi>>(c, SUGGEST_API)?.flatten())
+}
+
+/// Sets or clears (`None`) the suggestion API.
+pub fn set_suggest_api(c: &Connection, api: Option<&SuggestApi>, now_ms: i64) -> Result<()> {
+    write(c, SUGGEST_API, &api, now_ms)
 }
 
 fn read_raw(c: &Connection, key: &str) -> Result<Option<String>> {

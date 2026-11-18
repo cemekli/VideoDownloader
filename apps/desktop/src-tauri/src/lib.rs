@@ -20,6 +20,7 @@ pub mod organize_commands;
 pub mod player_commands;
 mod search_index_commands;
 mod session_commands;
+mod suggest_commands;
 pub mod thumb_protocol;
 pub mod transcript_commands;
 
@@ -33,6 +34,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
         .manage(library::LibraryState::default())
         .manage(engine::EngineState::default())
         .manage(meaning::MeaningState::default())
+        .manage(suggest_commands::SuggestState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::get_status,
@@ -128,6 +130,14 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             search_index_commands::clear_embedding_api,
             search_index_commands::build_search_index,
             search_index_commands::cancel_search_index,
+            suggest_commands::get_tag_suggest,
+            suggest_commands::set_suggest_api,
+            suggest_commands::clear_suggest_api,
+            suggest_commands::suggest_all,
+            suggest_commands::cancel_suggest_all,
+            suggest_commands::list_ai_proposals,
+            suggest_commands::suggest_tags,
+            suggest_commands::decide_ai_proposal,
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,

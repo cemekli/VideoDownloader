@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { errorCode } from "../ipc/errors";
-import type { AiJobDto, AiProcessing, CpuUse, DownloadClient, MachineDto, ModelClient, Settings, SettingsPatch } from "../ipc/types";
+import type { AiJobDto, AiProcessing, CpuUse, DownloadClient, MachineDto, ModelClient, Settings, SettingsPatch, SuggestClient } from "../ipc/types";
 import { formatBytes, formatDuration } from "../format";
 import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
 import { SearchIndexBlock } from "./SearchIndex";
+import { TagSuggestBlock } from "./TagSuggest";
 import { TranscriptionBlock } from "./Transcription";
 import { languageName } from "./Transcripts";
 
@@ -24,7 +25,7 @@ export function AiProcessingView({
   notify,
   onSettings,
 }: {
-  client: ModelClient & Pick<DownloadClient, "cancelJob" | "retryJob">;
+  client: ModelClient & SuggestClient & Pick<DownloadClient, "cancelJob" | "retryJob">;
   notify: Notify;
   onSettings: (patch: SettingsPatch) => Promise<Settings | void> | void;
 }) {
@@ -146,6 +147,13 @@ export function AiProcessingView({
           {t("search_index.title")}
         </h2>
         <SearchIndexBlock client={client} notify={notify} onChanged={() => void reload()} />
+      </section>
+
+      <section aria-labelledby="ai-tag-suggest">
+        <h2 id="ai-tag-suggest" className="downloads-heading">
+          {t("suggest.title")}
+        </h2>
+        <TagSuggestBlock client={client} notify={notify} />
       </section>
     </div>
   );

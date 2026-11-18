@@ -82,6 +82,9 @@ struct Shared {
     mode: String,
     calls: Vec<usize>,
     models: Vec<String>,
+    /// `/v1/chat/completions`: the answer text, and the request bodies.
+    chat_answer: String,
+    chats: Vec<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -123,6 +126,16 @@ impl FakeEmbed {
     /// Model names asked for.
     pub fn models(&self) -> Vec<String> {
         self.shared.lock().unwrap().models.clone()
+    }
+
+    /// What `/v1/chat/completions` answers from now on (the message text).
+    pub fn set_chat_answer(&self, text: &str) {
+        self.shared.lock().unwrap().chat_answer = text.into();
+    }
+
+    /// Chat request bodies so far.
+    pub fn chats(&self) -> Vec<serde_json::Value> {
+        self.shared.lock().unwrap().chats.clone()
     }
 }
 
@@ -173,13 +186,16 @@ fn serve(mut s: TcpStream, key: Option<&str>, sh: &Mutex<Shared>) {
     }
     let mut parts = line.split_whitespace();
     let (method, path) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
-    if (method, path) != ("POST", "/v1/embeddings") {
+    if method != "POST" || !matches!(path, "/v1/embeddings" | "/v1/chat/completions") {
         return reply(&mut s, "404 Not Found", "{\"error\":\"not found\"}");
     }
     if let Some(k) = key {
         if auth != format!("Bearer {k}") {
             return reply(&mut s, "401 Unauthorized", "{\"error\":\"invalid key\"}");
         }
+    }
+    if path == "/v1/chat/completions" {
+        return chat(s, &body, sh);
     }
     let v: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
     let inputs: Vec<String> = match &v["input"] {
@@ -210,4 +226,28 @@ fn serve(mut s: TcpStream, key: Option<&str>, sh: &Mutex<Shared>) {
     };
     let dims = if mode == "dims-512" { 512 } else { DIMS };
     reply(&mut s, "200 OK", &answer(&inputs, n, dims));
+}
+
+/// `/v1/chat/completions`. Modes: `fail` (HTTP 500), `no-reasoning` (HTTP
+/// 400 when the request has `reasoning_effort`, like a server that does
+/// not know the field).
+fn chat(mut s: TcpStream, body: &[u8], sh: &Mutex<Shared>) {
+    let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+    let (mode, answer) = {
+        let mut g = sh.lock().unwrap();
+        g.chats.push(v.clone());
+        (g.mode.clone(), g.chat_answer.clone())
+    };
+    match mode.as_str() {
+        "fail" => return reply(&mut s, "500 Internal Server Error", "{\"error\":\"boom\"}"),
+        "no-reasoning" if v.get("reasoning_effort").is_some() => {
+            return reply(&mut s, "400 Bad Request", "{\"error\":\"unknown field\"}")
+        }
+        _ => {}
+    }
+    let out = serde_json::json!({
+        "object": "chat.completion",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": answer}, "finish_reason": "stop"}],
+    });
+    reply(&mut s, "200 OK", &out.to_string());
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-tag-suggest"
+description = "Enables the get_tag_suggest command without any pre-configured scope."
+commands.allow = ["get_tag_suggest"]
+
+[[permission]]
+identifier = "deny-get-tag-suggest"
+description = "Denies the get_tag_suggest command without any pre-configured scope."
+commands.deny = ["get_tag_suggest"]

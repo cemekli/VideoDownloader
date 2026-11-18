@@ -290,6 +290,14 @@ fn main_capability_grants_only_app_commands() {
         "allow-clear-embedding-api",
         "allow-build-search-index",
         "allow-cancel-search-index",
+        "allow-get-tag-suggest",
+        "allow-set-suggest-api",
+        "allow-clear-suggest-api",
+        "allow-suggest-all",
+        "allow-cancel-suggest-all",
+        "allow-list-ai-proposals",
+        "allow-suggest-tags",
+        "allow-decide-ai-proposal",
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
@@ -1762,6 +1770,201 @@ fn model_commands_match_contract_and_need_consent() {
         &with_nulls_of(&cl, &spec("clear_embedding_api")),
         "clear_embedding_api",
     );
+}
+
+/// A chat API on 127.0.0.1 that always suggests "deniz"; requests whose
+/// bearer token is not `key` (when set) get 401.
+fn tiny_chat_api(key: Option<&'static str>) -> String {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://127.0.0.1:{}/v1", l.local_addr().unwrap().port());
+    std::thread::spawn(move || {
+        for mut s in l.incoming().flatten() {
+            let mut r = BufReader::new(s.try_clone().unwrap());
+            let (mut len, mut auth) = (0usize, String::new());
+            let mut line = String::new();
+            loop {
+                line.clear();
+                if r.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
+                    break;
+                }
+                let low = line.to_ascii_lowercase();
+                if let Some(v) = low.strip_prefix("content-length:") {
+                    len = v.trim().parse().unwrap_or(0);
+                }
+                if low.starts_with("authorization:") {
+                    auth = line
+                        .get("authorization:".len()..)
+                        .unwrap_or("")
+                        .trim()
+                        .to_owned();
+                }
+            }
+            let mut body = vec![0; len];
+            let _ = r.read_exact(&mut body);
+            let (status, out) = match key {
+                Some(k) if auth != format!("Bearer {k}") => ("401 Unauthorized", "{}".to_owned()),
+                _ => (
+                    "200 OK",
+                    json!({"choices": [{"message": {"content": "{\"tags\":[\"deniz\"]}"}}]})
+                        .to_string(),
+                ),
+            };
+            let _ = write!(
+                s,
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                out.len()
+            );
+        }
+    });
+    url
+}
+
+#[test]
+fn suggest_commands_match_contract_and_never_apply_by_themselves() {
+    // STATE.md F7.3, AI-B01/B02, AI-C07: the chat API is checked before it
+    // is saved, its key never comes back, a suggestion changes nothing
+    // until it is accepted, and an accept is an undoable "add tag".
+    let d = tempfile::tempdir().unwrap();
+    let (app, id) = app_with_library(d.path());
+    let w = window(&app, "main");
+    let c = contract();
+    let spec = |cmd: &str| c["commands"][cmd]["response"].clone();
+
+    let g = ok(&w, "get_tag_suggest", json!({}));
+    assert_same_shape(
+        &g,
+        &with_nulls_of(&g, &spec("get_tag_suggest")),
+        "get_tag_suggest",
+    );
+    assert!(g["api"].is_null() && g["run"].is_null());
+    assert_eq!(g["pending"], 0);
+    // Nothing set: "Suggest for all" is refused.
+    let e = invoke(&w, "suggest_all", json!({ "force": false }), app_origin()).unwrap_err();
+    assert!(
+        ["MODEL_MISSING", "TOOL_MISSING"].contains(&e["code"].as_str().unwrap()),
+        "{e}"
+    );
+
+    // A remote API needs agreement; a wrong key fails the check.
+    let e = invoke(
+        &w,
+        "set_suggest_api",
+        json!({ "url": "https://llm.example.com/v1", "model": "m", "key": null, "allowRemote": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "URL_BLOCKED");
+    let keyed = tiny_chat_api(Some("sk-test-123"));
+    let e = invoke(
+        &w,
+        "set_suggest_api",
+        json!({ "url": keyed, "model": "qwen3.5:4b", "key": "wrong", "allowRemote": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "ACCESS_DENIED");
+    assert!(ok(&w, "get_tag_suggest", json!({}))["api"].is_null());
+    assert!(!e.to_string().contains("wrong"));
+    // (The OS credential store is not there in CI: a saved key is tested in vv-engine.)
+    let url = tiny_chat_api(None);
+    let s = ok(
+        &w,
+        "set_suggest_api",
+        json!({ "url": url, "model": "qwen3.5:4b", "key": null, "allowRemote": false }),
+    );
+    assert_same_shape(
+        &s,
+        &with_nulls_of(&s, &spec("set_suggest_api")),
+        "set_suggest_api",
+    );
+    assert_same_shape(
+        &s["api"],
+        &spec("set_suggest_api")["api"],
+        "set_suggest_api.api",
+    );
+    assert_eq!(s["api"]["hasKey"], false);
+    assert_eq!(s["api"]["local"], true);
+
+    // A suggestion as a run stores it: listed, not applied.
+    let p_id = {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        let ps = vv_persistence::proposals::save_run(
+            db.writer(),
+            &id,
+            "qwen3.5:4b",
+            &url,
+            &"0".repeat(32),
+            &["deniz".into(), "sabah".into()],
+            1_794_000_000_000,
+        )
+        .unwrap();
+        ps[0].id.clone()
+    };
+    let l = ok(&w, "list_ai_proposals", json!({ "itemId": id }));
+    assert_same_shape(&l[0], &spec("list_ai_proposals")[0], "list_ai_proposals[0]");
+    assert_eq!(l.as_array().unwrap().len(), 2);
+    assert_eq!(ok(&w, "get_tag_suggest", json!({}))["pending"], 2);
+    let item = ok(&w, "get_item", json!({ "id": id }));
+    assert!(item["tagRefs"].as_array().unwrap().is_empty());
+
+    let r = ok(
+        &w,
+        "decide_ai_proposal",
+        json!({ "id": p_id, "accept": true, "name": null }),
+    );
+    assert_same_shape(&r, &spec("decide_ai_proposal"), "decide_ai_proposal");
+    assert_same_shape(
+        &r["op"],
+        &spec("decide_ai_proposal")["op"],
+        "decide_ai_proposal.op",
+    );
+    assert_eq!(r["proposals"].as_array().unwrap().len(), 1);
+    let item = ok(&w, "get_item", json!({ "id": id }));
+    assert_eq!(item["tagRefs"][0]["name"], "deniz");
+    // Undo takes the tag off again.
+    ok(&w, "undo", json!({}));
+    let item = ok(&w, "get_item", json!({ "id": id }));
+    assert!(item["tagRefs"].as_array().unwrap().is_empty());
+    // Rejecting changes no tag; a decided suggestion is not decided again.
+    let other = r["proposals"][0]["id"].clone();
+    let r = ok(
+        &w,
+        "decide_ai_proposal",
+        json!({ "id": other, "accept": false, "name": null }),
+    );
+    assert!(r["proposals"].as_array().unwrap().is_empty() && r["op"].is_null());
+    assert!(invoke(
+        &w,
+        "decide_ai_proposal",
+        json!({ "id": other, "accept": true, "name": null }),
+        app_origin()
+    )
+    .is_err());
+
+    // Without the engine (no tools checked in this test) asking is refused cleanly.
+    let e = invoke(
+        &w,
+        "suggest_tags",
+        json!({ "itemId": id, "force": false }),
+        app_origin(),
+    )
+    .unwrap_err();
+    assert_eq!(e["code"], "TOOL_MISSING");
+    let cs = ok(&w, "cancel_suggest_all", json!({}));
+    assert_same_shape(
+        &cs,
+        &with_nulls_of(&cs, &spec("cancel_suggest_all")),
+        "cancel_suggest_all",
+    );
+    let cl = ok(&w, "clear_suggest_api", json!({}));
+    assert_same_shape(
+        &cl,
+        &with_nulls_of(&cl, &spec("clear_suggest_api")),
+        "clear_suggest_api",
+    );
+    assert!(cl["api"].is_null());
 }
 
 #[test]

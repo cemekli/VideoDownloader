@@ -57,6 +57,11 @@ import type {
   MomentTarget,
   NotePreview,
   NoteExport,
+  SuggestClient,
+  TagSuggestDto,
+  ProposalDto,
+  ItemSuggestions,
+  DecideResult,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
 import { IpcError } from "./errors";
@@ -65,6 +70,7 @@ import { createFixtureData } from "./fixtureData";
 import { createFixtureDownloads } from "./fixtureDownloads";
 import { createFixtureModels, fixtureMachine } from "./fixtureModels";
 import { createFixtureTranscripts } from "./fixtureTranscripts";
+import { createFixtureSuggest } from "./fixtureSuggest";
 
 export { IpcError } from "./errors";
 
@@ -114,12 +120,14 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
   const downloads = createFixtureDownloads(recs, scenario);
   const data = createFixtureData(recs, scenario, library);
   const models = createFixtureModels(scenario);
+  const suggest = createFixtureSuggest(recs, library);
   return {
     ...data,
     ...downloads.client,
     ...downloads.sessions,
     ...models,
     ...transcripts,
+    ...suggest,
     clearFinishedAiJobs: async () => transcripts.clearOwnJobs(),
     getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs(), searchIndex: await models.getSearchIndex() }),
     // Transcription jobs live with the fixture transcripts; the rest are downloads.
@@ -277,6 +285,18 @@ const modelCommands: ModelClient = {
   clearFinishedAiJobs: () => call<ClearedJobs>("clear_finished_ai_jobs"),
 };
 
+/** Tag suggestions (F7.3). */
+const suggestCommands: SuggestClient = {
+  getTagSuggest: () => call<TagSuggestDto>("get_tag_suggest"),
+  setSuggestApi: (url, model, key, allowRemote) => call<TagSuggestDto>("set_suggest_api", { url, model, key, allowRemote }),
+  clearSuggestApi: () => call<TagSuggestDto>("clear_suggest_api"),
+  suggestAll: (force) => call<TagSuggestDto>("suggest_all", { force }),
+  cancelSuggestAll: () => call<TagSuggestDto>("cancel_suggest_all"),
+  listAiProposals: (itemId) => call<ProposalDto[]>("list_ai_proposals", { itemId }),
+  suggestTags: (itemId, force) => call<ItemSuggestions>("suggest_tags", { itemId, force }),
+  decideAiProposal: (id, accept, name) => call<DecideResult>("decide_ai_proposal", { id, accept, name }),
+};
+
 /** Transcripts (F6.2). */
 const transcriptCommands: TranscriptClient = {
   listTranscripts: (itemId) => call<ItemTranscripts>("list_transcripts", { itemId }),
@@ -305,6 +325,7 @@ export function createTauriClient(): BackendClient {
     ...sessionCommands,
     ...modelCommands,
     ...transcriptCommands,
+    ...suggestCommands,
     async onImportStatus(cb) {
       try {
         return await listen<ImportStatus>(IMPORT_EVENT, (e) => cb(e.payload));

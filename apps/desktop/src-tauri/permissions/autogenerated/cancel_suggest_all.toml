@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-suggest-all"
+description = "Enables the cancel_suggest_all command without any pre-configured scope."
+commands.allow = ["cancel_suggest_all"]
+
+[[permission]]
+identifier = "deny-cancel-suggest-all"
+description = "Denies the cancel_suggest_all command without any pre-configured scope."
+commands.deny = ["cancel_suggest_all"]
