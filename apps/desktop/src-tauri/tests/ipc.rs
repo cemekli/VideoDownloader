@@ -298,6 +298,8 @@ fn main_capability_grants_only_app_commands() {
         "allow-list-ai-proposals",
         "allow-suggest-tags",
         "allow-decide-ai-proposal",
+        "allow-list-ai-proposal-groups",
+        "allow-decide-ai-proposals",
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
