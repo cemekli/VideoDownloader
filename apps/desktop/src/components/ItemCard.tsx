@@ -29,19 +29,25 @@ export function SnippetText({ snippet }: { snippet: Snippet }) {
 
 /**
  * The first place a search text was said, with its timecode (F6.4, SEA-06);
- * without one, the closest passage in meaning (F7.2), marked as such.
+ * without one, where it was read on screen (F7.4), then the closest passage
+ * in meaning (F7.2), each marked as such.
  */
 export function MomentLine({ item }: { item: LibraryItemDto }) {
-  const meaning = !item.transcript?.moments[0];
-  const tr = meaning ? item.meaning : item.transcript;
+  const kind = item.transcript?.moments[0] ? "transcript" : item.onScreen?.moments[0] ? "on_screen" : "meaning";
+  const tr = kind === "transcript" ? item.transcript : kind === "on_screen" ? item.onScreen : item.meaning;
   const m = tr?.moments[0];
   if (!tr || !m) return null;
   const more = tr.total - 1;
   return (
-    <p className="snippet snippet-moment" data-testid="snippet" data-field={meaning ? "meaning" : "transcript"}>
-      {meaning && (
+    <p className="snippet snippet-moment" data-testid="snippet" data-field={kind}>
+      {kind === "meaning" && (
         <span className="meaning-tag" title={t("search.meaning_hint")}>
           {t("search.meaning_tag")}{" "}
+        </span>
+      )}
+      {kind === "on_screen" && (
+        <span className="meaning-tag screen-tag" title={t("search.screen_hint")}>
+          {t("search.screen_tag")}{" "}
         </span>
       )}
       <span className="timecode">{formatDuration(m.startMs)}</span> {m.snippet.cutStart && "…"}

@@ -30,6 +30,7 @@ pub mod models;
 pub mod proc;
 pub mod resources;
 pub mod runtime;
+pub mod screen_text;
 pub mod storage;
 pub mod storage_move;
 pub mod suggest;

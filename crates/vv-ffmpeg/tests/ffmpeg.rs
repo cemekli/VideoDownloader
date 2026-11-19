@@ -39,6 +39,7 @@ fn fixed_args_match_the_probe_script() {
     assert_eq!(strings(&a["remuxOutput"]), args::REMUX_OUTPUT);
     assert_eq!(strings(&a["thumbnailOutput"]), args::THUMBNAIL_OUTPUT);
     assert_eq!(strings(&a["audioWavOutput"]), args::AUDIO_WAV_OUTPUT);
+    assert_eq!(strings(&a["framesOutput"]), args::FRAMES_OUTPUT);
     // The build the fixtures are checked against is the one the manifest pins.
     let m = json("tools/manifest.json");
     let ff = m["tools"]
@@ -198,4 +199,47 @@ fn other_failures_are_media_corrupt() {
         rejected_demuxer("[mov,mp4 @ 0x2] moov atom not found"),
         None
     );
+}
+
+#[test]
+fn frames_keep_sparse_and_scene_frames_and_read_their_times() {
+    let p = args::FramePick {
+        every_ms: 2500,
+        scene_gap_ms: 1000,
+        scene_milli: 300,
+        max_frames: 300,
+        max_width: 1920,
+        keyframes_only: true,
+    };
+    let dir = std::env::temp_dir();
+    let a = os(args::frames_args(&dir.join("in.mp4"), &dir, &p).unwrap());
+    assert_eq!(
+        a[a.iter().position(|x| x == "-skip_frame").unwrap() + 1],
+        "nokey"
+    );
+    let vf = &a[a.iter().position(|x| x == "-vf").unwrap() + 1];
+    assert!(vf.starts_with("select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,2.500)+gt(scene\\,0.300)*gte(t-prev_selected_t\\,1.000)'"), "{vf}");
+    assert!(vf.ends_with("metadata=mode=print:file=frames.txt"), "{vf}");
+    assert_eq!(
+        a[a.iter().position(|x| x == "-frames:v").unwrap() + 1],
+        "300"
+    );
+    assert!(a.last().unwrap().ends_with("f-%05d.png"));
+    let full = os(args::frames_args(
+        &dir.join("in.mp4"),
+        &dir,
+        &args::FramePick {
+            keyframes_only: false,
+            ..p
+        },
+    )
+    .unwrap());
+    assert!(!full.iter().any(|x| x == "-skip_frame"));
+    assert!(full.iter().any(|x| x.starts_with("fps=4,select=")));
+    assert_eq!(
+        args::frames_args(Path::new("in.mp4"), &dir, &p),
+        Err(ArgsError::NotAbsolute)
+    );
+    let list = "frame:0    pts:0       pts_time:0\nlavfi.scene_score=0.000000\nframe:1    pts:51200   pts_time:4.04\nframe:2 pts:1 pts_time:nan\n";
+    assert_eq!(args::parse_frame_list(list), vec![0, 4040]);
 }

@@ -19,6 +19,10 @@
 //!   [`TRANSCRIPT_WEIGHT`]. The moments are grouped under the item, taken
 //!   from one transcript, and each opens at the real start of the segment
 //!   that holds the first matched word.
+//! - Text on screen (F7.4, AI-C04, SEA-08, ADR-0039): OCR chunks are in the
+//!   same index but never joined to a transcript. An item also matches by
+//!   them, with [`SCREEN_WEIGHT`]; their moments are listed apart as "on
+//!   screen", each at the time the text appeared.
 
 use super::repo::{self, LibraryItem};
 use super::{ItemKind, MetadataStatus, SourcePlatform};
@@ -37,6 +41,10 @@ pub const WEIGHTS: [f64; 5] = [10.0, 2.0, 2.0, 5.0, 5.0];
 /// Below the description's: words said in a video count, but a title or a
 /// note that names the topic ranks first.
 pub const TRANSCRIPT_WEIGHT: f64 = 1.0;
+
+/// Weight of the best on-screen chunk's BM25: below spoken words, since
+/// OCR misreads and a slide shows a word for a long time.
+pub const SCREEN_WEIGHT: f64 = 0.7;
 
 /// Moments listed under one item; [`TranscriptMatches::total`] counts all.
 pub const MAX_MOMENTS: usize = 5;
@@ -205,6 +213,8 @@ pub enum Field {
     /// A transcript passage close in meaning (F7.2, SEA-07); never in
     /// [`FIELDS`], and never with highlighted words.
     Meaning,
+    /// Text read on screen (F7.4, SEA-08); never in [`FIELDS`].
+    OnScreen,
 }
 
 /// Column order of `search_document`, and the order a snippet prefers.
@@ -283,6 +293,9 @@ pub struct Hit {
     /// Passages close in meaning to the query (F7.2, hybrid search only):
     /// whole chunks, nothing highlighted.
     pub meaning: Option<TranscriptMatches>,
+    /// Where the query was read on screen (F7.4): `transcript_id` is empty,
+    /// `provenance` is `ocr`, each moment's `segment_id` is the OCR chunk.
+    pub on_screen: Option<TranscriptMatches>,
     /// Why the item is where it is in a hybrid result (SEA-07).
     pub fusion: Option<Fusion>,
 }
@@ -424,6 +437,7 @@ pub(super) struct Ranked {
     pub seq: i64,
     pub metadata: bool,
     pub transcript: bool,
+    pub on_screen: bool,
 }
 
 /// The total and the items of `page` (`(limit, offset)`), or of every
@@ -448,14 +462,20 @@ pub(super) fn ranked(
                        FROM transcript_search JOIN search_chunk c ON c.seq = transcript_search.rowid \
                        JOIN transcript t ON t.id = c.transcript_id \
                        WHERE transcript_search MATCH ?1 AND t.status IN {SEARCHED}), \
-                     tm AS MATERIALIZED (SELECT item_id, min(rank) AS rank FROM tc GROUP BY item_id) "
+                     tm AS MATERIALIZED (SELECT item_id, min(rank) AS rank FROM tc GROUP BY item_id), \
+                     oc AS MATERIALIZED (SELECT c.item_id, bm25(transcript_search) AS rank \
+                       FROM transcript_search JOIN search_chunk c ON c.seq = transcript_search.rowid \
+                       WHERE transcript_search MATCH ?1 AND c.source_type = 'ocr'), \
+                     om AS MATERIALIZED (SELECT item_id, min(rank) AS rank FROM oc GROUP BY item_id) "
                 ),
                 "library_item i LEFT JOIN m ON m.seq = i.seq LEFT JOIN tm ON tm.item_id = i.id \
-                 WHERE (m.seq IS NOT NULL OR tm.item_id IS NOT NULL) AND "
+                 LEFT JOIN om ON om.item_id = i.id \
+                 WHERE (m.seq IS NOT NULL OR tm.item_id IS NOT NULL OR om.item_id IS NOT NULL) AND "
                     .to_owned(),
                 format!(
-                    ", ifnull(m.rank, 0) + {TRANSCRIPT_WEIGHT:?} * ifnull(tm.rank, 0) AS rank, \
-                     m.seq IS NOT NULL, tm.item_id IS NOT NULL"
+                    ", ifnull(m.rank, 0) + {TRANSCRIPT_WEIGHT:?} * ifnull(tm.rank, 0) \
+                       + {SCREEN_WEIGHT:?} * ifnull(om.rank, 0) AS rank, \
+                     m.seq IS NOT NULL, tm.item_id IS NOT NULL, om.item_id IS NOT NULL"
                 ),
             )
         }
@@ -477,16 +497,21 @@ pub(super) fn ranked(
     let mut stmt = c.prepare(&sql)?;
     let rows = stmt
         .query_map(params_from_iter(params.iter()), |r| {
-            let (metadata, transcript) = if fts.is_some() {
-                (r.get::<_, bool>(3)?, r.get::<_, bool>(4)?)
+            let (metadata, transcript, on_screen) = if fts.is_some() {
+                (
+                    r.get::<_, bool>(3)?,
+                    r.get::<_, bool>(4)?,
+                    r.get::<_, bool>(5)?,
+                )
             } else {
-                (false, false)
+                (false, false, false)
             };
             Ok(Ranked {
                 id: r.get(0)?,
                 seq: r.get(1)?,
                 metadata,
                 transcript,
+                on_screen,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -518,6 +543,17 @@ pub(super) fn hits(
         }
         None => Default::default(),
     };
+    let mut screen = match fts {
+        Some(m) => {
+            let ids: Vec<&str> = rows
+                .iter()
+                .filter(|r| r.on_screen)
+                .map(|r| r.id.as_str())
+                .collect();
+            screen_matches(c, m, &ids)?
+        }
+        None => Default::default(),
+    };
     let mut hits = Vec::with_capacity(rows.len());
     for r in rows {
         let item = repo::get_item(c, &r.id)?.ok_or(super::LibraryError::NotFound)?;
@@ -529,12 +565,17 @@ pub(super) fn hits(
         if transcript.is_some() {
             matched.push(Field::Transcript);
         }
+        let on_screen = screen.remove(&r.id);
+        if on_screen.is_some() {
+            matched.push(Field::OnScreen);
+        }
         hits.push(Hit {
             item,
             matched,
             snippet,
             transcript,
             meaning: None,
+            on_screen,
             fusion: None,
         });
     }
@@ -641,6 +682,60 @@ fn transcript_matches(
         if let Some(mo) = moment(c, &tid, &first, &last, &text, &hl)? {
             entry.moments.push(mo);
         }
+    }
+    Ok(out)
+}
+
+/// Where the match `m` was read on screen, per item, in time order. Each
+/// moment is one OCR chunk: the time the text appeared, and the text
+/// around the first matched word.
+fn screen_matches(
+    c: &Connection,
+    m: &str,
+    items: &[&str],
+) -> super::Result<std::collections::HashMap<String, TranscriptMatches>> {
+    let mut out = std::collections::HashMap::new();
+    if items.is_empty() {
+        return Ok(out);
+    }
+    let ph = items.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT c.item_id, c.id, c.start_ms, c.end_ms, c.text, ifnull(c.producer_model_id, 'und'), \
+             highlight(transcript_search, 0, char(1), char(2)) \
+         FROM transcript_search JOIN search_chunk c ON c.seq = transcript_search.rowid \
+         WHERE transcript_search MATCH ?1 AND c.source_type = 'ocr' AND c.item_id IN ({ph}) \
+         ORDER BY c.item_id, c.start_ms, c.seq"
+    );
+    let mut params: Vec<Value> = vec![Value::Text(m.to_owned())];
+    params.extend(items.iter().map(|s| Value::Text((*s).to_owned())));
+    let mut st = c.prepare(&sql)?;
+    let mut rows = st.query(params_from_iter(params.iter()))?;
+    while let Some(r) = rows.next()? {
+        let item: String = r.get(0)?;
+        let entry = out.entry(item).or_insert_with(|| TranscriptMatches {
+            transcript_id: String::new(),
+            language: String::new(),
+            provenance: "ocr".into(),
+            partial: false,
+            covered_ms: None,
+            moments: Vec::new(),
+            total: 0,
+        });
+        if entry.total == 0 {
+            entry.language = r.get(5)?;
+        }
+        entry.total += 1;
+        if entry.moments.len() >= MAX_MOMENTS {
+            continue;
+        }
+        let text: String = r.get(4)?;
+        let hl: String = r.get(6)?;
+        entry.moments.push(Moment {
+            segment_id: r.get(1)?,
+            start_ms: r.get(2)?,
+            end_ms: r.get(3)?,
+            snippet: make_snippet(Field::OnScreen, &hl, &text),
+        });
     }
     Ok(out)
 }

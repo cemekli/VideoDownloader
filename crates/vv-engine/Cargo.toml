@@ -19,6 +19,7 @@ vv-process = { path = "../vv-process" }
 vv-ffmpeg = { path = "../vv-ffmpeg" }
 vv-import = { path = "../vv-import" }
 vv-secrets = { path = "../vv-secrets" }
+vv-ocr = { path = "../vv-ocr" }
 url = "2"
 sha1 = "0.10"
 sha2 = "0.10"

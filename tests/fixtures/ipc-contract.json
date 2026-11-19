@@ -92,6 +92,7 @@
             },
             "transcript": null,
             "meaning": null,
+            "onScreen": null,
             "foundBy": null
           }
         ],
@@ -188,6 +189,7 @@
           "snippet": null,
           "transcript": null,
           "meaning": null,
+          "onScreen": null,
           "foundBy": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -268,6 +270,7 @@
             "snippet": null,
             "transcript": null,
             "meaning": null,
+            "onScreen": null,
             "foundBy": null
           },
           "removed": false,
@@ -300,6 +303,7 @@
           "snippet": null,
           "transcript": null,
           "meaning": null,
+          "onScreen": null,
           "foundBy": null
         },
         "removed": false,
@@ -327,6 +331,7 @@
         "snippet": null,
         "transcript": null,
         "meaning": null,
+        "onScreen": null,
         "foundBy": null
       }
     },
@@ -671,6 +676,7 @@
           "snippet": null,
           "transcript": null,
           "meaning": null,
+          "onScreen": null,
           "foundBy": null
         },
         "canonicalUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -732,6 +738,7 @@
             "snippet": null,
             "transcript": null,
             "meaning": null,
+            "onScreen": null,
             "foundBy": null
           },
           "b": {
@@ -750,6 +757,7 @@
             "snippet": null,
             "transcript": null,
             "meaning": null,
+            "onScreen": null,
             "foundBy": null
           }
         }
@@ -777,6 +785,7 @@
           "snippet": null,
           "transcript": null,
           "meaning": null,
+          "onScreen": null,
           "foundBy": null
         },
         "source": {
@@ -795,6 +804,7 @@
           "snippet": null,
           "transcript": null,
           "meaning": null,
+          "onScreen": null,
           "foundBy": null
         },
         "notesAfter": "",
@@ -872,6 +882,7 @@
         "snippet": null,
         "transcript": null,
         "meaning": null,
+        "onScreen": null,
         "foundBy": null
       }
     },
@@ -2910,7 +2921,9 @@
     },
     "decide_ai_proposals": {
       "args": {
-        "ids": ["00000000-0000-4000-8000-0000000a1001"],
+        "ids": [
+          "00000000-0000-4000-8000-0000000a1001"
+        ],
         "accept": true,
         "name": null
       },
@@ -2924,6 +2937,125 @@
             "kind": "tag_items",
             "size": 1
           }
+        }
+      }
+    },
+    "get_screen_text": {
+      "args": {},
+      "response": {
+        "available": true,
+        "language": "tr",
+        "videos": 3,
+        "read": 2,
+        "failed": 0,
+        "pending": 1,
+        "lines": 5,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000f001",
+          "kind": "ocr",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "read",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 2,
+          "unitsTotal": 2,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        }
+      }
+    },
+    "read_screen_text": {
+      "args": {
+        "itemId": null
+      },
+      "response": {
+        "available": true,
+        "language": "tr",
+        "videos": 3,
+        "read": 2,
+        "failed": 0,
+        "pending": 1,
+        "lines": 5,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000f001",
+          "kind": "ocr",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "read",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 2,
+          "unitsTotal": 2,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
+        }
+      }
+    },
+    "cancel_screen_text": {
+      "args": {},
+      "response": {
+        "available": true,
+        "language": "tr",
+        "videos": 3,
+        "read": 2,
+        "failed": 0,
+        "pending": 1,
+        "lines": 5,
+        "job": {
+          "id": "00000000-0000-4000-8000-00000000f001",
+          "kind": "ocr",
+          "itemId": null,
+          "itemTitle": null,
+          "itemPlatform": null,
+          "status": "succeeded",
+          "phase": "read",
+          "bytesDone": null,
+          "bytesTotal": null,
+          "bytesEstimate": null,
+          "unitsDone": 2,
+          "unitsTotal": 2,
+          "preset": null,
+          "attempts": 1,
+          "maxAttempts": 1,
+          "errorCode": null,
+          "blockedReason": null,
+          "nextRetryAt": null,
+          "partialBytes": 0,
+          "createdAt": 1794000080000,
+          "updatedAt": 1794000090000,
+          "finishedAt": 1762700460000,
+          "canRetry": false,
+          "canCancel": false,
+          "canRemovePartial": false
         }
       }
     }

@@ -218,6 +218,7 @@ pub fn search_hybrid(
                     seq: 0,
                     metadata: false,
                     transcript: false,
+                    on_screen: false,
                 },
             )
         });

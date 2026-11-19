@@ -123,6 +123,13 @@ pub struct Setup {
     pub policy: Policy,
     /// `whisper-cli`; the fake one unless a test sets the real one.
     pub whisper: Option<PathBuf>,
+    /// The OCR the jobs open (F7.4): a fake's script of texts per frame.
+    pub ocr: Arc<dyn vv_ocr::Ocr>,
+}
+
+/// A fake OCR as the engine takes it; keep the `Arc<Fake>` to count calls.
+pub fn fake_ocr(f: Arc<vv_ocr::Fake>) -> Arc<dyn vv_ocr::Ocr> {
+    Arc::new(f)
 }
 
 impl Setup {
@@ -132,6 +139,7 @@ impl Setup {
             media: media_tools(),
             policy: Policy::default(),
             whisper: Some(PathBuf::from(env!("CARGO_BIN_EXE_vv-fake-whisper"))),
+            ocr: fake_ocr(vv_ocr::Fake::new("en", &[])),
         }
     }
 }
@@ -180,6 +188,7 @@ pub fn library(setup: Setup) -> Lib {
         offline: AtomicBool::new(false),
         owner: "test-owner".into(),
         secrets: secrets.clone() as Arc<dyn vv_secrets::SecretStore>,
+        ocr: setup.ocr,
     };
     Lib {
         dir,

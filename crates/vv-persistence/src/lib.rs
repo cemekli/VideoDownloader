@@ -16,6 +16,7 @@ pub mod note;
 pub mod portable;
 pub mod proposals;
 pub mod restore;
+pub mod screen_text;
 pub mod settings;
 pub mod transcripts;
 pub mod vectors;

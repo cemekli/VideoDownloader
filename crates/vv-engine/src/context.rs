@@ -140,6 +140,9 @@ pub struct Context<S: Store> {
     pub owner: String,
     /// The OS secret store (cookie-file sessions, ADR-0024).
     pub secrets: Arc<dyn vv_secrets::SecretStore>,
+    /// Reads text on screen (F7.4): Windows' own OCR in the app, a fake in
+    /// tests.
+    pub ocr: Arc<dyn vv_ocr::Ocr>,
 }
 
 impl<S: Store> Context<S> {

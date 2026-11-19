@@ -4440,6 +4440,7 @@ dependencies = [
  "vv-engine",
  "vv-import",
  "vv-netguard",
+ "vv-ocr",
  "vv-persistence",
  "vv-secrets",
  "vv-tools",
@@ -4471,6 +4472,7 @@ dependencies = [
  "vv-fuzz",
  "vv-import",
  "vv-netguard",
+ "vv-ocr",
  "vv-persistence",
  "vv-process",
  "vv-secrets",
@@ -4514,6 +4516,13 @@ dependencies = [
  "serde_json",
  "url",
  "vv-domain",
+]
+
+[[package]]
+name = "vv-ocr"
+version = "0.0.1"
+dependencies = [
+ "windows",
 ]
 
 [[package]]

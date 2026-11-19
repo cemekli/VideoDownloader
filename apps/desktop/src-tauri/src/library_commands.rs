@@ -133,6 +133,10 @@ pub struct LibraryItemDto {
     /// Passages close in meaning to the search text (F7.2); whole chunks,
     /// nothing highlighted.
     pub meaning: Option<TranscriptMatchesDto>,
+    /// Where the search text was read on screen (F7.4, SEA-08): kept apart
+    /// from speech; `provenance` is `ocr`, `transcriptId` is empty and each
+    /// moment's `segmentId` names an on-screen line.
+    pub on_screen: Option<TranscriptMatchesDto>,
     /// Why a hybrid result is where it is (SEA-07).
     pub found_by: Option<FoundByDto>,
 }
@@ -253,6 +257,7 @@ fn field_name(f: Field) -> &'static str {
         Field::Tags => "tags",
         Field::Transcript => "transcript",
         Field::Meaning => "meaning",
+        Field::OnScreen => "on_screen",
     }
 }
 
@@ -303,6 +308,7 @@ pub(crate) fn item_dto(
         snippet,
         transcript: None,
         meaning: None,
+        on_screen: None,
         found_by: None,
     }
 }
@@ -442,6 +448,7 @@ pub(crate) fn page_dto(
             d.tags = tag_names(c, &h.item.id)?;
             d.transcript = h.transcript.as_ref().map(matches_dto);
             d.meaning = h.meaning.as_ref().map(matches_dto);
+            d.on_screen = h.on_screen.as_ref().map(matches_dto);
             d.found_by = h
                 .fusion
                 .map(|Fusion { words, meaning }| FoundByDto { words, meaning });

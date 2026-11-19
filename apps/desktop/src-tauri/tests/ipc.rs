@@ -300,6 +300,9 @@ fn main_capability_grants_only_app_commands() {
         "allow-decide-ai-proposal",
         "allow-list-ai-proposal-groups",
         "allow-decide-ai-proposals",
+        "allow-get-screen-text",
+        "allow-read-screen-text",
+        "allow-cancel-screen-text",
         "allow-list-transcripts",
         "allow-get-transcript",
         "allow-fetch-captions",
@@ -1734,6 +1737,37 @@ fn model_commands_match_contract_and_need_consent() {
     assert_eq!(e["code"], "MODEL_MISSING");
     let c2 = ok(&w, "cancel_search_index", json!({}));
     assert!(c2["active"].is_null());
+    // F7.4: reading text on screen needs Windows' OCR; elsewhere (and on a
+    // Windows without an OCR language) it is refused, cancel is a no-op.
+    let st = ok(&w, "get_screen_text", json!({}));
+    assert_same_shape(
+        &st,
+        &with_nulls_of(&st, &spec("get_screen_text")),
+        "get_screen_text",
+    );
+    assert_eq!(st["read"], 0);
+    assert!(st["job"].is_null());
+    if st["available"] == false {
+        assert!(st["language"].is_null());
+        let e = invoke(
+            &w,
+            "read_screen_text",
+            json!({ "itemId": null }),
+            app_origin(),
+        )
+        .unwrap_err();
+        assert_eq!(e["code"], "MODEL_MISSING");
+    } else {
+        let r = ok(&w, "read_screen_text", json!({ "itemId": null }));
+        assert_eq!(r["job"]["kind"], "ocr");
+    }
+    let cs = ok(&w, "cancel_screen_text", json!({}));
+    assert_same_shape(
+        &cs,
+        &with_nulls_of(&cs, &spec("cancel_screen_text")),
+        "cancel_screen_text",
+    );
+
     let text = g.to_string();
     assert!(!text.contains(&*d.path().to_string_lossy()), "{text}");
     // A remote API is refused until the user agrees text goes there
@@ -2202,6 +2236,56 @@ fn transcript_commands_match_contract_and_queue_captions() {
     assert_eq!(
         (e["code"].as_str(), e["diagnosticId"].as_str()),
         (Some("INPUT_REJECTED"), Some("moment-gone"))
+    );
+
+    // F7.4, AC-41: text read on screen finds the item, apart from speech,
+    // and its moment opens at the time the text appeared.
+    use vv_persistence::screen_text::{self, Line, Source};
+    screen_text::save(
+        db.writer(),
+        &Source {
+            item_id: &id,
+            asset_id: None,
+            provider: "test",
+            language: "tr",
+            config_version: 1,
+            fingerprint: "size:1",
+        },
+        4,
+        &[Line {
+            start_ms: 12_000,
+            end_ms: 18_000,
+            text: "HARRIER JUMP JET".into(),
+        }],
+        1_794_000_000_000,
+    )
+    .unwrap();
+    let on = ok(
+        &w,
+        "list_items",
+        json!({ "query": { "text": "harrier", "sort": "relevance" } }),
+    );
+    assert_eq!(on["total"], 1);
+    let it = &on["items"][0];
+    assert!(it["transcript"].is_null());
+    let sc = &it["onScreen"];
+    assert_same_shape(
+        sc,
+        &with_nulls_of(sc, shape),
+        "list_items.items[0].onScreen",
+    );
+    assert_eq!(
+        (sc["provenance"].as_str(), sc["language"].as_str()),
+        (Some("ocr"), Some("tr"))
+    );
+    assert_eq!(sc["moments"][0]["startMs"], 12_000);
+    assert_eq!(sc["moments"][0]["snippet"]["field"], "on_screen");
+    let line = sc["moments"][0]["segmentId"].as_str().unwrap().to_owned();
+    let om = ok(&w, "get_moment", json!({ "segmentId": line }));
+    assert_same_shape(&om, &spec("get_moment"), "get_moment (on screen)");
+    assert_eq!(
+        (om["startMs"].as_i64(), om["transcriptId"].as_str()),
+        (Some(12_000), Some(""))
     );
 
     for v in [&l, &r, &g, &x, &found, &m, &note] {

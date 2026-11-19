@@ -15,7 +15,7 @@
 //! and block themselves, waiting ones are blocked by `jobs::set_offline`.
 
 use crate::context::{Context, Store};
-use crate::{captions, download, embed, metadata, models, storage_move, transcribe};
+use crate::{captions, download, embed, metadata, models, screen_text, storage_move, transcribe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -32,11 +32,16 @@ pub const POOLS: &[(&[JobKind], usize)] = &[
     (&[JobKind::ModelDownload], 1),
     // Small text files; two runs of yt-dlp each (F6.2).
     (&[JobKind::FetchCaptions], 2),
-    // One heavy AI job at a time (§13.3): whisper.cpp uses most cores, and
-    // the embedding API is usually the user's Ollama on the same PC (F6.2,
-    // F6.6, F7.1).
+    // One heavy AI job at a time (§13.3): whisper.cpp uses most cores, the
+    // embedding API is usually the user's Ollama on the same PC, and OCR
+    // decodes video (F6.2, F6.6, F7.1, F7.4).
     (
-        &[JobKind::Transcription, JobKind::Embedding, JobKind::Reindex],
+        &[
+            JobKind::Transcription,
+            JobKind::Embedding,
+            JobKind::Reindex,
+            JobKind::Ocr,
+        ],
         1,
     ),
 ];
@@ -211,6 +216,7 @@ pub fn dispatch<S: Store>(cx: &Context<S>, kind: JobKind, lease: jobs::Lease) {
         JobKind::FetchCaptions => captions::run(cx, lease),
         JobKind::Transcription => transcribe::run(cx, lease),
         JobKind::Embedding | JobKind::Reindex => embed::run(cx, lease),
+        JobKind::Ocr => screen_text::run(cx, lease),
         _ => {}
     }
 }
@@ -263,6 +269,8 @@ fn clean_staging<S: Store>(cx: &Context<S>) {
         let name = e.file_name().to_string_lossy().into_owned();
         let job_id = if let Some(id) = name.strip_prefix("asr-") {
             id // `asr-<job-id>` (transcribe::staging_dir)
+        } else if let Some(id) = name.strip_prefix("ocr-") {
+            id // `ocr-<job-id>` (screen_text::staging_dir)
         } else {
             name.strip_prefix("meta-").map_or(name.as_str(), |rest| {
                 // `meta-<job-id>-<generation>`
@@ -277,7 +285,7 @@ fn clean_staging<S: Store>(cx: &Context<S>) {
             Some(JobStatus::Succeeded) => false,
             // A transcription's WAV and checkpoint matter only to the job
             // that runs again (F6.3); an ended one keeps nothing.
-            Some(s) if name.starts_with("asr-") => !s.is_terminal(),
+            Some(s) if name.starts_with("asr-") || name.starts_with("ocr-") => !s.is_terminal(),
             Some(_) => !name.starts_with("meta-"),
         };
         if !keep {

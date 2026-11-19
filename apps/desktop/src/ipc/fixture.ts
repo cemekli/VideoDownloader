@@ -38,9 +38,9 @@ export const fixtureAssetId = (itemId: string) => `${itemId.slice(0, 24)}a${item
 
 /** `download-error`: the first try of every download fails on the network; a retry succeeds (Journey 6).
  *  `transcripts`: the first YouTube item starts with the real Turkish captions fixture, so search finds its words (F6.4). */
-export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts" | "low-memory" | "drive-moved";
+export type FixtureScenario = "default" | "empty" | "many" | "error" | "slow" | "first-run" | "download-error" | "login-required" | "captions-error" | "transcripts" | "low-memory" | "drive-moved" | "no-ocr";
 
-export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript" | "meaning" | "foundBy"> {
+export interface FixtureRecord extends Omit<LibraryItemDto, "snippet" | "removedAt" | "transcript" | "meaning" | "onScreen" | "foundBy"> {
   creator: string | null;
   description: string | null;
   canonicalUrl: string | null;
@@ -209,7 +209,7 @@ function matchRecord(r: FixtureRecord, ts: string[]): Snippet | null | undefined
 /** Where search terms were said in an item (F6.4); the fixture transcripts answer it. */
 export type SpokenMatch = (itemId: string, ts: string[]) => TranscriptMatchesDto | null;
 
-export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW, org?: OrganizeState, spoken?: SpokenMatch): ItemPage {
+export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTURE_NOW, org?: OrganizeState, spoken?: SpokenMatch, shown?: SpokenMatch): ItemPage {
   const smart = q.smartCollectionId ? org?.smart.find((x) => x.id === q.smartCollectionId)?.rules : undefined;
   if (q.smartCollectionId && !smart) throw new IpcError("INTERNAL_ERROR", "list_items: error.internal");
   const text = smart?.text.trim() ? `${smart.text} ${q.text}` : q.text;
@@ -227,8 +227,8 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
     .filter((r) => q.view !== "recent" || r.addedAt >= now - RECENT_DAYS * DAY)
     .filter((r) => q.platforms.length === 0 || q.platforms.includes(r.platform))
     .filter((r) => q.kinds.length === 0 || q.kinds.includes(r.kind))
-    .map((r) => ({ r, snippet: ts.length ? matchRecord(r, ts) : null, said: ts.length && spoken ? spoken(r.id, ts) : null }))
-    .filter((x) => x.snippet !== undefined || x.said !== null);
+    .map((r) => ({ r, snippet: ts.length ? matchRecord(r, ts) : null, said: ts.length && spoken ? spoken(r.id, ts) : null, seen: ts.length && shown ? shown(r.id, ts) : null }))
+    .filter((x) => x.snippet !== undefined || x.said !== null || x.seen !== null);
   const dir = q.descending ? -1 : 1;
   const nullsLast = (a: number | null, b: number | null) => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : dir * (a - b));
   rows = rows.sort((a, b) => {
@@ -253,13 +253,13 @@ export function queryRecords(records: FixtureRecord[], q: ListQuery, now = FIXTU
     total: rows.length,
     offset: q.offset,
     notice,
-    items: page.map(({ r, snippet, said }) => toDto(r, snippet ?? null, said)),
+    items: page.map(({ r, snippet, said, seen }) => toDto(r, snippet ?? null, said, seen)),
     // The fixture library has no embedding API: words only (F7.2).
     meaning: ts.length && q.sort === "relevance" ? "no_api" : null,
   };
 }
 
-function toDto(r: FixtureRecord, snippet: Snippet | null, transcript: TranscriptMatchesDto | null = null): LibraryItemDto {
+function toDto(r: FixtureRecord, snippet: Snippet | null, transcript: TranscriptMatchesDto | null = null, onScreen: TranscriptMatchesDto | null = null): LibraryItemDto {
   return {
     id: r.id,
     title: r.title,
@@ -276,6 +276,7 @@ function toDto(r: FixtureRecord, snippet: Snippet | null, transcript: Transcript
     snippet,
     transcript,
     meaning: null,
+    onScreen,
     foundBy: null,
   };
 }
@@ -323,7 +324,7 @@ export interface FixtureLibrary extends LibraryClient {
   emitImportStatus(s: ImportStatus): void;
 }
 
-export function createFixtureLibrary(records: FixtureRecord[], scenario: FixtureScenario = "default", spoken?: SpokenMatch): FixtureLibrary {
+export function createFixtureLibrary(records: FixtureRecord[], scenario: FixtureScenario = "default", spoken?: SpokenMatch, shown?: SpokenMatch): FixtureLibrary {
   const listeners = new Set<(s: ImportStatus) => void>();
   const latency = scenario === "slow" ? 60_000 : 0;
   let saved = 0;
@@ -347,7 +348,7 @@ export function createFixtureLibrary(records: FixtureRecord[], scenario: Fixture
     async listItems(q) {
       if (scenario === "error") return fail();
       if (latency) await delay(latency);
-      return structuredClone(queryRecords(records, q, FIXTURE_NOW, org, spoken));
+      return structuredClone(queryRecords(records, q, FIXTURE_NOW, org, spoken, shown));
     },
     async getItem(id) {
       const r = records.find((x) => x.id === id && !x.removed);

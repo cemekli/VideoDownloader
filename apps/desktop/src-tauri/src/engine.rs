@@ -159,6 +159,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         offline: AtomicBool::new(false),
         owner: format!("app-{}-{}", std::process::id(), new_id()),
         secrets: Arc::from(vv_secrets::os_store(&lib.data_dir().join("secrets"))),
+        ocr: Arc::new(vv_ocr::SystemOcr) as Arc<dyn vv_ocr::Ocr>,
     };
     if app
         .state::<EngineState>()

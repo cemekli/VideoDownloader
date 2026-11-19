@@ -104,6 +104,110 @@ pub const AUDIO_WAV_OUTPUT: &[&str] = &[
     "-n",
 ];
 
+/// Still frames of the first video stream as PNG, for reading the text on
+/// screen (F7.4, AI-C01, ADR-0039). Which frames is [`frames_args`]'s
+/// filter; audio, subtitles and data are dropped, a frame is written only
+/// when the filter passes one (`vfr`), and `-n` never overwrites.
+pub const FRAMES_OUTPUT: &[&str] = &[
+    "-map",
+    "0:v:0",
+    "-an",
+    "-sn",
+    "-dn",
+    "-fps_mode",
+    "vfr",
+    "-c:v",
+    "png",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "image2",
+    "-n",
+];
+
+/// The times of the written frames, one block per frame, relative to the
+/// working directory of the run (a path in a filter needs escaping).
+pub const FRAME_LIST: &str = "frames.txt";
+
+/// File names of the frames in their folder: `f-00001.png`, … in order.
+pub const FRAME_PATTERN: &str = "f-%05d.png";
+
+/// Which frames [`frames_args`] keeps: never every frame (AI-C01).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FramePick {
+    /// A frame at least this often (sparse sampling).
+    pub every_ms: u64,
+    /// A scene change gives a frame when the last one is this far back.
+    pub scene_gap_ms: u64,
+    /// Scene change threshold in thousandths (300 = 0.3).
+    pub scene_milli: u32,
+    /// The run stops after this many frames (AI-C02 budget).
+    pub max_frames: u32,
+    /// Wider frames are scaled down to this width.
+    pub max_width: u32,
+    /// Decode only keyframes: fast, and most cuts start one. A file with
+    /// few keyframes (a screen recording) needs a full pass.
+    pub keyframes_only: bool,
+}
+
+fn secs(ms: u64) -> String {
+    format!("{}.{:03}", ms / 1000, ms % 1000)
+}
+
+/// The `-vf` filter of [`frames_args`].
+pub fn frame_filter(p: &FramePick) -> String {
+    // A full pass looks at four frames a second: cheaper scene scores, and
+    // text on screen stays longer than a quarter second.
+    let thin = if p.keyframes_only { "" } else { "fps=4," };
+    format!(
+        "{thin}select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,{every})+gt(scene\\,{scene})*gte(t-prev_selected_t\\,{gap})',\
+         scale='min(iw\\,{w})':-2,metadata=mode=print:file={FRAME_LIST}",
+        every = secs(p.every_ms),
+        scene = secs(u64::from(p.scene_milli)),
+        gap = secs(p.scene_gap_ms),
+        w = p.max_width,
+    )
+}
+
+/// Full ffmpeg argv for the frames of one local file, written as
+/// [`FRAME_PATTERN`] into `dir`. Run it with `dir` as the working directory:
+/// the frame list goes there.
+pub fn frames_args(input: &Path, dir: &Path, p: &FramePick) -> Result<Vec<OsString>, ArgsError> {
+    absolute(input)?;
+    absolute(dir)?;
+    let mut v: Vec<OsString> = strs(COMMON).collect();
+    v.push("-nostdin".into());
+    v.extend(strs(INPUT));
+    if p.keyframes_only {
+        v.push("-skip_frame".into());
+        v.push("nokey".into());
+    }
+    v.push("-i".into());
+    v.push(file_arg(input));
+    v.push("-vf".into());
+    v.push(frame_filter(p).into());
+    v.push("-frames:v".into());
+    v.push(p.max_frames.to_string().into());
+    v.extend(strs(FRAMES_OUTPUT));
+    v.push(file_arg(&dir.join(FRAME_PATTERN)));
+    Ok(v)
+}
+
+/// Frame times in ms from the frame list, in written order (frame `k` is
+/// file `k + 1`). Lines other than `frame:… pts_time:…` are skipped.
+pub fn parse_frame_list(text: &str) -> Vec<i64> {
+    text.lines()
+        .filter(|l| l.starts_with("frame:"))
+        .filter_map(|l| {
+            let t = l
+                .split_whitespace()
+                .find_map(|w| w.strip_prefix("pts_time:"))?;
+            let s: f64 = t.parse().ok()?;
+            (s.is_finite() && s >= 0.0).then(|| (s * 1000.0).round() as i64)
+        })
+        .collect()
+}
+
 /// `file:` + the path, one argv entry.
 pub fn file_arg(path: &Path) -> OsString {
     let mut v = OsString::from("file:");

@@ -21,8 +21,8 @@ export interface SnippetPart {
 
 /** A real substring of one field. Rendered as text, never as HTML (SEA-03). */
 export interface Snippet {
-  /** `transcript`: words said in the video (F6.4). `meaning`: a passage close in meaning (F7.2), nothing highlighted. */
-  field: "title" | "description" | "creator" | "notes" | "tags" | "transcript" | "meaning";
+  /** `transcript`: words said in the video (F6.4). `meaning`: a passage close in meaning (F7.2), nothing highlighted. `on_screen`: text read on screen (F7.4). */
+  field: "title" | "description" | "creator" | "notes" | "tags" | "transcript" | "meaning" | "on_screen";
   parts: SnippetPart[];
   cutStart: boolean;
   cutEnd: boolean;
@@ -50,6 +50,11 @@ export interface LibraryItemDto {
   transcript: TranscriptMatchesDto | null;
   /** Passages close in meaning to the search text (F7.2); only in a hybrid result. */
   meaning: TranscriptMatchesDto | null;
+  /**
+   * Where the search text was read on screen (F7.4, SEA-08), kept apart from speech: `provenance` is
+   * `ocr`, `transcriptId` is empty, each moment's `segmentId` names an on-screen line; only with a search text.
+   */
+  onScreen: TranscriptMatchesDto | null;
   /** Why a hybrid result is where it is (SEA-07): its rank in each search, null when not found that way. */
   foundBy: FoundBy | null;
 }
@@ -71,7 +76,8 @@ export interface MomentDto {
 export interface TranscriptMatchesDto {
   transcriptId: string;
   language: string;
-  provenance: TranscriptProvenance;
+  /** `ocr`: text read on screen (F7.4). */
+  provenance: TranscriptProvenance | "ocr";
   /** Only up to `coveredMs` was transcribed. */
   partial: boolean;
   coveredMs: number | null;
@@ -634,7 +640,7 @@ export interface ToolStatus {
   checkedAt: number | null;
 }
 
-export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions" | "transcription" | "embedding" | "reindex";
+export type JobKind = "download" | "metadata" | "storage_move" | "model_download" | "fetch_captions" | "transcription" | "embedding" | "reindex" | "ocr";
 export type JobStatus = "queued" | "blocked" | "running" | "retry_wait" | "pausing" | "paused" | "canceling" | "canceled" | "succeeded" | "failed";
 
 export interface JobDto {
@@ -961,6 +967,28 @@ export interface ModelClient {
   buildSearchIndex(rebuild: boolean): Promise<SearchIndexDto>;
   /** Cancels a build; the active index stays (AC-24). */
   cancelSearchIndex(): Promise<SearchIndexDto>;
+  getScreenText(): Promise<ScreenTextDto>;
+  /** Reads the text on screen of every video not read with its file (`itemId` null), or of one item again. MODEL_MISSING without an OCR language. */
+  readScreenText(itemId: string | null): Promise<ScreenTextDto>;
+  /** Cancels the run for all videos; what it read stays. */
+  cancelScreenText(): Promise<ScreenTextDto>;
+}
+
+/** Text on screen (F7.4, ADR-0039): Windows' own OCR, what was read, the run for all videos. */
+export interface ScreenTextDto {
+  /** This PC can read text on screen (Windows with an OCR language). */
+  available: boolean;
+  /** The language it reads (BCP 47). */
+  language: string | null;
+  /** Videos in the library / read with their file / could not be read / a run would read now. */
+  videos: number;
+  read: number;
+  failed: number;
+  pending: number;
+  /** Lines of text on screen stored. */
+  lines: number;
+  /** The open or last run for all videos (`ocr`). */
+  job: JobDto | null;
 }
 
 /** Where a transcript came from (SPEC §11.5). */

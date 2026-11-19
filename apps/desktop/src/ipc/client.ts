@@ -50,6 +50,7 @@ import type {
   ModelClient,
   ModelOverview,
   SearchIndexDto,
+  ScreenTextDto,
   AiProcessing,
   TranscriptClient,
   ItemTranscripts,
@@ -70,6 +71,7 @@ import { IpcError } from "./errors";
 import { createFixtureLibrary, scenarioRecords, type FixtureLibrary, type FixtureRecord, type FixtureScenario } from "./fixture";
 import { createFixtureData } from "./fixtureData";
 import { createFixtureDownloads } from "./fixtureDownloads";
+import { createFixtureScreenText } from "./fixtureScreenText";
 import { createFixtureModels, fixtureMachine } from "./fixtureModels";
 import { createFixtureTranscripts } from "./fixtureTranscripts";
 import { createFixtureSuggest } from "./fixtureSuggest";
@@ -118,7 +120,8 @@ export type FixtureClient = BackendClient & Pick<FixtureLibrary, "emitImportStat
 export function createFixtureClient(records?: FixtureRecord[], scenario: FixtureScenario = "default"): FixtureClient {
   const recs = records ?? scenarioRecords(scenario);
   const transcripts = createFixtureTranscripts(recs, undefined, scenario);
-  const library = createFixtureLibrary(recs, scenario, transcripts.spokenMatches);
+  const screen = createFixtureScreenText(recs, scenario);
+  const library = createFixtureLibrary(recs, scenario, transcripts.spokenMatches, screen.screenMatches);
   const downloads = createFixtureDownloads(recs, scenario);
   const data = createFixtureData(recs, scenario, library);
   const models = createFixtureModels(scenario);
@@ -130,6 +133,11 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...models,
     ...transcripts,
     ...suggest,
+    getScreenText: () => screen.getScreenText(),
+    readScreenText: (id) => screen.readScreenText(id),
+    cancelScreenText: () => screen.cancelScreenText(),
+    // An on-screen line (F7.4) opens at its own time; the rest are transcript segments.
+    getMoment: async (id) => screen.screenMoment(id) ?? transcripts.getMoment(id),
     clearFinishedAiJobs: async () => transcripts.clearOwnJobs(),
     getAiProcessing: async () => ({ machine: fixtureMachine(scenario, (await data.getSettings()).transcriptionCpu), models: await models.listModels(), jobs: transcripts.aiJobs(), searchIndex: await models.getSearchIndex() }),
     // Transcription jobs live with the fixture transcripts; the rest are downloads.
@@ -285,6 +293,9 @@ const modelCommands: ModelClient = {
   clearEmbeddingApi: () => call<SearchIndexDto>("clear_embedding_api"),
   buildSearchIndex: (rebuild: boolean) => call<SearchIndexDto>("build_search_index", { rebuild }),
   cancelSearchIndex: () => call<SearchIndexDto>("cancel_search_index"),
+  getScreenText: () => call<ScreenTextDto>("get_screen_text"),
+  readScreenText: (itemId) => call<ScreenTextDto>("read_screen_text", { itemId }),
+  cancelScreenText: () => call<ScreenTextDto>("cancel_screen_text"),
   downloadModel: (modelId, agreed) => call<ModelOverview>("download_model", { modelId, agreed }),
   verifyModel: (modelId) => call<ModelOverview>("verify_model", { modelId }),
   removeModel: (modelId) => call<ModelOverview>("remove_model", { modelId }),
@@ -348,7 +359,7 @@ export function createTauriClient(): BackendClient {
   };
 }
 
-const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory", "drive-moved"];
+const SCENARIOS: FixtureScenario[] = ["default", "empty", "many", "error", "slow", "first-run", "download-error", "login-required", "captions-error", "transcripts", "low-memory", "drive-moved", "no-ocr"];
 
 /** `?fixture=empty|many|error|slow|first-run|download-error|login-required|captions-error|transcripts|low-memory` picks a fixture data set (fixture mode only). */
 export function scenarioFromUrl(search: string = typeof location === "undefined" ? "" : location.search): FixtureScenario {
