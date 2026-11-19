@@ -114,6 +114,8 @@ export function App({ client }: { client?: BackendClient }) {
   const addUrlOpener = useRef<HTMLElement | null>(null);
   /** Item to select (and maybe inspect) once the list shows it. */
   const [reveal, setReveal] = useState<{ id: string; inspect: boolean } | null>(null);
+  /** Item whose details are open beside the Suggested tags review. */
+  const [reviewItem, setReviewItem] = useState<string | null>(null);
 
   // A link typed or pasted into search is offered to Add URL instead of
   // being searched for (§9.4 Ctrl+K capture).
@@ -605,18 +607,17 @@ export function App({ client }: { client?: BackendClient }) {
           ) : scope.kind === "suggestions" ? (
             <SuggestionReview
               client={c}
-              reloadKey={reloadKey}
+              reloadKey={reloadKey + org.version * 1000}
               onDecided={(m, op) => {
                 toast(m, "info", !!op?.undo);
                 org.refresh();
               }}
               onOpenItem={(id) => {
-                setScope({ kind: "none" });
-                setView("all");
-                setText("");
-                setPlatforms([]);
-                setKinds([]);
-                setReveal({ id, inspect: true });
+                // Details open beside the review; the item may not be on the library's loaded page.
+                setReviewItem(id);
+                lastFocus.current = document.activeElement as HTMLElement | null;
+                if (compact) setDrawerOpen(true);
+                else setPrefs({ inspectorOpen: true });
               }}
             />
           ) : scope.kind === "sessions" ? (
@@ -643,7 +644,7 @@ export function App({ client }: { client?: BackendClient }) {
         {inspectorVisible && (
           <Inspector
             client={c}
-            itemId={view === "removed" || special ? null : activeId}
+            itemId={scope.kind === "suggestions" ? reviewItem : view === "removed" || special ? null : activeId}
             selectedCount={selection.ids.size}
             drawer={compact}
             onClose={closeInspector}

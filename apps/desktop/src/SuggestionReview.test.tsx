@@ -52,6 +52,14 @@ describe("Suggested tags review", () => {
     // The group lists its videos.
     await user.click(within(first).getByTestId("review-toggle"));
     expect(within(first).getAllByTestId("review-item")).toHaveLength(2);
+    // A video's title opens its details beside the review, also when the
+    // library's loaded page does not hold it.
+    const title = within(within(first).getAllByTestId("review-item")[0]!).getAllByRole("button")[0]!;
+    const name = title.textContent!;
+    await user.click(title);
+    const inspector = await screen.findByTestId("inspector");
+    await waitFor(() => expect(inspector).toHaveTextContent(name));
+    expect(screen.getByTestId("suggestion-review")).toBeInTheDocument();
 
     await user.click(within(first).getByTestId("review-accept"));
     await waitFor(() => expect(group("kaydı")).toBeUndefined());
