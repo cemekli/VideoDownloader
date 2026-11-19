@@ -194,6 +194,7 @@ export function createFixtureOrganize(records: FixtureRecord[], s: OrganizeState
           removed: records.filter((r) => r.removed).length,
           duplicates: s.candidates.filter((c) => c.status === "open" && !byId(c.a)?.removed && !byId(c.b)?.removed).length,
           orphans: s.orphans.length,
+          suggestions: 0,
         },
       });
     },

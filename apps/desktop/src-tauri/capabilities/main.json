@@ -108,6 +108,8 @@
     "allow-list-ai-proposals",
     "allow-suggest-tags",
     "allow-decide-ai-proposal",
+    "allow-list-ai-proposal-groups",
+    "allow-decide-ai-proposals",
     "allow-list-transcripts",
     "allow-get-transcript",
     "allow-fetch-captions",

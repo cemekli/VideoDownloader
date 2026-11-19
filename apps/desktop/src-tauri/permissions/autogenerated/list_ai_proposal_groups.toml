@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-ai-proposal-groups"
+description = "Enables the list_ai_proposal_groups command without any pre-configured scope."
+commands.allow = ["list_ai_proposal_groups"]
+
+[[permission]]
+identifier = "deny-list-ai-proposal-groups"
+description = "Denies the list_ai_proposal_groups command without any pre-configured scope."
+commands.deny = ["list_ai_proposal_groups"]

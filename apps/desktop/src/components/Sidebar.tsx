@@ -6,7 +6,7 @@ import { MenuButton } from "./Menu";
 import { t } from "../i18n";
 
 /** What the main area shows besides the plain views (STATE.md F2.1). */
-export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" } | { kind: "downloads" } | { kind: "sessions" } | { kind: "ai" };
+export type Scope = { kind: "none" } | { kind: "collection"; id: string } | { kind: "smart"; id: string } | { kind: "tag"; id: string } | { kind: "duplicates" } | { kind: "downloads" } | { kind: "sessions" } | { kind: "ai" } | { kind: "suggestions" };
 
 export type SidebarAction =
   | { kind: "new-collection"; parentId: string | null }
@@ -94,6 +94,9 @@ export function Sidebar({
             {v === "favorites" && <li>{navButton(t("downloads.title"), is("downloads"), () => onScope({ kind: "downloads" }), "nav-downloads")}</li>}
             {v === "favorites" && <li>{navButton(t("sessions.title"), is("sessions"), () => onScope({ kind: "sessions" }), "nav-sessions")}</li>}
             {v === "favorites" && <li>{navButton(t("ai.title"), is("ai"), () => onScope({ kind: "ai" }), "nav-ai")}</li>}
+            {v === "favorites" && ((data?.counts.suggestions ?? 0) > 0 || is("suggestions")) && (
+              <li>{navButton(t("review.title"), is("suggestions"), () => onScope({ kind: "suggestions" }), "nav-suggestions", count(data?.counts.suggestions))}</li>
+            )}
           </Fragment>
         ))}
       </ul>

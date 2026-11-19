@@ -12,6 +12,7 @@ import { Onboarding } from "./components/Onboarding";
 import { Player } from "./components/Player";
 import { SessionsView } from "./components/Sessions";
 import { AiProcessingView } from "./components/AiProcessing";
+import { SuggestionReview } from "./components/SuggestionReview";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Results } from "./components/Results";
 import { ResizeHandle } from "./components/ResizeHandle";
@@ -326,7 +327,7 @@ export function App({ client }: { client?: BackendClient }) {
         void org.undo();
         return;
       }
-      if (e.key === "Delete" && !inTextField(e.target) && selectedIds.length > 0 && view !== "removed" && scope.kind !== "duplicates" && scope.kind !== "downloads" && scope.kind !== "sessions" && scope.kind !== "ai") {
+      if (e.key === "Delete" && !inTextField(e.target) && selectedIds.length > 0 && view !== "removed" && scope.kind !== "duplicates" && scope.kind !== "downloads" && scope.kind !== "sessions" && scope.kind !== "ai" && scope.kind !== "suggestions") {
         e.preventDefault();
         void org.actions.remove(selectedIds);
         return;
@@ -399,12 +400,14 @@ export function App({ client }: { client?: BackendClient }) {
               ? t("sessions.title")
             : scope.kind === "ai"
               ? t("ai.title")
+            : scope.kind === "suggestions"
+              ? t("review.title")
             : platforms.length === 1 && view === "all"
               ? PLATFORM_LABEL[platforms[0]!]
               : VIEW_LABEL[view];
   const smartInvalid = scope.kind === "smart" && !!sb?.smartCollections.find((x) => x.id === scope.id)?.invalid;
   /** Screens that are not a list of library items. */
-  const special = scope.kind === "duplicates" || scope.kind === "downloads" || scope.kind === "sessions" || scope.kind === "ai";
+  const special = scope.kind === "duplicates" || scope.kind === "downloads" || scope.kind === "sessions" || scope.kind === "ai" || scope.kind === "suggestions";
   const total = data.status === "ready" && !special ? data.total : null;
 
   const importButtons = (
@@ -599,6 +602,23 @@ export function App({ client }: { client?: BackendClient }) {
           )}
           {scope.kind === "ai" ? (
             <AiProcessingView client={c} notify={(m, tone) => toast(m, tone)} onSettings={updateSettings} />
+          ) : scope.kind === "suggestions" ? (
+            <SuggestionReview
+              client={c}
+              reloadKey={reloadKey}
+              onDecided={(m, op) => {
+                toast(m, "info", !!op?.undo);
+                org.refresh();
+              }}
+              onOpenItem={(id) => {
+                setScope({ kind: "none" });
+                setView("all");
+                setText("");
+                setPlatforms([]);
+                setKinds([]);
+                setReveal({ id, inspect: true });
+              }}
+            />
           ) : scope.kind === "sessions" ? (
             <SessionsView client={c} notify={(m, tone) => toast(m, tone)} />
           ) : scope.kind === "downloads" ? (

@@ -95,6 +95,8 @@ pub struct SidebarCounts {
     pub removed: i64,
     pub duplicates: i64,
     pub orphans: i64,
+    /// Pending tag suggestions of live items (F7.3 review screen).
+    pub suggestions: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -486,6 +488,8 @@ pub mod ops {
             removed: count(c, "SELECT count(*) FROM library_item WHERE removed_at IS NOT NULL")?,
             duplicates: organize::open_duplicate_count(c).map_err(lib("sidebar-duplicates"))?,
             orphans: count(c, "SELECT count(*) FROM orphan_media")?,
+            suggestions: vv_persistence::proposals::pending_count(c)
+                .map_err(|_| internal("sidebar-suggestions"))?,
         };
         Ok(Sidebar {
             collections,
@@ -1055,7 +1059,8 @@ mod tests {
                 inbox: 1,
                 removed: 1,
                 duplicates: 0,
-                orphans: 0
+                orphans: 0,
+                suggestions: 0
             }
         );
         assert!(!s.smart_collections[0].invalid);

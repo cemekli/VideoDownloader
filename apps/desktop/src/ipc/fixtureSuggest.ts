@@ -6,7 +6,7 @@
 // is an ordinary undoable "add tag".
 import { IpcError } from "./errors";
 import type { FixtureRecord } from "./fixture";
-import type { OrganizeClient, ProposalDto, SuggestApiDto, SuggestClient, SuggestRunDto, TagSuggestDto } from "./types";
+import type { OrganizeClient, ProposalDto, ProposalGroupDto, SuggestApiDto, SuggestClient, SuggestRunDto, TagSuggestDto } from "./types";
 
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
@@ -20,7 +20,7 @@ export function fixtureTags(title: string | null): string[] {
   return [...new Set(words.map((w) => w.toLocaleLowerCase("tr")))].slice(0, 3);
 }
 
-export function createFixtureSuggest(records: FixtureRecord[], organize: Pick<OrganizeClient, "tagItems">, stepMs = 200): SuggestClient {
+export function createFixtureSuggest(records: FixtureRecord[], organize: Pick<OrganizeClient, "tagItems" | "getSidebar">, stepMs = 200): SuggestClient {
   let api: SuggestApiDto | null = null;
   let run: SuggestRunDto | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -32,7 +32,11 @@ export function createFixtureSuggest(records: FixtureRecord[], organize: Pick<Or
   let seq = 0;
 
   const pending = (itemId: string) => all.filter((p) => p.itemId === itemId && p.status === "pending").map(({ status: _s, ...p }) => p);
-  const view = (): TagSuggestDto => structuredClone({ api, run, pending: all.filter((p) => p.status === "pending").length });
+  const liveIds = () => new Set(records.filter((r) => !r.removed).map((r) => r.id));
+  const view = (): TagSuggestDto => {
+    const live = liveIds();
+    return structuredClone({ api, run, pending: all.filter((p) => p.status === "pending" && live.has(p.itemId)).length });
+  };
 
   const suggest = (r: FixtureRecord, force: boolean): "asked" | "current" | "no_text" => {
     if (!api) throw err("MODEL_MISSING", "suggest_tags");
@@ -115,6 +119,33 @@ export function createFixtureSuggest(records: FixtureRecord[], organize: Pick<Or
       const op = accept ? await organize.tagItems([p.itemId], (name ?? "").trim() || p.value) : null;
       p.status = accept ? "accepted" : "rejected";
       return { proposals: pending(p.itemId), op };
+    },
+    async listAiProposalGroups() {
+      const live = liveIds();
+      const tags = new Map((await organize.getSidebar()).tags.map((x) => [norm(x.name), x.name]));
+      const groups = new Map<string, ProposalGroupDto>();
+      // Newest item first, like the backend.
+      const order = [...records].sort((a, b) => b.addedAt - a.addedAt).map((r) => r.id);
+      const pend = all.filter((p) => p.status === "pending" && live.has(p.itemId)).sort((a, b) => order.indexOf(a.itemId) - order.indexOf(b.itemId));
+      for (const p of pend) {
+        const key = norm(p.value);
+        let g = groups.get(key);
+        if (!g) {
+          g = { value: tags.get(key) ?? p.value, normalizedValue: key, tagExists: tags.has(key), items: [] };
+          groups.set(key, g);
+        }
+        g.items.push({ proposalId: p.id, itemId: p.itemId, title: records.find((r) => r.id === p.itemId)?.title ?? null });
+      }
+      return [...groups.values()].sort((a, b) => b.items.length - a.items.length || a.normalizedValue.localeCompare(b.normalizedValue));
+    },
+    async decideAiProposals(ids, accept, name) {
+      const ps = [...new Set(ids)].map((id) => all.find((x) => x.id === id));
+      if (ps.some((p) => !p || p.status !== "pending")) throw err("INTERNAL_ERROR", "decide_ai_proposals");
+      const list = ps as (typeof all)[number][];
+      if (list.length === 0) return { decided: 0, op: null };
+      const op = accept ? await organize.tagItems([...new Set(list.map((p) => p.itemId))], (name ?? "").trim() || list[0]!.value) : null;
+      for (const p of list) p.status = accept ? "accepted" : "rejected";
+      return { decided: list.length, op };
     },
   };
 }

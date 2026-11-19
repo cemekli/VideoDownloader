@@ -1908,6 +1908,20 @@ fn suggest_commands_match_contract_and_never_apply_by_themselves() {
     assert_eq!(ok(&w, "get_tag_suggest", json!({}))["pending"], 2);
     let item = ok(&w, "get_item", json!({ "id": id }));
     assert!(item["tagRefs"].as_array().unwrap().is_empty());
+    // The review screen sees the same two, grouped by value.
+    let g = ok(&w, "list_ai_proposal_groups", json!({}));
+    assert_same_shape(
+        &g[0],
+        &spec("list_ai_proposal_groups")[0],
+        "list_ai_proposal_groups[0]",
+    );
+    assert_same_shape(
+        &g[0]["items"][0],
+        &spec("list_ai_proposal_groups")[0]["items"][0],
+        "list_ai_proposal_groups[0].items[0]",
+    );
+    assert_eq!(g.as_array().unwrap().len(), 2);
+    assert_eq!(ok(&w, "get_sidebar", json!({}))["counts"]["suggestions"], 2);
 
     let r = ok(
         &w,
@@ -1942,6 +1956,49 @@ fn suggest_commands_match_contract_and_never_apply_by_themselves() {
         app_origin()
     )
     .is_err());
+
+    // Many at once: one undoable "add tag", named as the user typed it.
+    let more = {
+        let mut db =
+            Database::open(&d.path().join("db/library.sqlite"), &OpenOptions::default()).unwrap();
+        vv_persistence::proposals::save_run(
+            db.writer(),
+            &id,
+            "qwen3.5:4b",
+            &url,
+            &"1".repeat(32),
+            &["gece".into()],
+            1_794_000_000_001,
+        )
+        .unwrap()
+    };
+    let r = ok(
+        &w,
+        "decide_ai_proposals",
+        json!({ "ids": [more[0].id], "accept": true, "name": "Gece çekimi" }),
+    );
+    assert_same_shape(&r, &spec("decide_ai_proposals"), "decide_ai_proposals");
+    assert_same_shape(
+        &r["op"],
+        &spec("decide_ai_proposals")["op"],
+        "decide_ai_proposals.op",
+    );
+    assert_eq!(r["decided"], 1);
+    let item = ok(&w, "get_item", json!({ "id": id }));
+    assert_eq!(item["tagRefs"][0]["name"], "Gece çekimi");
+    assert!(ok(&w, "list_ai_proposal_groups", json!({}))
+        .as_array()
+        .unwrap()
+        .is_empty());
+    // Decided already: refused.
+    assert!(invoke(
+        &w,
+        "decide_ai_proposals",
+        json!({ "ids": [more[0].id], "accept": false, "name": null }),
+        app_origin()
+    )
+    .is_err());
+    ok(&w, "undo", json!({}));
 
     // Without the engine (no tools checked in this test) asking is refused cleanly.
     let e = invoke(

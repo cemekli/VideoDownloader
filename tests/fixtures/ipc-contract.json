@@ -383,7 +383,8 @@
           "inbox": 1,
           "removed": 0,
           "duplicates": 0,
-          "orphans": 0
+          "orphans": 0,
+          "suggestions": 0
         }
       }
     },
@@ -2879,6 +2880,42 @@
       },
       "response": {
         "proposals": [],
+        "op": {
+          "changed": 1,
+          "unchanged": 0,
+          "failed": 0,
+          "undo": {
+            "kind": "tag_items",
+            "size": 1
+          }
+        }
+      }
+    },
+    "list_ai_proposal_groups": {
+      "args": {},
+      "response": [
+        {
+          "value": "deniz",
+          "normalizedValue": "deniz",
+          "tagExists": false,
+          "items": [
+            {
+              "proposalId": "00000000-0000-4000-8000-0000000a1001",
+              "itemId": "00000000-0000-4000-8000-000000000001",
+              "title": "Kadıköy vapuru"
+            }
+          ]
+        }
+      ]
+    },
+    "decide_ai_proposals": {
+      "args": {
+        "ids": ["00000000-0000-4000-8000-0000000a1001"],
+        "accept": true,
+        "name": null
+      },
+      "response": {
+        "decided": 1,
         "op": {
           "changed": 1,
           "unchanged": 0,
