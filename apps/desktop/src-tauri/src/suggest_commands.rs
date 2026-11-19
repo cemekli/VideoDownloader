@@ -682,13 +682,14 @@ mod tests {
         let mut db = Database::open(&dir.path().join("l.sqlite"), &OpenOptions::default()).unwrap();
         let clock = FixedClock::new(1_794_000_000_000);
         let now = clock.now_ms();
-        let c = db.writer();
-        let item = |url: &str| match bookmark::save_bookmark(c, &clock, url).unwrap().outcome {
+        let w = db.writer();
+        let mut item = |url: &str| match bookmark::save_bookmark(w, &clock, url).unwrap().outcome {
             bookmark::SaveOutcome::Created(it) => it.id,
             bookmark::SaveOutcome::Existing { item, .. } => item.id,
         };
         let a = item("https://example.com/a");
         let b = item("https://example.com/b");
+        let c: &Connection = w;
         let run = |id: &str, v: &[&str]| {
             proposals::save_run(
                 c,
