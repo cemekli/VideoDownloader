@@ -327,6 +327,7 @@ pub async fn get_transcript<R: Runtime>(
 #[serde(rename_all = "camelCase")]
 pub struct MomentTarget {
     pub item_id: String,
+    /// Empty for a line of text on screen (F7.4).
     pub transcript_id: String,
     pub segment_id: String,
     pub start_ms: i64,
@@ -339,9 +340,25 @@ pub struct MomentTarget {
 /// `INPUT_REJECTED` with `moment-gone` (search again).
 pub fn moment_target(c: &Connection, segment_id: &str) -> Result<MomentTarget, DomainError> {
     let gone = || DomainError::new(ErrorCode::InputRejected, "moment-gone");
-    let p = transcripts::segment_place(c, segment_id)
-        .map_err(db_err)?
-        .ok_or_else(gone)?;
+    let Some(p) = transcripts::segment_place(c, segment_id).map_err(db_err)? else {
+        // A line of text on screen (F7.4): no transcript, its own time.
+        let (item_id, start_ms, end_ms) = vv_persistence::screen_text::place(c, segment_id)
+            .map_err(|_| internal("moment-screen"))?
+            .ok_or_else(gone)?;
+        let it = repo::get_item(c, &item_id)
+            .map_err(|_| internal("moment-item"))?
+            .ok_or_else(gone)?;
+        if it.removed_at.is_some() {
+            return Err(gone());
+        }
+        return Ok(MomentTarget {
+            item_id,
+            transcript_id: String::new(),
+            segment_id: segment_id.to_owned(),
+            start_ms,
+            end_ms,
+        });
+    };
     if !matches!(
         p.status,
         transcripts::Status::Ready | transcripts::Status::Partial

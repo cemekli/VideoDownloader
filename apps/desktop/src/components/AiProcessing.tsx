@@ -4,6 +4,7 @@ import type { AiJobDto, AiProcessing, CpuUse, DownloadClient, MachineDto, ModelC
 import { formatBytes, formatDuration } from "../format";
 import { formatDateTime, t, tn, type MessageKey } from "../i18n";
 import { errorMessage } from "../labels";
+import { ScreenTextBlock } from "./ScreenText";
 import { SearchIndexBlock } from "./SearchIndex";
 import { TagSuggestBlock } from "./TagSuggest";
 import { TranscriptionBlock } from "./Transcription";
@@ -147,6 +148,13 @@ export function AiProcessingView({
           {t("search_index.title")}
         </h2>
         <SearchIndexBlock client={client} notify={notify} onChanged={() => void reload()} />
+      </section>
+
+      <section aria-labelledby="ai-screen-text">
+        <h2 id="ai-screen-text" className="downloads-heading">
+          {t("screen_text.title")}
+        </h2>
+        <ScreenTextBlock client={client} notify={notify} />
       </section>
 
       <section aria-labelledby="ai-tag-suggest">

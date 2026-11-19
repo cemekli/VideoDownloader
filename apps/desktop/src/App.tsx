@@ -652,6 +652,7 @@ export function App({ client }: { client?: BackendClient }) {
             transcripts={c}
             moments={activeId ? (items.find((i) => i.id === activeId)?.transcript ?? null) : null}
             meaningMoments={activeId ? (items.find((i) => i.id === activeId)?.meaning ?? null) : null}
+            screenMoments={activeId ? (items.find((i) => i.id === activeId)?.onScreen ?? null) : null}
             suggestions={c}
             downloadJob={activeId ? (jobs.find((j) => j.kind === "download" && j.itemId === activeId && (isOpen(j) || j.status === "failed")) ?? null) : null}
             collections={sb?.collections ?? []}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-screen-text"
+description = "Enables the cancel_screen_text command without any pre-configured scope."
+commands.allow = ["cancel_screen_text"]
+
+[[permission]]
+identifier = "deny-cancel-screen-text"
+description = "Denies the cancel_screen_text command without any pre-configured scope."
+commands.deny = ["cancel_screen_text"]

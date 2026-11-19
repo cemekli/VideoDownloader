@@ -70,5 +70,21 @@
     "-f",
     "wav",
     "-n"
+  ],
+  "framesOutput": [
+    "-map",
+    "0:v:0",
+    "-an",
+    "-sn",
+    "-dn",
+    "-fps_mode",
+    "vfr",
+    "-c:v",
+    "png",
+    "-protocol_whitelist",
+    "file",
+    "-f",
+    "image2",
+    "-n"
   ]
 }

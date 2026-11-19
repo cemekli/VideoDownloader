@@ -70,6 +70,7 @@ export function Inspector({
   transcripts,
   moments = null,
   meaningMoments = null,
+  screenMoments = null,
   suggestions,
 }: {
   client: LibraryClient;
@@ -90,6 +91,8 @@ export function Inspector({
   moments?: TranscriptMatchesDto | null;
   /** Passages close in meaning to the search text (F7.2). */
   meaningMoments?: TranscriptMatchesDto | null;
+  /** Where the search text was read on screen (F7.4). */
+  screenMoments?: TranscriptMatchesDto | null;
   /** Tag suggestions (F7.3); without it the section is not shown. */
   suggestions?: SuggestClient;
 }) {
@@ -126,7 +129,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} suggestions={suggestions} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} screenMoments={screenMoments} suggestions={suggestions} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -171,6 +174,7 @@ function Details({
   transcripts,
   moments,
   meaningMoments,
+  screenMoments,
   suggestions,
   onSaved,
 }: {
@@ -182,6 +186,7 @@ function Details({
   transcripts?: TranscriptClient & Pick<DownloadClient, "cancelJob">;
   moments: TranscriptMatchesDto | null;
   meaningMoments: TranscriptMatchesDto | null;
+  screenMoments: TranscriptMatchesDto | null;
   suggestions?: SuggestClient;
   onSaved: (d: ItemDetail) => void;
 }) {
@@ -222,6 +227,7 @@ function Details({
       )}
       {/* With a search text, where it was said comes right under the actions (F6.4). */}
       {moments && moments.moments.length > 0 && <Moments matches={moments} playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />}
+      {screenMoments && screenMoments.moments.length > 0 && <Moments matches={screenMoments} playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />}
       {meaningMoments && meaningMoments.moments.length > 0 && (
         <Moments matches={meaningMoments} meaning playable={detail.assets.length > 0 && !!actions?.openMoment} onOpen={(seg) => actions?.openMoment?.(seg)} />
       )}

@@ -1,0 +1,17 @@
+[package]
+name = "vv-ocr"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "VideoVault on-screen text: the reader trait, Windows' own OCR (Windows.Media.Ocr) and a fake for tests (STATE.md F7.4, ADR-0039)"
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+# Windows.Media.Ocr ships with Windows 10/11 and reads the languages whose
+# OCR pack is installed (DEC-13, ADR-0039). Same version Tauri already uses.
+windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
+
+[lints]
+workspace = true

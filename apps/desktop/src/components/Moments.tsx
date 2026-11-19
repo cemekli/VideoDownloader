@@ -7,6 +7,7 @@ const SOURCE = {
   source_captions: "search.source.captions",
   generated_local: "search.source.local",
   imported: "transcripts.source.imported",
+  ocr: "search.source.ocr",
 } as const;
 
 /**
@@ -17,13 +18,18 @@ const SOURCE = {
  *
  * `meaning`: passages found by meaning rather than by the words (F7.2);
  * they are about the search text, so nothing in them is marked.
+ *
+ * Text read on screen (F7.4, SEA-08) is listed in its own section, never
+ * with speech; each line opens at the time it appeared.
  */
 export function Moments({ matches, playable, onOpen, meaning = false }: { matches: TranscriptMatchesDto; playable: boolean; onOpen: (segmentId: string) => void; meaning?: boolean }) {
   const more = matches.total - matches.moments.length;
+  const screen = matches.provenance === "ocr";
   return (
-    <section data-testid={meaning ? "inspector-meaning" : "inspector-moments"}>
-      <h4>{t(meaning ? "search.meaning_title" : "search.said_title")}</h4>
+    <section data-testid={meaning ? "inspector-meaning" : screen ? "inspector-on-screen" : "inspector-moments"}>
+      <h4>{t(meaning ? "search.meaning_title" : screen ? "search.screen_title" : "search.said_title")}</h4>
       {meaning && <p className="muted small">{t("search.meaning_hint")}</p>}
+      {screen && <p className="muted small">{t("search.screen_hint")}</p>}
       <p className="muted small">
         {languageName(matches.language)} · {t(SOURCE[matches.provenance])}
       </p>
@@ -58,7 +64,7 @@ export function Moments({ matches, playable, onOpen, meaning = false }: { matche
           );
         })}
       </ol>
-      {more > 0 && <p className="muted small">{tn("search.said_more", more)}</p>}
+      {more > 0 && <p className="muted small">{tn(screen ? "search.screen_more" : "search.said_more", more)}</p>}
     </section>
   );
 }

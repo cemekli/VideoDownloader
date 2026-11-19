@@ -35,7 +35,7 @@ const MEDIUM = { id: "whisper-medium", label: "Medium", sizeBytes: 1533763059, u
 const err = (code: string, cmd: string) =>
   new IpcError(code, `${cmd}: error.${code.toLowerCase()}`, { code, messageKey: `error.${code.toLowerCase()}`, retryable: false, suggestedAction: null, diagnosticId: cmd, safeDetails: {} });
 
-export function createFixtureModels(scenario: FixtureScenario, stepMs = 300): Omit<ModelClient, "getAiProcessing" | "clearFinishedAiJobs"> {
+export function createFixtureModels(scenario: FixtureScenario, stepMs = 300): Omit<ModelClient, "getAiProcessing" | "clearFinishedAiJobs" | "getScreenText" | "readScreenText" | "cancelScreenText"> {
   const base = contract.commands.list_models.response as ModelOverview;
   const mem = fixtureMemory(scenario);
   const models: ModelDto[] = base.models.map((m) => ({ ...m, needMemoryMb: needMb(m.upstreamMemoryMb), fit: fitOf(needMb(m.upstreamMemoryMb), mem), status: "not_installed", consentAt: null, verifiedAt: null, job: null }));

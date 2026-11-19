@@ -367,6 +367,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Search moments (F6.4): where a search text was said. */
 .snippet-moment .timecode { color: var(--accent); font-variant-numeric: tabular-nums; }
 .snippet-moment .meaning-tag { color: var(--muted); font-style: italic; }
+.snippet-moment .screen-tag { font-style: normal; }
 .moments { list-style: none; margin: var(--s1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .moment-button { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--s2); width: 100%; text-align: left; padding: var(--s1); border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; }
 button.moment-button { cursor: pointer; }
