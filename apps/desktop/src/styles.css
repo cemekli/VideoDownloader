@@ -393,7 +393,8 @@ button.moment-button:hover, button.moment-button:focus-visible { background: var
 .downloads-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--s2); }
 
 /* Suggested tags review (F7.3 follow-up, ADR-0038). */
-.review { display: flex; flex-direction: column; gap: var(--s2); }
+.review { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: var(--s2); padding-bottom: var(--s4); }
+.review > * { flex: none; }
 .review-filter { max-width: 24em; }
 .review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); }
 .review-group { border: 1px solid var(--border); border-radius: 6px; padding: var(--s1) var(--s2); }
