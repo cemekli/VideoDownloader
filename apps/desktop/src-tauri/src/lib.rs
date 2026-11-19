@@ -138,6 +138,8 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             suggest_commands::list_ai_proposals,
             suggest_commands::suggest_tags,
             suggest_commands::decide_ai_proposal,
+            suggest_commands::list_ai_proposal_groups,
+            suggest_commands::decide_ai_proposals,
             transcript_commands::list_transcripts,
             transcript_commands::get_transcript,
             transcript_commands::fetch_captions,

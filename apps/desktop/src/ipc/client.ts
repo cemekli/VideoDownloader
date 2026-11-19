@@ -61,6 +61,8 @@ import type {
   TagSuggestDto,
   ProposalDto,
   ItemSuggestions,
+  ProposalGroupDto,
+  DecideManyResult,
   DecideResult,
 } from "./types";
 import contract from "@fixtures/ipc-contract.json";
@@ -142,6 +144,11 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     saveUrl: (u) => library.saveUrl(u),
     restoreItem: (id) => library.restoreItem(id),
     ...organizeOf(library),
+    // The sidebar counts pending suggestions, which live with the fixture suggestions.
+    getSidebar: async () => {
+      const [sb, g] = await Promise.all([library.getSidebar(), suggest.getTagSuggest()]);
+      return { ...sb, counts: { ...sb.counts, suggestions: g.pending } };
+    },
     emitImportStatus: (s) => library.emitImportStatus(s),
     async ping(nonce) {
       return { nonce, contractVersion: CONTRACT_VERSION };
@@ -295,6 +302,8 @@ const suggestCommands: SuggestClient = {
   listAiProposals: (itemId) => call<ProposalDto[]>("list_ai_proposals", { itemId }),
   suggestTags: (itemId, force) => call<ItemSuggestions>("suggest_tags", { itemId, force }),
   decideAiProposal: (id, accept, name) => call<DecideResult>("decide_ai_proposal", { id, accept, name }),
+  listAiProposalGroups: () => call<ProposalGroupDto[]>("list_ai_proposal_groups"),
+  decideAiProposals: (ids, accept, name) => call<DecideManyResult>("decide_ai_proposals", { ids, accept, name }),
 };
 
 /** Transcripts (F6.2). */

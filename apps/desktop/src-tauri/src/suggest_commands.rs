@@ -399,6 +399,115 @@ pub async fn decide_ai_proposal<R: Runtime>(
     .await
 }
 
+/// Pending tag suggestions across the library, grouped by value (the
+/// review screen; ADR-0038).
+#[tauri::command]
+pub async fn list_ai_proposal_groups<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<proposals::Group>, DomainError> {
+    blocking(app, move |st| {
+        let c = st.get()?.reader()?;
+        proposals::pending_groups(&c).map_err(|_| internal("proposal-groups"))
+    })
+    .await
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecideManyResult {
+    /// Suggestions accepted or rejected.
+    pub decided: u32,
+    /// The one "add tag" an accept made for all the items (Undo reverts it).
+    pub op: Option<OpResult>,
+}
+
+/// Accepts or rejects several pending suggestions at once (the review
+/// screen). An accept adds one tag, `name` or the first suggestion's
+/// value, to every item as a single undoable "add tag", and marks each
+/// relation as coming from its suggestion. All or nothing: a suggestion
+/// that is missing or already decided refuses the whole call.
+pub fn decide_many(
+    c: &Connection,
+    session: &str,
+    now: i64,
+    ids: &[String],
+    accept: bool,
+    name: Option<&str>,
+) -> Result<DecideManyResult, DomainError> {
+    ops::check_bulk(ids)?;
+    let mut ps: Vec<Proposal> = Vec::with_capacity(ids.len());
+    let mut seen = std::collections::HashSet::new();
+    for id in ids {
+        if !seen.insert(id.as_str()) {
+            continue;
+        }
+        let p = proposals::get(c, id)
+            .map_err(|_| internal("proposal-get"))?
+            .ok_or_else(|| internal("proposal-not-found"))?;
+        if p.status != proposals::Status::Pending {
+            return Err(internal("proposal-decided"));
+        }
+        ps.push(p);
+    }
+    let Some(first) = ps.first() else {
+        return Ok(DecideManyResult {
+            decided: 0,
+            op: None,
+        });
+    };
+    let op = if accept {
+        let name = name
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .unwrap_or(&first.value)
+            .to_owned();
+        let mut items: Vec<String> = Vec::with_capacity(ps.len());
+        for p in &ps {
+            if !items.contains(&p.item_id) {
+                items.push(p.item_id.clone());
+            }
+        }
+        let r = ops::tag_items(c, session, now, &items, &name)?;
+        if let Some(t) = organize::tag_by_name(c, &name).map_err(|_| internal("tag-get"))? {
+            for p in &ps {
+                proposals::link_tag(c, &p.item_id, &t.id, &p.id, now)
+                    .map_err(|_| internal("proposal-link"))?;
+            }
+        }
+        Some(r)
+    } else {
+        None
+    };
+    for p in &ps {
+        proposals::decide(c, &p.id, accept, now).map_err(|_| internal("proposal-decide"))?;
+    }
+    Ok(DecideManyResult {
+        decided: ps.len() as u32,
+        op,
+    })
+}
+
+#[tauri::command]
+pub async fn decide_ai_proposals<R: Runtime>(
+    app: AppHandle<R>,
+    ids: Vec<String>,
+    accept: bool,
+    name: Option<String>,
+) -> Result<DecideManyResult, DomainError> {
+    blocking(app, move |st: &LibraryState| {
+        let session = st.session().to_owned();
+        st.get()?.write(|c| {
+            let tx = c
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(|_| internal("tx-begin"))?;
+            let r = decide_many(&tx, &session, now(), &ids, accept, name.as_deref())?;
+            tx.commit().map_err(|_| internal("tx-commit"))?;
+            Ok(r)
+        })
+    })
+    .await
+}
+
 /// Starts "Suggest for all": every live item, newest first, skipping the
 /// ones already current (all of them again with `force`).
 #[tauri::command]
@@ -565,5 +674,72 @@ mod tests {
             // Decided twice: refused.
             assert!(decide(c, "s1", now, &ps[1].id, true, None).is_err());
         }
+    }
+
+    #[test]
+    fn deciding_many_tags_every_item_once_and_is_all_or_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Database::open(&dir.path().join("l.sqlite"), &OpenOptions::default()).unwrap();
+        let clock = FixedClock::new(1_794_000_000_000);
+        let now = clock.now_ms();
+        let w = db.writer();
+        let mut item = |url: &str| match bookmark::save_bookmark(w, &clock, url).unwrap().outcome {
+            bookmark::SaveOutcome::Created(it) => it.id,
+            bookmark::SaveOutcome::Existing { item, .. } => item.id,
+        };
+        let a = item("https://example.com/a");
+        let b = item("https://example.com/b");
+        let c: &Connection = w;
+        let run = |id: &str, v: &[&str]| {
+            proposals::save_run(
+                c,
+                id,
+                "m",
+                "http://localhost/v1",
+                &"0".repeat(32),
+                &v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>(),
+                now,
+            )
+            .unwrap()
+        };
+        let pa = run(&a, &["uçak", "deniz"]);
+        let pb = run(&b, &["Uçak"]);
+        let ids = vec![pa[0].id.clone(), pb[0].id.clone()];
+        // One already decided: nothing changes.
+        decide(c, "s1", now, &pa[1].id, false, None).unwrap();
+        assert!(decide_many(
+            c,
+            "s1",
+            now,
+            &[ids[0].clone(), pa[1].id.clone()],
+            true,
+            None
+        )
+        .is_err());
+        assert!(organize::item_tags(c, &a).unwrap().is_empty());
+
+        let r = decide_many(c, "s1", now, &ids, true, Some("Uçaklar")).unwrap();
+        assert_eq!(r.decided, 2);
+        let op = r.op.unwrap();
+        assert_eq!(op.changed, 2);
+        assert!(op.undo.is_some());
+        for it in [&a, &b] {
+            let origin: String = c
+                .query_row(
+                    "SELECT lt.origin FROM library_item_tag lt JOIN tag t ON t.id = lt.tag_id \
+                     WHERE lt.item_id = ?1 AND t.name = 'Uçaklar'",
+                    [it],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(origin, "ai_accepted");
+        }
+        assert!(proposals::pending_groups(c).unwrap().is_empty());
+        // Rejecting many changes no tag.
+        let pc = run(&a, &["gemi"]);
+        let r = decide_many(c, "s1", now, &[pc[0].id.clone()], false, None).unwrap();
+        assert_eq!(r.decided, 1);
+        assert!(r.op.is_none());
+        assert_eq!(organize::item_tags(c, &a).unwrap().len(), 1);
     }
 }

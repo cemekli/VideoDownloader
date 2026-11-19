@@ -391,3 +391,15 @@ button.moment-button:hover, button.moment-button:focus-visible { background: var
   margin: 4px 0;
 }
 .downloads-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--s2); }
+
+/* Suggested tags review (F7.3 follow-up, ADR-0038). */
+.review { display: flex; flex-direction: column; gap: var(--s2); }
+.review-filter { max-width: 24em; }
+.review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); }
+.review-group { border: 1px solid var(--border); border-radius: 6px; padding: var(--s1) var(--s2); }
+.review-head, .review-edit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.review-name { font: inherit; font-weight: 600; background: none; border: 0; padding: 0; color: inherit; cursor: text; }
+.review-actions { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.review-items { list-style: none; margin: var(--s1) 0 0; padding: 0 0 0 var(--s3); }
+.review-items li { display: flex; align-items: center; gap: var(--s1); }
+.review-title { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40em; }

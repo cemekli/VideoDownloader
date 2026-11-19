@@ -90,7 +90,8 @@ export function fixtureRecords(): FixtureRecord[] {
     kind: r.kind as ItemKind,
     localState: r.localState as LocalState,
     durationMs: r.durationMs,
-    tags: r.tags,
+    // A copy: tests change tags, and the next test must start from the fixture file.
+    tags: [...r.tags],
     thumbnailUrl: r.fixtureThumbnail ? thumb(r.id) : null,
     addedAt: r.addedAt,
     isFavorite: r.isFavorite,

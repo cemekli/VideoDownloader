@@ -362,6 +362,105 @@ pub fn pending_count(c: &Connection) -> Result<i64> {
     )?)
 }
 
+/// One item in a [`Group`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupItem {
+    pub proposal_id: String,
+    pub item_id: String,
+    pub title: Option<String>,
+}
+
+/// Pending tag suggestions with the same value across the library: what
+/// the review screen decides at once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    /// The existing tag's name when there is one, else the spelling most
+    /// suggestions used.
+    pub value: String,
+    pub normalized_value: String,
+    /// The library already has a tag with this name.
+    pub tag_exists: bool,
+    /// Newest item first.
+    pub items: Vec<GroupItem>,
+}
+
+/// Every pending tag suggestion of live items, grouped by value; the
+/// groups with the most items first, then by name.
+pub fn pending_groups(c: &Connection) -> Result<Vec<Group>> {
+    let mut s = c.prepare_cached(
+        "SELECT p.id, p.item_id, p.value, p.normalized_value, i.title, t.name \
+         FROM ai_proposal p JOIN library_item i ON i.id = p.item_id \
+         LEFT JOIN tag t ON t.normalized_name = p.normalized_value \
+         WHERE p.status = 'pending' AND p.type = 'tag' AND i.removed_at IS NULL \
+         ORDER BY p.normalized_value, i.added_at DESC, i.id",
+    )?;
+    let rows = s.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            r.get::<_, Option<String>>(5)?,
+        ))
+    })?;
+    let mut out: Vec<Group> = Vec::new();
+    // Spellings of the current group and how often each was used.
+    let mut spellings: Vec<(String, usize)> = Vec::new();
+    let finish = |g: &mut Group, sp: &mut Vec<(String, usize)>| {
+        if !g.tag_exists {
+            // The most used spelling; the first one on a tie.
+            if let Some((v, _)) = sp
+                .iter()
+                .fold(None::<&(String, usize)>, |best, x| match best {
+                    Some(b) if b.1 >= x.1 => Some(b),
+                    _ => Some(x),
+                })
+            {
+                g.value = v.clone();
+            }
+        }
+        sp.clear();
+    };
+    for r in rows {
+        let (id, item_id, value, norm, title, tag) = r?;
+        if out.last().is_none_or(|g| g.normalized_value != norm) {
+            if let Some(g) = out.last_mut() {
+                finish(g, &mut spellings);
+            }
+            out.push(Group {
+                value: tag.clone().unwrap_or_else(|| value.clone()),
+                normalized_value: norm,
+                tag_exists: tag.is_some(),
+                items: Vec::new(),
+            });
+        }
+        match spellings.iter_mut().find(|(v, _)| *v == value) {
+            Some(x) => x.1 += 1,
+            None => spellings.push((value, 1)),
+        }
+        if let Some(g) = out.last_mut() {
+            g.items.push(GroupItem {
+                proposal_id: id,
+                item_id,
+                title,
+            });
+        }
+    }
+    if let Some(g) = out.last_mut() {
+        finish(g, &mut spellings);
+    }
+    out.sort_by(|a, b| {
+        b.items
+            .len()
+            .cmp(&a.items.len())
+            .then_with(|| a.normalized_value.cmp(&b.normalized_value))
+    });
+    Ok(out)
+}
+
 /// Live items, newest first: what "Suggest for all" walks.
 pub fn live_items(c: &Connection) -> Result<Vec<String>> {
     let mut s = c.prepare_cached(

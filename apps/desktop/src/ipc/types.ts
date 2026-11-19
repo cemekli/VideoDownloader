@@ -295,7 +295,7 @@ export interface Sidebar {
   collections: CollectionDto[];
   smartCollections: SmartCollectionDto[];
   tags: TagDto[];
-  counts: { inbox: number; removed: number; duplicates: number; orphans: number };
+  counts: { inbox: number; removed: number; duplicates: number; orphans: number; suggestions: number };
 }
 
 export type ChildPolicy = "move_up" | "delete_all";
@@ -1116,6 +1116,23 @@ export interface DecideResult {
   op: OpResult | null;
 }
 
+/** Pending tag suggestions with the same value across the library (review screen, ADR-0038). */
+export interface ProposalGroupDto {
+  /** The existing tag's name when there is one, else the spelling most suggestions used. */
+  value: string;
+  normalizedValue: string;
+  /** The library already has a tag with this name. */
+  tagExists: boolean;
+  /** Newest item first. */
+  items: { proposalId: string; itemId: string; title: string | null }[];
+}
+
+export interface DecideManyResult {
+  decided: number;
+  /** The one "add tag" an accept made for all the items; Undo reverts it. */
+  op: OpResult | null;
+}
+
 /** Tag suggestions from the user's chat API (F7.3, ADR-0037). */
 export interface SuggestClient {
   getTagSuggest(): Promise<TagSuggestDto>;
@@ -1130,6 +1147,10 @@ export interface SuggestClient {
   suggestTags(itemId: string, force: boolean): Promise<ItemSuggestions>;
   /** Accepts (adding the tag, named `name` when edited) or rejects a suggestion. */
   decideAiProposal(id: string, accept: boolean, name: string | null): Promise<DecideResult>;
+  /** Every pending tag suggestion, grouped by value. */
+  listAiProposalGroups(): Promise<ProposalGroupDto[]>;
+  /** Accepts (one tag, `name` when edited, on every item) or rejects several suggestions at once. */
+  decideAiProposals(ids: string[], accept: boolean, name: string | null): Promise<DecideManyResult>;
 }
 
 export type BackendClient = LibraryClient & StatusClient & DataClient & DownloadClient & SessionClient & ModelClient & TranscriptClient & SuggestClient;

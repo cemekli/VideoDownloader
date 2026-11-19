@@ -1350,3 +1350,22 @@ STATE.md F7.3. SPEC §11 `AIProposal`, AI-B01 (başlık, açıklama ve dökümde
 - `crates/vv-persistence/src/proposals.rs` ve `crates/vv-engine/src/suggest.rs` birim testleri: döküm örnekleme, değer temizleme, parmak izi, `<think>` ve sarılı JSON okuma.
 - `apps/desktop/src-tauri/tests/ipc.rs` `suggest_commands_match_contract_and_never_apply_by_themselves` ve `suggest_commands.rs` birim testi: sözleşme, izin, anahtarın dönmemesi, kabulün Undo ile geri alınması, red.
 - `src/TagSuggest.test.tsx`: ayar formu, uzak adres onayı, toplu çalıştırma, Details'te sor/düzenle/kabul/red.
+
+## ADR-0038: Önerilen etiketleri toplu gözden geçirme
+
+STATE.md F7.3 devamı. SPEC AI-B02 (öneri kabul edilmeden etiket değişmez), §7.3 (Undo), ADR-0037.
+
+**Bağlam.** Cuma'nın ilk "Suggest for all" denemesi (18 Kas): 660 öğe, 2.580 öneri. Önerileri yalnız Details'ten, öğe öğe açmak yorucu; aynı etiket (ör. "fighter jet") onlarca videoya ayrı ayrı önerilmiş oluyor.
+
+**Karar.**
+
+- **Ekran.** Kenar çubuğunda AI Processing'in altında "Suggested tags" (bekleyen öneri sayısıyla); bekleyen öneri yokken görünmez. Öneriler değere göre gruplanır (etiketle aynı katlama: "İstanbul" = "istanbul"); en çok videoya önerilen değer üstte, sonra ada göre. Grubun adı, kütüphanede o adla bir etiket varsa etiketin adı ("existing tag" rozeti), yoksa önerilerde en çok kullanılan yazılış (eşitlikte en yeni öğeninki). İlk 60 grup, "Show more" ile devamı; ada göre süzme kutusu.
+- **Toplu karar.** "Add to all N" etiketi gruptaki her öğeye **tek** bir "add tag" işlemiyle ekler: Undo hepsini birden geri alır; her ilişki kendi önerisiyle `ai_accepted` olur. Ada tıklayınca ad değiştirilip eklenebilir. "Reject" birden çok videoda önce onay ister; red etiketlere dokunmaz ve o değer o öğelere bir daha önerilmez (ADR-0037). "Show videos" grubun videolarını açar: tek tek ✓/×, başlığa tıklayınca öğe kütüphanede seçilip Details açılır.
+- **Komutlar.** `list_ai_proposal_groups` (canlı öğelerin bekleyen etiket önerileri, gruplu) ve `decide_ai_proposals(ids, accept, name)`. İkincisi hepsi ya da hiçbiri: listedeki bir öneri yoksa ya da karara bağlanmışsa (ör. bu arada Details'ten kabul edildiyse) hiçbir şey değişmez ve ekran listeyi yeniden okur. Kenar çubuğu sayıları `suggestions` alanını aldı.
+
+**Sonuçlar ve kanıt.**
+
+- `crates/vv-persistence/tests/proposal_groups.rs`: gruplama, yazılışların birleşmesi, sıralama, var olan etiketin adı, kaldırılmış öğe ve karara bağlanmış önerinin dışarıda kalması.
+- `suggest_commands.rs` birim testi `deciding_many_tags_every_item_once_and_is_all_or_nothing`; `ipc.rs` `suggest_commands_match_contract_and_never_apply_by_themselves` (sözleşme, kenar çubuğu sayısı, toplu kabul + Undo, ikinci kararın reddi).
+- `src/SuggestionReview.test.tsx`: kenar çubuğu sayısı, gruba toplu ekleme ve toast'tan Undo, adını değiştirerek ekleme, onaylı toplu red ve reddedilenin geri gelmemesi, süzme, boş durum.
+- Fixture düzeltmesi: `fixtureRecords()` etiket dizilerini kopyalıyor; testler arasında etiket değişikliği sızıyordu.
