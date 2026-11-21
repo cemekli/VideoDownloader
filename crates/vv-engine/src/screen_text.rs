@@ -6,12 +6,13 @@
 //!    fixed input allowlists and keeps a frame at least every
 //!    [`FramePick::every_ms`] and at each scene change at least a second
 //!    after the last one, at most [`MAX_FRAMES`] (AI-C02), as PNG in the
-//!    job's staging folder. Only keyframes are decoded first; a file with
-//!    too few of them (a screen recording) gets a full pass at four frames
-//!    a second.
+//!    job's staging folder. A video up to ten minutes is decoded in full
+//!    (four frames a second to pick from); a longer one by its keyframes
+//!    first, and in full when they are too few (a screen recording).
 //! 2. Each frame goes to the OCR ([`vv_ocr`]; Windows' own on Windows) in
-//!    the user's language. Lines with fewer than two letters or digits are
-//!    noise and dropped.
+//!    the user's language. Marks around words and letters in no word's
+//!    shape are noise and dropped, and so are lines left with fewer than
+//!    two letters or digits.
 //! 3. Frames in a row that show about the same text (the same words, give
 //!    or take OCR slips) become one line of text on screen, from the time
 //!    of its first frame to the time of the frame that no longer shows it
@@ -42,7 +43,7 @@ use vv_ytdlp::outcome::{Exit, Stream};
 
 /// Bumped when the frames or the rules change; older runs are read again
 /// by the next run for all videos.
-pub const CONFIG_VERSION: i64 = 1;
+pub const CONFIG_VERSION: i64 = 2;
 /// Frames per video at most (AI-C02).
 pub const MAX_FRAMES: u32 = 300;
 /// Frames wider than this are scaled down (Windows' OCR reads up to about
@@ -50,19 +51,24 @@ pub const MAX_FRAMES: u32 = 300;
 pub const MAX_WIDTH: u32 = 1920;
 /// Scene change threshold (0.3 of FFmpeg's scene score).
 pub const SCENE_MILLI: u32 = 300;
-/// Shortest and longest gap between sampled frames.
-pub const EVERY_MIN_MS: u64 = 2_000;
+/// Shortest and longest gap between sampled frames. A second catches
+/// captions that change word by word (short phone videos).
+pub const EVERY_MIN_MS: u64 = 1_000;
 pub const EVERY_MAX_MS: u64 = 30_000;
 /// A frame whose words overlap the frame before it at least this much
 /// (shared / all) shows the same text: one OCR slip in a five-word title
 /// still counts as the same.
 pub const SAME_TEXT: f64 = 0.5;
 
+/// Videos up to this long are decoded in full: their keyframes are too far
+/// apart for captions that change every second or two.
+pub const FULL_PASS_UP_TO_MS: i64 = 10 * 60_000;
+
 /// The idempotency key of the run for all videos: one at a time.
 pub const ALL_KEY: &str = "ocr:all";
 
 /// Which frames for a video of `duration_ms`: about 150 frames spread over
-/// it, at least every 2 s and at most every 30 s, plus scene changes.
+/// it, at least every second and at most every 30 s, plus scene changes.
 pub fn pick(duration_ms: Option<i64>, keyframes_only: bool) -> FramePick {
     let every = match duration_ms {
         Some(d) if d > 0 => (d as u64 / 150).clamp(EVERY_MIN_MS, EVERY_MAX_MS),
@@ -347,9 +353,15 @@ fn read_item<S: Store>(
         Err(code) => return record_failed(code, "the video file is not there"),
     };
 
-    // 1. Frames: keyframes, then a full pass when they were too few.
-    let mut times = frames(w, ffmpeg, &path, dir, &pick(duration, true))?;
+    // 1. Frames: a short video in full; a longer one by its keyframes,
+    // then in full when they were too few.
     let full = pick(duration, false);
+    let short = duration.is_some_and(|d| d <= FULL_PASS_UP_TO_MS);
+    let mut times = if short {
+        Vec::new()
+    } else {
+        frames(w, ffmpeg, &path, dir, &pick(duration, true))?
+    };
     if times.len() < expected(duration, &full) / 3 {
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::create_dir_all(dir);
@@ -452,9 +464,36 @@ fn run_tool<S: Store>(
 pub fn clean(lines: &[String]) -> Vec<String> {
     lines
         .iter()
-        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .map(|l| {
+            l.split_whitespace()
+                .filter_map(word)
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
         .filter(|l| l.chars().filter(|c| c.is_alphanumeric()).count() >= 2)
         .collect()
+}
+
+/// A word as written, or `None` for what the OCR made of a busy picture:
+/// marks around it are cut ("DAHA]", "MERMİLER;,.-", also a comma), and letters in
+/// a shape no word has ("ALEVSİLAWjLEMjWON") drop it. Words are all
+/// capitals, all small letters, or one capital and then small letters.
+fn word(w: &str) -> Option<&str> {
+    let w = w.trim_matches(|c: char| !c.is_alphanumeric());
+    let mut letters = w.chars().filter(|c| c.is_alphabetic());
+    let first = letters.next();
+    let (upper, lower) = letters.fold((0, 0), |(u, l), c| {
+        (
+            u + usize::from(c.is_uppercase()),
+            l + usize::from(c.is_lowercase()),
+        )
+    });
+    let shaped = match first {
+        None => true,
+        Some(_) if upper == 0 => true,
+        Some(f) => lower == 0 && !f.is_lowercase(),
+    };
+    (!w.is_empty() && shaped).then_some(w)
 }
 
 fn words(lines: &[String]) -> std::collections::HashSet<String> {
@@ -543,7 +582,8 @@ mod tests {
 
     #[test]
     fn frames_spread_over_the_video_within_the_budget() {
-        assert_eq!(pick(Some(60_000), true).every_ms, 2_000);
+        assert_eq!(pick(Some(60_000), true).every_ms, 1_000);
+        assert_eq!(pick(Some(10 * 60_000), true).every_ms, 4_000);
         assert_eq!(pick(Some(30 * 60_000), true).every_ms, 12_000);
         assert_eq!(pick(Some(5 * 3_600_000), true).every_ms, 30_000);
         assert_eq!(pick(None, true).every_ms, 5_000);
@@ -566,6 +606,30 @@ mod tests {
             "HARRIER   JET".into(),
         ]);
         assert_eq!(l, vec!["İz 1", "HARRIER JET"]);
+    }
+
+    #[test]
+    fn what_a_busy_picture_makes_of_letters_is_dropped() {
+        let l = clean(&[
+            "ALEVSİLAWjLEMjWON DOLARLIK SOYGUN".into(),
+            "DAHA]".into(),
+            "MERMİLERİ;,.-".into(),
+            "SONRASINDA*".into(),
+            "İstanbul'da 3 gün, e-posta".into(),
+            "iPhone".into(),
+            "aB".into(),
+        ]);
+        assert_eq!(
+            l,
+            vec![
+                "DOLARLIK SOYGUN",
+                "DAHA",
+                "MERMİLERİ",
+                "SONRASINDA",
+                // Marks around a word go with the noise; search ignores them.
+                "İstanbul'da 3 gün e-posta",
+            ]
+        );
     }
 
     #[test]
