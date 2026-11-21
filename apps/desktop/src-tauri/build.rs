@@ -107,6 +107,7 @@ const COMMANDS: &[&str] = &[
     "list_ai_proposal_groups",
     "decide_ai_proposals",
     "get_screen_text",
+    "get_item_screen_text",
     "read_screen_text",
     "cancel_screen_text",
     "list_transcripts",
