@@ -86,7 +86,8 @@ describe("Text on screen", () => {
     expect(within(section).getByTestId("item-screen-text-read")).toBe(button);
     expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).toHaveFocus();
-    const line = await within(section).findByTestId("item-screen-line");
+    // The details look again once a second while it reads.
+    const line = await within(section).findByTestId("item-screen-line", {}, { timeout: 5_000 });
     expect(line).toHaveTextContent(`0:04 ${video.title.toLocaleUpperCase("tr")}`);
     expect(within(section).getByTestId("item-screen-text-read")).toHaveTextContent("Read again");
     await user.click(within(line).getByRole("button"));
