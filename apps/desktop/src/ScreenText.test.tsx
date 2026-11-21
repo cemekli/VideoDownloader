@@ -49,6 +49,8 @@ describe("Text on screen", () => {
     const client = createFixtureClient();
     const video = fixtureRecords().find((r) => !r.removed && r.fileName !== null)!;
     await client.readScreenText(video.id);
+    // Reading one video is a short job of its own.
+    await waitFor(async () => expect((await client.getItemScreenText(video.id)).status).toBe("ready"));
     render(<App client={client} />);
     const search = await screen.findByRole("searchbox");
     await user.type(search, video.title.split(" ")[0]!);
