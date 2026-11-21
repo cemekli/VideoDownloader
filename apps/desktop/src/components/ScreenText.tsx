@@ -148,39 +148,43 @@ export function ItemScreenText({
     <section data-testid="inspector-screen-text">
       <h4>{t("screen_text.title")}</h4>
       {!view.available && <p className="warning small">{t("screen_text.unavailable")}</p>}
-      {running ? (
-        <>
-          <p className="muted small" data-testid="item-screen-text-progress">
-            {job?.status === "queued" ? t("screen_text.item_queued") : t("screen_text.item_reading")}
-          </p>
-          {job && <ProgressBar job={job} />}
-        </>
-      ) : (
-        <>
-          {view.status === null && <p className="muted small">{t("screen_text.item_none")}</p>}
-          {view.status === "failed" && <p className="warning small">{t("screen_text.item_failed", { reason: errorMessage(view.errorCode ?? "INTERNAL_ERROR") })}</p>}
-          {view.status === "ready" && view.lines.length === 0 && (
-            <p className="muted small" data-testid="item-screen-text-empty">
-              {t("screen_text.item_empty")}
-            </p>
-          )}
-          {view.status !== null && !view.current && <p className="muted small">{t("screen_text.item_changed")}</p>}
-          {!running && job?.status === "failed" && job.errorCode !== view.errorCode && (
-            <p className="warning small">{t("screen_text.item_failed", { reason: job.errorCode === "MODEL_MISSING" ? t("screen_text.unavailable") : errorMessage(job.errorCode ?? "INTERNAL_ERROR") })}</p>
-          )}
-          {error && <p className="warning small">{error}</p>}
-          <div className="actions">
-            <button type="button" className="button" disabled={busy || !view.available} onClick={() => void read()} data-testid="item-screen-text-read">
-              {view.status === null ? t("screen_text.item_read") : t("screen_text.item_again")}
-            </button>
-          </div>
-        </>
+      {/* One status line and the button stay where they are while reading,
+          and the button keeps the focus, so the panel does not move. */}
+      <p className={!running && view.status === "failed" ? "warning small" : "muted small"} data-testid="item-screen-text-status">
+        {running
+          ? job?.status === "queued"
+            ? t("screen_text.item_queued")
+            : t("screen_text.item_reading")
+          : view.status === null
+            ? t("screen_text.item_none")
+            : view.status === "failed"
+              ? t("screen_text.item_failed", { reason: errorMessage(view.errorCode ?? "INTERNAL_ERROR") })
+              : view.lines.length === 0
+                ? t("screen_text.item_empty")
+                : `${languageName(view.language ?? "und")} · ${tn("screen_text.lines", view.lines.length)}`}
+      </p>
+      {!running && view.status !== null && !view.current && <p className="muted small">{t("screen_text.item_changed")}</p>}
+      {!running && job?.status === "failed" && job.errorCode !== view.errorCode && (
+        <p className="warning small">{t("screen_text.item_failed", { reason: job.errorCode === "MODEL_MISSING" ? t("screen_text.unavailable") : errorMessage(job.errorCode ?? "INTERNAL_ERROR") })}</p>
       )}
+      {error && <p className="warning small">{error}</p>}
+      <div className="actions">
+        <button
+          type="button"
+          className="button"
+          disabled={!view.available}
+          aria-disabled={busy || running}
+          onClick={() => {
+            if (!busy && !running) void read();
+          }}
+          data-testid="item-screen-text-read"
+        >
+          {view.status === null ? t("screen_text.item_read") : t("screen_text.item_again")}
+        </button>
+      </div>
+      {running && job && <ProgressBar job={job} />}
       {view.lines.length > 0 && (
         <>
-          <p className="muted small">
-            {languageName(view.language ?? "und")} · {tn("screen_text.lines", view.lines.length)}
-          </p>
           <ol className="moments" data-testid="item-screen-text-lines">
             {lines.map((l) => {
               const body = (

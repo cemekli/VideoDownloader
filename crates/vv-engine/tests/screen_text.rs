@@ -21,13 +21,20 @@ use vv_persistence::screen_text::{self as rows, RunStatus};
 /// JUMP JET" 4–9 s, nothing 9–12 s.
 const SLIDES: &str = "tests/fixtures/ocr/slides.mp4";
 
-/// What the fake reads, frame by frame (0, 2, 4, 6, 8, 10 s).
+/// What the fake reads, frame by frame: a short video is read every
+/// second (0 … 11 s).
 const SCRIPT: &[&str] = &[
     "KADIKOY VAPURU",
     "KADIKOY VAPURU",
+    "KADIKOY VAPURU",
+    "KADIKOY VAPURU",
     "HARRIER JUMP JET",
     "HARRIER JUMP JET",
     "HARRIER JUMP JET",
+    "HARRIER JUMP JET",
+    "HARRIER JUMP JET",
+    "",
+    "",
     "",
 ];
 
@@ -108,12 +115,12 @@ fn text_on_screen_in_a_video_is_found_with_its_time() {
         (j.progress.units_done, j.progress.units_total),
         (Some(1), Some(1))
     );
-    // Sparse frames, never all 120 (AI-C01).
-    assert_eq!(fake.calls(), 6);
+    // A frame a second, never all 120 (AI-C01).
+    assert_eq!(fake.calls(), 12);
     let run = lib.write(|c| rows::get(c, &item).unwrap().unwrap());
     assert_eq!(
         (run.status, run.frames, run.chunks),
-        (RunStatus::Ready, 6, 2)
+        (RunStatus::Ready, 12, 2)
     );
     assert_eq!(
         (run.provider.as_str(), run.language.as_str()),
@@ -128,7 +135,7 @@ fn text_on_screen_in_a_video_is_found_with_its_time() {
         got,
         [
             (0, 4_000, "KADIKOY VAPURU"),
-            (4_000, 10_000, "HARRIER JUMP JET")
+            (4_000, 9_000, "HARRIER JUMP JET")
         ]
     );
     // AC-41: found by words, with the frame time, labelled as on screen.
@@ -144,10 +151,10 @@ fn text_on_screen_in_a_video_is_found_with_its_time() {
     let again = read(&lib, None);
     assert_eq!(lib.job(&again).status, JobStatus::Succeeded);
     assert_eq!(lib.job(&again).progress.units_total, Some(0));
-    assert_eq!(fake.calls(), 6);
+    assert_eq!(fake.calls(), 12);
     // Asked for this item: read again (past the script: no text now).
     read(&lib, Some(&item));
-    assert_eq!(fake.calls(), 12);
+    assert_eq!(fake.calls(), 24);
     assert!(find(&lib, "harrier").hits.is_empty());
     let run = lib.write(|c| rows::get(c, &item).unwrap().unwrap());
     assert_eq!((run.status, run.chunks), (RunStatus::Ready, 0));

@@ -36,6 +36,7 @@ export function createFixtureScreenText(records: FixtureRecord[], scenario: Fixt
   let job: JobDto | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let queue: string[] = [];
+  const itemJobs = new Map<string, JobDto>();
   let clock = 1_794_000_000_000;
   const now = () => (clock += 1000);
 
@@ -87,7 +88,7 @@ export function createFixtureScreenText(records: FixtureRecord[], scenario: Fixt
         current: !!lines,
         errorCode: null,
         lines: lines ?? [],
-        job: null,
+        job: itemJobs.get(itemId) ?? null,
       });
     },
     async readScreenText(itemId) {
@@ -95,7 +96,16 @@ export function createFixtureScreenText(records: FixtureRecord[], scenario: Fixt
       if (itemId !== null) {
         const r = records.find((x) => x.id === itemId);
         if (!r || r.fileName === null) throw err("FILE_MISSING", "read_screen_text");
-        readOne(itemId);
+        // Like the backend: a job of its own that reads for a moment.
+        const t = now();
+        const own: JobDto = { ...sample, id: `00000000-0000-4000-8000-${String(0xf800 + itemJobs.size).padStart(12, "0")}`, itemId, status: "running", unitsDone: 0, unitsTotal: 1, createdAt: t, updatedAt: t, finishedAt: null, canCancel: false };
+        itemJobs.set(itemId, own);
+        setTimeout(() => {
+          readOne(itemId);
+          own.status = "succeeded";
+          own.unitsDone = 1;
+          own.finishedAt = own.updatedAt = now();
+        }, stepMs);
         return view();
       }
       if (isOpen(job)) return view();

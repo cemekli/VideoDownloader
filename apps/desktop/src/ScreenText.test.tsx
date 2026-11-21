@@ -49,6 +49,8 @@ describe("Text on screen", () => {
     const client = createFixtureClient();
     const video = fixtureRecords().find((r) => !r.removed && r.fileName !== null)!;
     await client.readScreenText(video.id);
+    // Reading one video is a short job of its own.
+    await waitFor(async () => expect((await client.getItemScreenText(video.id)).status).toBe("ready"));
     render(<App client={client} />);
     const search = await screen.findByRole("searchbox");
     await user.type(search, video.title.split(" ")[0]!);
@@ -79,8 +81,15 @@ describe("Text on screen", () => {
     render(<ItemScreenText client={client} itemId={video.id} onOpen={onOpen} />);
     const section = await screen.findByTestId("inspector-screen-text");
     expect(section).toHaveTextContent("Not read yet.");
-    await user.click(within(section).getByTestId("item-screen-text-read"));
-    const line = await within(section).findByTestId("item-screen-line");
+    const button = within(section).getByTestId("item-screen-text-read");
+    await user.click(button);
+    // While it reads, the button stays and keeps the focus, so the panel does not move.
+    await waitFor(() => expect(within(section).getByTestId("item-screen-text-status")).toHaveTextContent("Reading the frames"));
+    expect(within(section).getByTestId("item-screen-text-read")).toBe(button);
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveFocus();
+    // The details look again once a second while it reads.
+    const line = await within(section).findByTestId("item-screen-line", {}, { timeout: 5_000 });
     expect(line).toHaveTextContent(`0:04 ${video.title.toLocaleUpperCase("tr")}`);
     expect(within(section).getByTestId("item-screen-text-read")).toHaveTextContent("Read again");
     await user.click(within(line).getByRole("button"));
