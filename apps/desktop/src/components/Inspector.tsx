@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, OpResult, SuggestClient, TagRef, TranscriptClient, TranscriptMatchesDto } from "../ipc/types";
+import type { CollectionDto, DownloadClient, ItemDetail, JobDto, LibraryClient, OpResult, ModelClient, SuggestClient, TagRef, TranscriptClient, TranscriptMatchesDto } from "../ipc/types";
 import { ItemTagSuggestions } from "./TagSuggest";
 import { Transcripts } from "./Transcripts";
 import { Moments } from "./Moments";
+import { ItemScreenText } from "./ScreenText";
+
+type ScreenTextClient = Pick<ModelClient, "getItemScreenText" | "readScreenText">;
 import { ItemDownload } from "./DownloadsView";
 import { errorCode } from "../ipc/errors";
 import { formatBytes, formatDate, formatDuration } from "../format";
@@ -72,6 +75,7 @@ export function Inspector({
   meaningMoments = null,
   screenMoments = null,
   suggestions,
+  screenText,
 }: {
   client: LibraryClient;
   itemId: string | null;
@@ -95,6 +99,8 @@ export function Inspector({
   screenMoments?: TranscriptMatchesDto | null;
   /** Tag suggestions (F7.3); without it the section is not shown. */
   suggestions?: SuggestClient;
+  /** Text on screen of the item (F7.4); without it the section is not shown. */
+  screenText?: ScreenTextClient;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
   const panel = useRef<HTMLElement>(null);
@@ -129,7 +135,7 @@ export function Inspector({
           Could not load the details ({state.code}).
         </p>
       );
-    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} screenMoments={screenMoments} suggestions={suggestions} onSaved={(detail) => setState({ status: "ready", detail })} />;
+    return <Details detail={state.detail} client={client} collections={collections} actions={actions} downloadJob={downloadJob} transcripts={transcripts} moments={moments} meaningMoments={meaningMoments} screenMoments={screenMoments} suggestions={suggestions} screenText={screenText} onSaved={(detail) => setState({ status: "ready", detail })} />;
   })();
 
   return (
@@ -176,6 +182,7 @@ function Details({
   meaningMoments,
   screenMoments,
   suggestions,
+  screenText,
   onSaved,
 }: {
   detail: ItemDetail;
@@ -188,6 +195,7 @@ function Details({
   meaningMoments: TranscriptMatchesDto | null;
   screenMoments: TranscriptMatchesDto | null;
   suggestions?: SuggestClient;
+  screenText?: ScreenTextClient;
   onSaved: (d: ItemDetail) => void;
 }) {
   const { item } = detail;
@@ -319,6 +327,7 @@ function Details({
         )
       )}
       {transcripts && <Transcripts key={item.id} client={transcripts} itemId={item.id} />}
+      {screenText && detail.assets.length > 0 && <ItemScreenText key={item.id} client={screenText} itemId={item.id} onOpen={actions?.openMoment} />}
       {detail.assets.length > 0 && (
         <section data-testid="inspector-media">
           <h4>Media</h4>

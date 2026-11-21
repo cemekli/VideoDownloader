@@ -301,6 +301,7 @@ fn main_capability_grants_only_app_commands() {
         "allow-list-ai-proposal-groups",
         "allow-decide-ai-proposals",
         "allow-get-screen-text",
+        "allow-get-item-screen-text",
         "allow-read-screen-text",
         "allow-cancel-screen-text",
         "allow-list-transcripts",
@@ -2286,6 +2287,22 @@ fn transcript_commands_match_contract_and_queue_captions() {
     assert_eq!(
         (om["startMs"].as_i64(), om["transcriptId"].as_str()),
         (Some(12_000), Some(""))
+    );
+    // Details lists the item's lines; each opens like a search moment.
+    let it = ok(&w, "get_item_screen_text", json!({ "itemId": id }));
+    assert_same_shape(
+        &it,
+        &with_nulls_of(&it, &spec("get_item_screen_text")),
+        "get_item_screen_text",
+    );
+    assert_eq!(it["status"], "ready");
+    assert!(it["job"].is_null());
+    assert_eq!(
+        (
+            it["lines"][0]["id"].as_str(),
+            it["lines"][0]["text"].as_str()
+        ),
+        (Some(line.as_str()), Some("HARRIER JUMP JET"))
     );
 
     for v in [&l, &r, &g, &x, &found, &m, &note] {

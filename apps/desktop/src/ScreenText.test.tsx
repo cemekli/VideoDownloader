@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
-import { ScreenTextBlock } from "./components/ScreenText";
+import { ItemScreenText, ScreenTextBlock } from "./components/ScreenText";
 import { MomentLine } from "./components/ItemCard";
 import { createFixtureClient } from "./ipc/client";
 import { fixtureRecords } from "./ipc/fixture";
@@ -69,6 +69,33 @@ describe("Text on screen", () => {
     await user.click(within(section).getAllByTestId("moment")[0]!.querySelector("button")!);
     const player = await screen.findByTestId("player");
     expect(await within(player).findByTestId("player-video")).toHaveAttribute("data-start-ms", "4000");
+  });
+
+  it("reads one video from its details and opens a line at its time", async () => {
+    const user = userEvent.setup();
+    const client = createFixtureClient();
+    const video = fixtureRecords().find((r) => !r.removed && r.fileName !== null)!;
+    const onOpen = vi.fn();
+    render(<ItemScreenText client={client} itemId={video.id} onOpen={onOpen} />);
+    const section = await screen.findByTestId("inspector-screen-text");
+    expect(section).toHaveTextContent("Not read yet.");
+    await user.click(within(section).getByTestId("item-screen-text-read"));
+    const line = await within(section).findByTestId("item-screen-line");
+    expect(line).toHaveTextContent(`0:04 ${video.title.toLocaleUpperCase("tr")}`);
+    expect(within(section).getByTestId("item-screen-text-read")).toHaveTextContent("Read again");
+    await user.click(within(line).getByRole("button"));
+    expect(onOpen).toHaveBeenCalledWith(expect.any(String));
+    const m = await client.getMoment(onOpen.mock.calls[0]![0] as string);
+    expect(m).toMatchObject({ itemId: video.id, startMs: 4000 });
+    // Only this video was read.
+    expect((await client.getScreenText()).read).toBe(1);
+  });
+
+  it("is not shown for an item without a video file", async () => {
+    const client = createFixtureClient();
+    const saved = fixtureRecords().find((r) => !r.removed && r.fileName === null)!;
+    const { container } = render(<ItemScreenText client={client} itemId={saved.id} />);
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
   it("without an OCR language it says how to add one and does not read", async () => {

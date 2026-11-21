@@ -142,6 +142,7 @@ pub fn register<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             suggest_commands::list_ai_proposal_groups,
             suggest_commands::decide_ai_proposals,
             screen_text_commands::get_screen_text,
+            screen_text_commands::get_item_screen_text,
             screen_text_commands::read_screen_text,
             screen_text_commands::cancel_screen_text,
             transcript_commands::list_transcripts,

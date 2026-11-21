@@ -968,6 +968,8 @@ export interface ModelClient {
   /** Cancels a build; the active index stays (AC-24). */
   cancelSearchIndex(): Promise<SearchIndexDto>;
   getScreenText(): Promise<ScreenTextDto>;
+  /** The text on screen of one item (Details). */
+  getItemScreenText(itemId: string): Promise<ItemScreenTextDto>;
   /** Reads the text on screen of every video not read with its file (`itemId` null), or of one item again. MODEL_MISSING without an OCR language. */
   readScreenText(itemId: string | null): Promise<ScreenTextDto>;
   /** Cancels the run for all videos; what it read stays. */
@@ -988,6 +990,30 @@ export interface ScreenTextDto {
   /** Lines of text on screen stored. */
   lines: number;
   /** The open or last run for all videos (`ocr`). */
+  job: JobDto | null;
+}
+
+/** One line of text on screen; `id` opens it with `getMoment`. */
+export interface ScreenLineDto {
+  id: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+/** The text on screen of one item, for Details (F7.4). */
+export interface ItemScreenTextDto {
+  available: boolean;
+  language: string | null;
+  /** The item has a video file to read. */
+  hasVideo: boolean;
+  /** Null when never read. */
+  status: "ready" | "failed" | null;
+  /** Read with the item's current file and reading rules. */
+  current: boolean;
+  errorCode: string | null;
+  lines: ScreenLineDto[];
+  /** The open or last run for this item alone. */
   job: JobDto | null;
 }
 

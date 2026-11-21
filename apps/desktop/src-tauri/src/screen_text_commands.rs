@@ -94,6 +94,96 @@ pub async fn get_screen_text<R: Runtime>(app: AppHandle<R>) -> Result<ScreenText
     .await
 }
 
+/// One line of text on screen in an item; `id` opens it with `get_moment`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenLineDto {
+    pub id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+/// The text on screen of one item, for Details.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemScreenTextDto {
+    pub available: bool,
+    pub language: Option<String>,
+    /// The item has a video file to read.
+    pub has_video: bool,
+    /// `ready` or `failed` once read; null when never read.
+    pub status: Option<&'static str>,
+    /// Read with the item's current file and reading rules.
+    pub current: bool,
+    pub error_code: Option<String>,
+    pub lines: Vec<ScreenLineDto>,
+    /// The open or last run for this item alone.
+    pub job: Option<JobDto>,
+}
+
+pub fn item_screen_text_view(
+    c: &Connection,
+    dirs: &Dirs,
+    item_id: &str,
+    ocr: (bool, Option<String>),
+) -> ItemScreenTextDto {
+    use vv_persistence::screen_text as rows;
+    let asset = screen_text::video_asset(c, item_id);
+    let run = rows::get(c, item_id).ok().flatten();
+    let current = match (&run, &asset) {
+        (Some(r), Some(a)) => {
+            r.config_version == screen_text::CONFIG_VERSION
+                && r.source_fingerprint == screen_text::fingerprint(a)
+        }
+        _ => false,
+    };
+    let lines = rows::lines(c, item_id)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|l| ScreenLineDto {
+            id: l.id,
+            start_ms: l.start_ms,
+            end_ms: l.end_ms,
+            text: l.text,
+        })
+        .collect();
+    let job = jobs::list_shown(c, &[JobKind::Ocr], 200)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|j| j.item_id.as_deref() == Some(item_id))
+        .max_by_key(|j| (!j.status.is_terminal(), j.created_at, j.id.clone()))
+        .map(|j| job_dto(c, &dirs.staging, &j));
+    ItemScreenTextDto {
+        available: ocr.0,
+        language: ocr.1,
+        has_video: asset.is_some(),
+        status: run.as_ref().map(|r| r.status.as_str()),
+        current,
+        error_code: run.and_then(|r| r.error_code),
+        lines,
+        job,
+    }
+}
+
+/// The text on screen of one item (Details).
+#[tauri::command]
+pub async fn get_item_screen_text<R: Runtime>(
+    app: AppHandle<R>,
+    item_id: String,
+) -> Result<ItemScreenTextDto, DomainError> {
+    blocking(app, move |st| {
+        let d = dirs(st)?;
+        Ok(item_screen_text_view(
+            &st.get()?.reader()?,
+            &d,
+            &item_id,
+            ocr_state(),
+        ))
+    })
+    .await
+}
+
 /// Queues reading the text on screen: of every video not read with its
 /// current file (`itemId` null), or of one item again. Without an OCR
 /// language on this PC: `MODEL_MISSING`.

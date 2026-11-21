@@ -8,7 +8,7 @@ import { IpcError } from "./errors";
 import { highlight, terms, type FixtureRecord, type FixtureScenario } from "./fixture";
 import type { JobDto, ModelClient, MomentTarget, ScreenTextDto, TranscriptMatchesDto } from "./types";
 
-type ScreenClient = Pick<ModelClient, "getScreenText" | "readScreenText" | "cancelScreenText">;
+type ScreenClient = Pick<ModelClient, "getScreenText" | "getItemScreenText" | "readScreenText" | "cancelScreenText">;
 
 export type FixtureScreenText = ScreenClient & {
   /** Where the search terms were read on screen in an item. */
@@ -75,6 +75,20 @@ export function createFixtureScreenText(records: FixtureRecord[], scenario: Fixt
   return {
     async getScreenText() {
       return view();
+    },
+    async getItemScreenText(itemId) {
+      const r = records.find((x) => x.id === itemId);
+      const lines = read.get(itemId);
+      return structuredClone({
+        available,
+        language: available ? "tr" : null,
+        hasVideo: !!r && !r.removed && r.fileName !== null,
+        status: lines ? ("ready" as const) : null,
+        current: !!lines,
+        errorCode: null,
+        lines: lines ?? [],
+        job: null,
+      });
     },
     async readScreenText(itemId) {
       if (!available) throw err("MODEL_MISSING", "read_screen_text");

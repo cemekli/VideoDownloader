@@ -111,6 +111,7 @@
     "allow-list-ai-proposal-groups",
     "allow-decide-ai-proposals",
     "allow-get-screen-text",
+    "allow-get-item-screen-text",
     "allow-read-screen-text",
     "allow-cancel-screen-text",
     "allow-list-transcripts",

@@ -51,6 +51,7 @@ import type {
   ModelOverview,
   SearchIndexDto,
   ScreenTextDto,
+  ItemScreenTextDto,
   AiProcessing,
   TranscriptClient,
   ItemTranscripts,
@@ -134,6 +135,7 @@ export function createFixtureClient(records?: FixtureRecord[], scenario: Fixture
     ...transcripts,
     ...suggest,
     getScreenText: () => screen.getScreenText(),
+    getItemScreenText: (id) => screen.getItemScreenText(id),
     readScreenText: (id) => screen.readScreenText(id),
     cancelScreenText: () => screen.cancelScreenText(),
     // An on-screen line (F7.4) opens at its own time; the rest are transcript segments.
@@ -294,6 +296,7 @@ const modelCommands: ModelClient = {
   buildSearchIndex: (rebuild: boolean) => call<SearchIndexDto>("build_search_index", { rebuild }),
   cancelSearchIndex: () => call<SearchIndexDto>("cancel_search_index"),
   getScreenText: () => call<ScreenTextDto>("get_screen_text"),
+  getItemScreenText: (itemId) => call<ItemScreenTextDto>("get_item_screen_text", { itemId }),
   readScreenText: (itemId) => call<ScreenTextDto>("read_screen_text", { itemId }),
   cancelScreenText: () => call<ScreenTextDto>("cancel_screen_text"),
   downloadModel: (modelId, agreed) => call<ModelOverview>("download_model", { modelId, agreed }),
